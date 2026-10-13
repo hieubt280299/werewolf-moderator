@@ -1,48 +1,63 @@
-import { MoonStar, Settings, Undo2 } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, MoonStar, Undo2, UserRound } from 'lucide-react';
+import type { View } from '../../App';
+import { useAuth } from '../../context/AuthContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { SettingsSheet } from './SettingsSheet';
 
-export function AppHeader() {
+const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.decks' | 'hub.history' | 'hub.profile'> = {
+  game: 'hub.newGame',
+  decks: 'hub.decks',
+  history: 'hub.history',
+  profile: 'hub.profile',
+};
+
+export function AppHeader({ view, onNavigate }: { view: View; onNavigate: (view: View) => void }) {
   const { t } = useI18n();
+  const { profile } = useAuth();
   const { state, canUndo, undo } = useGameEngine();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const inGame = view === 'game' && state.phase !== 'setup';
+  const subtitle = view === 'home' ? t('app.tagline') : view === 'game' && state.phase !== 'setup' ? t(`phase.${state.phase}`) : t(TITLES[view as Exclude<View, 'home'>]);
 
   return (
-    <>
-      <header className="sticky top-0 z-30 border-b border-panel-edge/70 bg-ink/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-          <MoonStar className="h-5 w-5 text-wolf" />
-          <div className="min-w-0 flex-1 leading-tight">
-            <h1 className="truncate text-base text-bone">{t('app.title')}</h1>
-            <p className="truncate text-[11px] text-bone-faint">
-              {state.phase === 'setup' ? t('setup.title') : t('app.tagline')}
-            </p>
-          </div>
-          {state.phase !== 'setup' && (
-            <button
-              type="button"
-              onClick={undo}
-              disabled={!canUndo}
-              aria-label={t('settings.undo')}
-              title={t('settings.undo')}
-              className="rounded-full p-2.5 text-bone-dim hover:text-bone disabled:opacity-30"
-            >
-              <Undo2 className="h-5 w-5" />
-            </button>
-          )}
+    <header className="sticky top-0 z-30 border-b border-panel-edge/70 bg-ink/90 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-2 sm:px-4">
+        {view === 'home' ? (
+          <span className="flex h-10 w-10 items-center justify-center">
+            <MoonStar className="h-5 w-5 text-wolf" />
+          </span>
+        ) : (
+          <button type="button" onClick={() => onNavigate('home')} aria-label={t('hub.home')} className="press rounded-full p-2.5 text-bone-dim hover:text-bone">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate font-display text-base font-bold uppercase tracking-grimoire text-bone">{t('app.title')}</p>
+          <p className="truncate text-[11px] text-bone-faint">{subtitle}</p>
+        </div>
+        {inGame && (
           <button
             type="button"
-            onClick={() => setSettingsOpen(true)}
-            aria-label={t('settings.title')}
-            className="rounded-full p-2.5 text-bone-dim hover:text-bone"
+            onClick={undo}
+            disabled={!canUndo}
+            aria-label={t('settings.undo')}
+            title={t('settings.undo')}
+            className="press rounded-full p-2.5 text-bone-dim hover:text-bone disabled:opacity-30"
           >
-            <Settings className="h-5 w-5" />
+            <Undo2 className="h-5 w-5" />
           </button>
-        </div>
-      </header>
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </>
+        )}
+        <button
+          type="button"
+          onClick={() => onNavigate('profile')}
+          aria-label={t('hub.profile')}
+          className="press flex items-center gap-2 rounded-full border border-panel-edge bg-panel-2 py-1 pl-1 pr-3 text-xs text-bone-dim hover:text-bone"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-village/20 text-village">
+            <UserRound className="h-4 w-4" />
+          </span>
+          <span className="hidden max-w-[8rem] truncate sm:inline">{profile?.displayName}</span>
+        </button>
+      </div>
+    </header>
   );
 }

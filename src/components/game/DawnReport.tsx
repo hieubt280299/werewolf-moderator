@@ -1,10 +1,8 @@
-import { motion } from 'framer-motion';
 import { Droplet, EyeOff, Flame, HeartPulse, Megaphone, PawPrint, Skull, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NightReport } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { fadeStep, stagger } from '../../utils/motion';
 import { Chip } from '../shared/ui';
 
 /** Morning summary: public announcements first, moderator-only secrets below. */
@@ -21,33 +19,32 @@ export function DawnReport({ report }: { report: NightReport }) {
   ];
 
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-4">
+    <div className="space-y-4">
       <div>
         <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-ember">
           <Megaphone className="h-3.5 w-3.5" /> {t('dawn.announce')}
         </p>
         <ul className="space-y-2">
           {report.deaths.length === 0 && (
-            <motion.li variants={fadeStep} className="rounded-xl border border-village/30 bg-village/5 px-4 py-3 text-bone">
+            <li className="animate-step-in rounded-xl border border-village/30 bg-village/5 px-4 py-3 text-bone">
               {t('dawn.peaceful')}
-            </motion.li>
+            </li>
           )}
           {report.deaths.map((d) => (
-            <motion.li
+            <li
               key={d.playerId}
-              variants={fadeStep}
-              className="flex items-center gap-3 rounded-xl border border-wolf/50 bg-wolf/10 px-4 py-3 shadow-inner-wolf"
+              className="animate-step-in flex items-center gap-3 rounded-xl border border-wolf/50 bg-wolf/10 px-4 py-3 shadow-inner-wolf"
             >
               <Skull className="h-5 w-5 shrink-0 text-wolf-bright" />
               <span className="flex-1 font-semibold text-bone text-shadow-crisp">{t('dawn.died', { name: name(d.playerId) })}</span>
               <Chip tone="werewolf">{t(`cause.${d.cause}`)}</Chip>
-            </motion.li>
+            </li>
           ))}
           {report.silenced && (
-            <motion.li variants={fadeStep} className="flex items-center gap-3 rounded-xl border border-ember/40 bg-ember/10 px-4 py-3">
+            <li className="animate-step-in flex items-center gap-3 rounded-xl border border-ember/40 bg-ember/10 px-4 py-3">
               <VolumeX className="h-5 w-5 shrink-0 text-ember" />
               <span className="text-bone">{t('dawn.silenced', { name: name(report.silenced) })}</span>
-            </motion.li>
+            </li>
           )}
         </ul>
       </div>
@@ -59,14 +56,14 @@ export function DawnReport({ report }: { report: NightReport }) {
           </p>
           <ul className="space-y-1.5">
             {secrets.map((s, i) => (
-              <motion.li key={i} variants={fadeStep} className="flex items-center gap-2 text-sm text-bone-dim">
+              <li key={i} className="flex items-center gap-2 text-sm text-bone-dim">
                 {s.icon}
                 {s.text}
-              </motion.li>
+              </li>
             ))}
           </ul>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

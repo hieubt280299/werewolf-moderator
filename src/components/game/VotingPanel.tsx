@@ -1,11 +1,10 @@
 import clsx from 'clsx';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Droplet, Gavel, Pause, Play, RotateCcw, Timer, Undo2, VolumeX } from 'lucide-react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useEffect, useState } from 'react';
 import type { Nomination } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { fadeStep } from '../../utils/motion';
 import { PlayerToken } from '../shared/PlayerToken';
 import { Button, Chip, SectionTitle, Sheet } from '../shared/ui';
 
@@ -15,6 +14,7 @@ export function VotingPanel() {
   const engine = useGameEngine();
   const { state, alive, byId } = engine;
   const [nominating, setNominating] = useState(false);
+  const [listRef] = useAutoAnimate<HTMLDivElement>({ duration: 220 });
 
   const silenced = alive.filter((p) => p.status.silenced);
   const vampirePending = !state.modifiers.vampireTriggeredToday && alive.some((p) => p.status.vampireMarked);
@@ -42,13 +42,11 @@ export function VotingPanel() {
       {open ? (
         <>
           <p className="text-sm text-bone-dim">{t('day.discussion')}</p>
-          <AnimatePresence initial={false}>
+          <div ref={listRef} className="space-y-4">
             {nominations.map((nom) => (
-              <motion.div key={nom.id} variants={fadeStep} initial="hidden" animate="show" exit="exit" layout>
-                <NominationCard nomination={nom} />
-              </motion.div>
+              <NominationCard key={nom.id} nomination={nom} />
             ))}
-          </AnimatePresence>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Button variant="ember" size="lg" onClick={() => setNominating(true)} icon={<Gavel className="h-5 w-5" />}>
               {t('day.nominate')}
@@ -111,6 +109,18 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
         <p className="text-xs text-bone-faint">{t('day.tapVoters')}</p>
         <div className="flex flex-wrap gap-2">
           {alive.map((p) => {
+            // The accused can't vote on their own nomination: always counted as NO / abstain.
+            if (p.id === accused.id) {
+              return (
+                <span
+                  key={p.id}
+                  className="flex min-h-10 items-center rounded-full border border-dashed border-panel-edge px-3 text-sm text-bone-faint"
+                  title={t('day.abstain')}
+                >
+                  {p.name} · {t('day.abstain')}
+                </span>
+              );
+            }
             const on = nomination.voters.includes(p.id);
             return (
               <button
@@ -119,7 +129,7 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
                 aria-pressed={on}
                 onClick={() => toggleVoter(p.id)}
                 className={clsx(
-                  'min-h-10 rounded-full border px-3 text-sm font-medium transition-colors',
+                  'press min-h-10 rounded-full border px-3 text-sm font-medium transition-colors',
                   on ? 'border-ember bg-ember/20 text-bone shadow-inner-ember' : 'border-panel-edge bg-panel-2 text-bone-dim',
                 )}
               >

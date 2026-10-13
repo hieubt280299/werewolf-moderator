@@ -10,11 +10,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { GameState, NightActionField, Player, RoleId, SetupDraft } from '../@types/game';
-import { cloudAvailable, pushToCloud } from '../services/cloud';
-import { createId } from '../utils/gameCalculations';
+import { buildGameRecord, createId } from '../utils/gameCalculations';
 import * as rules from '../utils/gameRules';
 import { readJSON, STORAGE_KEYS, writeJSON } from '../utils/storage';
-import { useSettings } from './SettingsContext';
+import { useAuth } from './AuthContext';
 
 // ---------------------------------------------------------------------------
 // Actions
@@ -40,6 +39,7 @@ export type GameAction =
   | { type: 'REMATCH' }
   | { type: 'NEW_GAME' }
   | { type: 'HYDRATE'; state: GameState }
+  | { type: 'MARK_RECORDED' }
   | { type: 'UNDO' };
 
 /** Actions worth an undo checkpoint. Fine-grained edits (votes, night picks) are not. */
@@ -94,6 +94,9 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
     updatedAt: now,
   };
 }
+
+/** A game is "active" (resumable from the hub) once dealt and until it ends. */
+export const isActiveGame = (s: GameState): boolean => s.phase === 'night' || s.phase === 'dawn' || s.phase === 'day';
 
 const isGameState = (value: unknown): value is GameState =>
   !!value && typeof value === 'object' && (value as GameState).version === 1 && Array.isArray((value as GameState).players);
@@ -155,6 +158,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return createInitialState({ experience: state.setup.experience, pool: state.setup.pool });
     case 'HYDRATE':
       return action.state;
+    case 'MARK_RECORDED':
+      return { ...state, recordedAt: Date.now() };
     case 'UNDO':
       return state; // handled by historyReducer
   }
@@ -194,32 +199,63 @@ interface GameContextValue {
 
 const GameContext = createContext<GameContextValue | null>(null);
 
-export function GameProvider({ children }: { children: ReactNode }) {
-  const { cloudSync } = useSettings();
+/**
+ * Game state for one signed-in moderator. Persisted per user in localStorage; with Firebase
+ * it is also mirrored to users/{uid}/session/active so another device can continue it.
+ * Finished games are written to the moderator's history exactly once per game id.
+ */
+export function GameProvider({ uid, children }: { uid: string; children: ReactNode }) {
+  const { store, recordGame } = useAuth();
+  const storageKey = `${STORAGE_KEYS.game}:${uid}`;
   const [history, dispatch] = useReducer(historyReducer, undefined, () => {
-    const stored = readJSON<unknown>(STORAGE_KEYS.game, null);
+    const stored = readJSON<unknown>(storageKey, null);
     return { past: [], present: isGameState(stored) ? stored : createInitialState() };
   });
   const [syncError, setSyncError] = useState<string | null>(null);
   const syncTimer = useRef<number>();
+  const cloudChecked = useRef(false);
+  const cloud = store?.mode === 'firebase' ? store : null;
 
   const { present } = history;
 
   useEffect(() => {
-    writeJSON(STORAGE_KEYS.game, present);
-  }, [present]);
+    writeJSON(storageKey, present);
+  }, [storageKey, present]);
 
-  // Debounced Firestore backup — only when the moderator opted in and Firebase is configured.
+  // On sign-in, resume a cloud game if this device has nothing in progress.
   useEffect(() => {
-    if (!cloudSync || !cloudAvailable) return;
+    if (!cloud || cloudChecked.current) return;
+    cloudChecked.current = true;
+    if (isActiveGame(present)) return;
+    cloud
+      .loadActiveGame(uid)
+      .then((remote) => {
+        if (remote && isGameState(remote) && isActiveGame(remote)) dispatch({ type: 'HYDRATE', state: remote });
+      })
+      .catch((err: unknown) => setSyncError(err instanceof Error ? err.message : String(err)));
+  }, [cloud, uid, present]);
+
+  // Debounced mirror of the in-progress game.
+  useEffect(() => {
+    if (!cloud || !cloudChecked.current) return;
     window.clearTimeout(syncTimer.current);
     syncTimer.current = window.setTimeout(() => {
-      pushToCloud(present)
+      cloud
+        .saveActiveGame(uid, isActiveGame(present) ? present : null)
         .then(() => setSyncError(null))
         .catch((err: unknown) => setSyncError(err instanceof Error ? err.message : String(err)));
     }, 1500);
     return () => window.clearTimeout(syncTimer.current);
-  }, [present, cloudSync]);
+  }, [cloud, uid, present]);
+
+  // Write finished games to history (and lifetime stats) once.
+  useEffect(() => {
+    if (present.phase !== 'gameOver' || present.recordedAt) return;
+    const record = buildGameRecord(present);
+    if (!record) return;
+    dispatch({ type: 'MARK_RECORDED' });
+    recordGame(record).catch((err: unknown) => setSyncError(err instanceof Error ? err.message : String(err)));
+  }, [present, recordGame]);
 
   const value = useMemo<GameContextValue>(
     () => ({ state: present, dispatch, canUndo: history.past.length > 0, syncError }),

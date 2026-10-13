@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { GameState, Player, RoleId } from '../@types/game';
 import { createInitialState } from '../context/GameContext';
+import { applyStatsDelta, EMPTY_STATS, statsDelta } from '../services/profileStore';
 import {
   calculateBalance,
   EMPTY_STATUS,
   EXPERIENCE_TARGET,
+  formatChronicleEntry,
   generateBalancedDeck,
+  groupChronicle,
+  swapRole,
   validateDeck,
 } from './gameCalculations';
 import * as rules from './gameRules';
@@ -119,5 +123,43 @@ describe('day & win conditions', () => {
     const players = base.players.map((p) => (p.id === 'p1' ? { ...p, alive: false } : p));
     expect(rules.evaluateWinner(players)).toBeNull();
     expect(rules.evaluateWinner(players.map((p) => (p.id === 'p2' ? { ...p, alive: false } : p)))?.team).toBe('loneWolf');
+  });
+});
+
+describe('v0.1.0 mechanics', () => {
+  it('swaps roles when picking one another player already holds', () => {
+    const { players } = game(['werewolf', 'seer', 'villager', 'villager', 'villager']);
+    const next = swapRole(players, 'p2', 'seer');
+    expect(next[2].roleId).toBe('seer');
+    expect(next[1].roleId).toBe('villager');
+    expect(next.map((p) => p.roleId).sort()).toEqual(players.map((p) => p.roleId).sort());
+  });
+
+  it('never counts the accused voting on their own nomination', () => {
+    let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager'])));
+    s = rules.nominate(s, 'p0', 'p1');
+    s = rules.setVoters(s, s.nominations[0].id, ['p0', 'p1', 'p2', 'p2']);
+    expect(s.nominations[0].voters).toEqual(['p1', 'p2']);
+  });
+
+  it('writes a chronological chronicle naming player and role', () => {
+    let s = game(['werewolf', 'seer', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { wolfTargets: ['p2'], seerTarget: 'p0' }));
+    s = rules.startDay(s);
+    s = rules.nominate(s, 'p0', 'p1');
+    s = rules.executeNomination(s, s.nominations[0].id);
+    const tx = (key: string, params?: Record<string, string | number>) =>
+      key + (params ? ' ' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join(' ') : '');
+    const groups = groupChronicle(s.log, tx);
+    expect(groups.map((g) => g.label)).toEqual(['phase.nightN round=1', 'phase.dayN round=1', 'phase.gameOver']);
+    const vote = s.log.find((e) => e.key === 'log.eliminated.vote')!;
+    expect(formatChronicleEntry(vote, tx)).toContain('name=P0 role=role.werewolf.name');
+  });
+
+  it('keeps lifetime stats right when a game is re-recorded with a new winner', () => {
+    let stats = applyStatsDelta(EMPTY_STATS, statsDelta('werewolf', null));
+    expect(stats).toEqual({ gamesModerated: 1, werewolfWins: 1, villageWins: 0, otherWins: 0 });
+    stats = applyStatsDelta(stats, statsDelta('village', 'werewolf'));
+    expect(stats).toEqual({ gamesModerated: 1, werewolfWins: 0, villageWins: 1, otherWins: 0 });
   });
 });

@@ -1,12 +1,11 @@
 import clsx from 'clsx';
-import { motion } from 'framer-motion';
 import { Skull } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
+import { memo, type CSSProperties, type ReactNode } from 'react';
 import type { RoleId } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { stepped } from '../../utils/motion';
-import { ROLE_ICONS } from './roleIcons';
+import { dictionaries } from '../../i18n/translations';
+import { RoleAvatar } from './RoleAvatar';
 import { TONES } from './tones';
 
 type CardSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -18,10 +17,12 @@ const WIDTHS: Record<CardSize, string> = {
   lg: 'w-56 sm:w-64',
 };
 
+const RESTING_SHADOW = '0 10px 30px -8px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.08)';
+
 interface RoleCardProps {
   roleId: RoleId;
   size?: CardSize;
-  /** Rules text on the plate. Defaults on for md/lg. */
+  /** Rules text under the localised name. Defaults on for md/lg. */
   showText?: boolean;
   showWeight?: boolean;
   dead?: boolean;
@@ -30,18 +31,19 @@ interface RoleCardProps {
   muted?: boolean;
   onClick?: () => void;
   className?: string;
+  style?: CSSProperties;
   /** Overlay content (count badges, toggles). */
   children?: ReactNode;
   ariaLabel?: string;
 }
 
 /**
- * "Deluxe Grimoire" card face modelled on the Ultimate Werewolf Deluxe cards:
- * vignetted night portrait, stacked vertical title down the right edge, a slanted
- * faction-coloured rules plate and the balance value in the corner.
- * All inner sizes use container-query units so every size is a true scale copy.
+ * "Deluxe Grimoire" card face modelled on the Ultimate Werewolf Deluxe cards.
+ * Dual-language: the stacked title down the right edge is always the English card name
+ * (as printed), while the plate shows the role name horizontally in the active language.
+ * Inner sizes use container-query units, so every size is an exact scale copy.
  */
-export function RoleCard({
+export const RoleCard = memo(function RoleCard({
   roleId,
   size = 'md',
   showText,
@@ -51,42 +53,41 @@ export function RoleCard({
   muted = false,
   onClick,
   className,
+  style,
   children,
   ariaLabel,
 }: RoleCardProps) {
   const { t } = useI18n();
   const role = ROLES[roleId];
   const tone = TONES[role.cardTone];
-  const Icon = ROLE_ICONS[role.icon];
-  const name = t(`role.${roleId}.name`);
-  const words = name.toLocaleUpperCase().split(/\s+/);
-  const longest = Math.max(...words.map((w) => [...w].length));
+  const englishName = dictionaries.en[`role.${roleId}.name`];
+  const localName = t(`role.${roleId}.name`);
+  const words = englishName.toUpperCase().split(/\s+/);
+  const longest = Math.max(...words.map((w) => w.length));
   const withText = showText ?? (size === 'md' || size === 'lg');
   const weight = role.weight > 0 ? `+${role.weight}` : role.weight < 0 ? `−${Math.abs(role.weight)}` : '0';
 
   const titleStyle: CSSProperties = {
     writingMode: 'vertical-rl',
     textOrientation: 'upright',
-    // Fit the longest word into ~62% of the card height. Oswald's upright vertical advance is
-    // ~1.45em, hence 62 / 1.45 ≈ 43. Capped so short names don't balloon.
-    fontSize: `min(${(43 / Math.max(longest, 4)).toFixed(2)}cqh, 11.5cqw)`,
+    // Fit the longest word into ~58% of the card height. Oswald's upright vertical advance
+    // is ~1.45em, hence 58 / 1.45 ≈ 40. Capped so short names don't balloon.
+    fontSize: `min(${(40 / Math.max(longest, 4)).toFixed(2)}cqh, 11cqw)`,
     letterSpacing: '-0.06em',
     lineHeight: 1,
   };
 
-  const Tag = onClick ? motion.button : motion.div;
+  const Tag = onClick ? 'button' : 'div';
 
   return (
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      aria-label={ariaLabel ?? name}
+      aria-label={ariaLabel ?? localName}
       aria-pressed={onClick ? selected : undefined}
-      whileTap={onClick ? { scale: 0.96 } : undefined}
-      animate={{ scale: selected ? 1.03 : 1 }}
-      transition={stepped(3, 0.18)}
       className={clsx(
-        'relative isolate block shrink-0 overflow-hidden rounded-[7%/5%] bg-ink text-left shadow-card',
+        'relative isolate block shrink-0 overflow-hidden rounded-[7%/5%] bg-ink text-left',
+        onClick && 'press',
         WIDTHS[size],
         dead && 'grayscale',
         (dead || muted) && 'opacity-45',
@@ -96,52 +97,42 @@ export function RoleCard({
       style={{
         aspectRatio: '5 / 7',
         containerType: 'size',
-        boxShadow:
-          selected || size === 'lg'
-            ? `0 0 28px -6px ${tone.glow}, 0 10px 30px -8px rgba(0,0,0,.9)`
-            : '0 10px 30px -8px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.08)',
+        boxShadow: selected || size === 'lg' ? `0 0 28px -6px ${tone.glow}, 0 10px 30px -8px rgba(0,0,0,.9)` : RESTING_SHADOW,
+        ...style,
       }}
     >
       {/* Portrait background: moonlit vignette in the faction hue. */}
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{
-          background: `radial-gradient(110% 75% at 38% 32%, ${tone.mist} 0%, ${tone.night} 48%, #050505 100%)`,
-        }}
+        style={{ background: `radial-gradient(110% 75% at 38% 30%, ${tone.mist} 0%, ${tone.night} 48%, #050505 100%)` }}
       />
       <div
         aria-hidden
         className="absolute rounded-full"
         style={{
-          left: '12%',
-          top: '8%',
-          width: '16cqw',
-          height: '16cqw',
-          background: 'radial-gradient(circle at 35% 35%, rgba(245,245,247,.55), rgba(245,245,247,.08) 60%, transparent 70%)',
-          filter: 'blur(0.4cqw)',
+          left: '10%',
+          top: '6%',
+          width: '15cqw',
+          height: '15cqw',
+          background: 'radial-gradient(circle at 35% 35%, rgba(245,245,247,.5), rgba(245,245,247,.06) 60%, transparent 70%)',
         }}
       />
-      {/* Treeline silhouette like the forest edge behind each portrait. */}
-      <svg aria-hidden viewBox="0 0 100 30" preserveAspectRatio="none" className="absolute inset-x-0" style={{ top: '46%', height: '22%' }}>
+      <svg aria-hidden viewBox="0 0 100 30" preserveAspectRatio="none" className="absolute inset-x-0" style={{ top: '38%', height: '18%' }}>
         <path
           d="M0 30 L0 18 L4 12 L6 17 L9 8 L12 16 L15 11 L18 18 L22 6 L25 15 L28 10 L32 19 L36 9 L39 16 L43 12 L47 20 L52 7 L55 15 L59 11 L63 19 L67 8 L70 16 L74 12 L78 20 L82 9 L85 15 L89 10 L93 18 L97 11 L100 16 L100 30 Z"
           fill="#050505"
-          opacity="0.85"
+          opacity="0.7"
         />
       </svg>
-      <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-ink via-ink/70 to-transparent" />
 
-      {/* Emblem. */}
-      <div aria-hidden className="absolute flex items-center justify-center" style={{ left: '6%', right: '22%', top: '14%', height: '46%' }}>
-        <Icon
-          strokeWidth={1.4}
-          className="text-bone"
-          style={{ width: '46cqw', height: '46cqw', filter: `drop-shadow(0 0 3cqw ${tone.glow}) drop-shadow(0 1cqw 1cqw rgba(0,0,0,.9))` }}
-        />
+      {/* Character portrait. */}
+      <div aria-hidden className="absolute" style={{ left: '-7%', right: '9%', top: '5%', bottom: withText ? '24%' : '15%' }}>
+        <RoleAvatar roleId={roleId} className="h-full w-full" />
       </div>
+      <div aria-hidden className="absolute inset-x-0 bg-gradient-to-t from-ink/90 to-transparent" style={{ bottom: withText ? '22%' : '13%', height: '14%' }} />
 
-      {/* Stacked vertical title. */}
+      {/* Stacked English title, as printed on the physical card. */}
       <div className="absolute flex flex-row gap-[1.5cqw]" style={{ right: '4.5%', top: '4%' }}>
         {words.map((word, i) => (
           <span key={i} className="font-display font-bold text-bone text-shadow-title" style={titleStyle}>
@@ -150,26 +141,32 @@ export function RoleCard({
         ))}
       </div>
 
-      {/* Slanted rules plate. */}
+      {/* Slanted plate: localised name (+ rules text on large cards), value in the corner. */}
       <div
-        className="absolute inset-x-0 bottom-0 flex flex-col justify-center"
+        className={clsx('absolute inset-x-0 bottom-0 flex text-center', withText ? 'flex-col items-center justify-center' : 'items-end gap-[2cqw]')}
         style={{
-          height: withText ? '27%' : '13%',
-          clipPath: 'polygon(0 22%, 100% 0, 100% 100%, 0 100%)',
+          height: withText ? '30%' : '17%',
+          clipPath: 'polygon(0 16%, 100% 0, 100% 100%, 0 100%)',
           background: `linear-gradient(180deg, ${tone.plate} 0%, ${tone.plateDark} 100%)`,
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,.25)',
-          padding: withText ? '6cqh 9cqw 3.5cqh 5cqw' : '0 4cqw',
+          padding: withText ? '4.5cqh 8cqw 3cqh' : '0 4cqw 2.2cqh',
         }}
       >
+        <span
+          className="block min-w-0 flex-1 truncate font-display font-bold uppercase text-bone text-shadow-crisp"
+          style={{ fontSize: withText ? '7.4cqw' : '10cqw', letterSpacing: '0.04em', lineHeight: 1.15, flex: withText ? 'none' : undefined, width: withText ? '100%' : undefined }}
+        >
+          {localName}
+        </span>
         {withText && (
-          <p className="line-clamp-4 text-center font-body font-medium text-bone text-shadow-crisp" style={{ fontSize: '4.9cqw', lineHeight: 1.25 }}>
+          <p className="mt-[1cqh] line-clamp-3 font-body font-medium text-bone/90 text-shadow-crisp" style={{ fontSize: '4.6cqw', lineHeight: 1.22 }}>
             {t(`role.${roleId}.desc`)}
           </p>
         )}
         {showWeight && (
           <span
-            className="absolute font-display font-semibold text-bone/90 text-shadow-crisp"
-            style={{ right: '4cqw', bottom: withText ? '2cqh' : '1.5cqh', fontSize: withText ? '5.5cqw' : '9cqw', lineHeight: 1 }}
+            className={clsx('font-display font-semibold text-bone/85 text-shadow-crisp', withText && 'absolute')}
+            style={withText ? { right: '3.5cqw', bottom: '2cqh', fontSize: '5.2cqw', lineHeight: 1 } : { fontSize: '8cqw', lineHeight: 1.3 }}
           >
             {weight}
           </span>
@@ -184,4 +181,4 @@ export function RoleCard({
       {children}
     </Tag>
   );
-}
+});

@@ -1,4 +1,13 @@
-import type { BalanceOptions, ExperienceLevel, Player, PlayerStatus, RoleId } from '../@types/game';
+import type {
+  BalanceOptions,
+  ExperienceLevel,
+  GameLogEntry,
+  GameRecord,
+  GameState,
+  Player,
+  PlayerStatus,
+  RoleId,
+} from '../@types/game';
 import { ROLES, ROLE_ORDER } from '../data/roles';
 
 /**
@@ -220,4 +229,95 @@ export function dealRoles(
     alive: true,
     status: { ...EMPTY_STATUS },
   }));
+}
+
+/**
+ * Assigns `roleId` to a player. If another player already holds that role, the two
+ * swap — so the dealt hand always stays exactly the setup deck.
+ */
+export function swapRole(players: readonly Player[], playerId: string, roleId: RoleId): Player[] {
+  const target = players.find((p) => p.id === playerId);
+  if (!target || target.roleId === roleId) return [...players];
+  const holder = players.find((p) => p.id !== playerId && p.roleId === roleId);
+  const giveBack = target.roleId;
+  return players.map((p) => {
+    if (p.id === playerId) return { ...p, roleId, originalRoleId: roleId };
+    if (holder && p.id === holder.id) return { ...p, roleId: giveBack, originalRoleId: giveBack };
+    return p;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Chronicle formatting
+// ---------------------------------------------------------------------------
+
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+/** "Night 2", "Day 2", "Setup"… — dawn events belong to the night that produced them. */
+export function chroniclePhaseLabel(entry: Pick<GameLogEntry, 'phase' | 'round'>, tx: Translate): string {
+  switch (entry.phase) {
+    case 'night':
+    case 'dawn':
+      return tx('phase.nightN', { round: entry.round });
+    case 'day':
+      return tx('phase.dayN', { round: entry.round });
+    case 'setup':
+      return tx('phase.setup');
+    case 'gameOver':
+      return tx('phase.gameOver');
+  }
+}
+
+/** Renders a log entry, localising role and team ids at display time. */
+export function formatChronicleEntry(entry: GameLogEntry, tx: Translate): string {
+  const params: Record<string, string | number> = { ...entry.params };
+  for (const key of ['role', 'actorRole'] as const) {
+    if (typeof params[key] === 'string') params[key] = tx(`role.${params[key]}.name`);
+  }
+  if (typeof params.team === 'string') params.team = tx(`team.${params.team}`);
+  return tx(entry.key, params);
+}
+
+export interface ChronicleGroup {
+  label: string;
+  entries: GameLogEntry[];
+}
+
+/** Oldest first, grouped into consecutive phase blocks (Night 1 → Day 1 → Night 2…). */
+export function groupChronicle(log: readonly GameLogEntry[], tx: Translate): ChronicleGroup[] {
+  const groups: ChronicleGroup[] = [];
+  for (const entry of log) {
+    const label = chroniclePhaseLabel(entry, tx);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.entries.push(entry);
+    else groups.push({ label, entries: [entry] });
+  }
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+/** Snapshot of a finished game for the moderator's history. */
+export function buildGameRecord(state: GameState): GameRecord | null {
+  if (!state.winner) return null;
+  const winners = new Set(state.winner.winnerIds);
+  return {
+    id: state.id,
+    startedAt: new Date(state.createdAt).toISOString(),
+    finishedAt: new Date().toISOString(),
+    rounds: state.round,
+    deckName: state.setup.deckName ?? null,
+    winner: state.winner.team,
+    players: state.players.map((p) => ({
+      name: p.name,
+      seat: p.seat,
+      roleId: p.roleId,
+      originalRoleId: p.originalRoleId,
+      alive: p.alive,
+    })),
+    winnerSeats: state.players.filter((p) => winners.has(p.id)).map((p) => p.seat),
+    log: state.log,
+  };
 }

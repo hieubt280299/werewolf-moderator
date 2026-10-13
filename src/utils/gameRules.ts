@@ -131,7 +131,7 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
   p.eliminated = { round: s.round, phase: when, cause };
   p.status.vampireMarked = false;
   p.status.protected = false;
-  pushLog(s, `log.eliminated.${cause}`, { name: p.name });
+  pushLog(s, `log.eliminated.${cause}`, { name: p.name, role: p.roleId });
   if (p.roleId === 'wolfCub') {
     s.modifiers.wolvesDoubleKill = true;
     pushLog(s, 'log.wolfCubRage');
@@ -218,6 +218,8 @@ export function resolveNight(state: GameState): GameState {
     vampireMarked: null,
   };
 
+  logNightActions(s);
+
   // Tonight's modifiers are spent; deaths below may arm new ones for tomorrow night.
   s.modifiers.wolvesSkipNextNight = false;
   s.modifiers.wolvesDoubleKill = false;
@@ -236,7 +238,7 @@ export function resolveNight(state: GameState): GameState {
       p.roleId = 'werewolf';
       p.status.transformed = true;
       report.transformed.push(p.id);
-      pushLog(s, 'log.cursedTurned', { name: p.name });
+      pushLog(s, 'log.cursedTurned', { name: p.name, role: 'cursed' });
       continue;
     }
     dying.push({ playerId: targetId, cause: 'wolves' });
@@ -286,6 +288,38 @@ export function resolveNight(state: GameState): GameState {
   return finalize(s);
 }
 
+/** Writes who did what tonight into the chronicle (before deaths are applied). */
+function logNightActions(s: GameState) {
+  const a = s.nightActions;
+  const actor = (roleId: RoleId) => {
+    const holders = alivePlayers(s.players).filter((p) => p.roleId === roleId);
+    return holders.length ? { actor: holders.map((p) => p.name).join(', '), actorRole: roleId } : null;
+  };
+  const target = (id: string | null) => {
+    const p = findPlayer(s, id);
+    return p ? { name: p.name, role: p.roleId } : null;
+  };
+  const log = (key: string, roleId: RoleId, targetId: string | null, extra?: Record<string, string>) => {
+    const who = actor(roleId);
+    const whom = target(targetId);
+    if (who && whom) pushLog(s, key, { ...who, ...whom, ...extra });
+  };
+
+  for (const id of a.wolfTargets) {
+    const whom = target(id);
+    if (whom) pushLog(s, 'log.night.wolves', whom);
+  }
+  const seerTarget = findPlayer(s, a.seerTarget);
+  if (seerTarget) log(seerResult(seerTarget) === 'werewolf' ? 'log.night.seerWolf' : 'log.night.seerVillage', 'seer', a.seerTarget);
+  log('log.night.sorceress', 'sorceress', a.sorceressTarget);
+  log('log.night.bodyguard', 'bodyguard', a.bodyguardTarget);
+  log('log.night.witchSave', 'witch', a.witchSaveTarget);
+  log('log.night.witchKill', 'witch', a.witchKillTarget);
+  log('log.night.vampire', 'vampire', a.vampireTarget);
+  log('log.night.spellcaster', 'spellcaster', a.spellcasterTarget);
+  log('log.night.cult', 'cultLeader', a.cultTarget);
+}
+
 export function startDay(state: GameState): GameState {
   const s = clone(state);
   s.phase = 'day';
@@ -308,7 +342,12 @@ export function nominate(state: GameState, accusedId: string, accuserId: string 
   const accused = findPlayer(s, accusedId);
   if (accused?.alive) {
     s.nominations.push({ id: createId('nom'), accusedId, accuserId, voters: [] });
-    pushLog(s, 'log.nominated', { name: accused.name });
+    const accuser = findPlayer(s, accuserId);
+    if (accuser) {
+      pushLog(s, 'log.nominatedBy', { name: accused.name, role: accused.roleId, actor: accuser.name, actorRole: accuser.roleId });
+    } else {
+      pushLog(s, 'log.nominated', { name: accused.name, role: accused.roleId });
+    }
   }
   s.dayStep = 'voting';
   return finalize(s);
@@ -317,7 +356,8 @@ export function nominate(state: GameState, accusedId: string, accuserId: string 
 export function setVoters(state: GameState, nominationId: string, voters: string[]): GameState {
   const s = clone(state);
   const nom = s.nominations.find((n) => n.id === nominationId);
-  if (nom) nom.voters = voters;
+  // The accused can't vote on their own nomination — it always counts as NO / abstain.
+  if (nom) nom.voters = [...new Set(voters)].filter((v) => v !== nom.accusedId);
   return s;
 }
 
@@ -337,7 +377,7 @@ export function executeNomination(state: GameState, nominationId: string): GameS
   if (!nom || !accused?.alive) return state;
   if (accused.roleId === 'prince' && !accused.status.princeRevealed) {
     accused.status.princeRevealed = true;
-    pushLog(s, 'log.princeRevealed', { name: accused.name });
+    pushLog(s, 'log.princeRevealed', { name: accused.name, role: 'prince' });
   } else {
     killPlayer(s, accused.id, 'vote', 'day');
   }
@@ -377,6 +417,6 @@ export function revivePlayer(state: GameState, playerId: string): GameState {
     s.phase = 'day';
     s.winner = null;
   }
-  pushLog(s, 'log.revived', { name: p.name });
+  pushLog(s, 'log.revived', { name: p.name, role: p.roleId });
   return s;
 }

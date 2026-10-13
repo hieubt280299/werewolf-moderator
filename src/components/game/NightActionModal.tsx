@@ -1,11 +1,9 @@
 import clsx from 'clsx';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Ghost, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NightActionField, NightActionKind, NightStep, Player } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { fadeStep, stepped } from '../../utils/motion';
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
 import { Button, Sheet } from '../shared/ui';
@@ -62,17 +60,15 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
         </div>
       )}
 
-      <AnimatePresence mode="wait">
-        {step ? (
-          <motion.div key={step.id} variants={fadeStep} initial="hidden" animate="show" exit="exit" className="pb-4">
+              {step ? (
+          <div key={step.id} className="animate-step-in pb-4">
             <StepView step={step} />
-          </motion.div>
+          </div>
         ) : (
-          <motion.p key="empty" variants={fadeStep} initial="hidden" animate="show" className="py-8 text-center text-bone-dim">
+          <p key="empty" className="py-8 text-center text-bone-dim">
             {t('dash.nightIntro')}
-          </motion.p>
+          </p>
         )}
-      </AnimatePresence>
 
       <div className="sticky bottom-0 -mx-5 mt-2 border-t border-village/15 bg-panel/95 px-5 pt-3 backdrop-blur pb-safe">
         {step && (
@@ -282,17 +278,14 @@ function SorceressResult({ playerId }: { playerId: string }) {
 
 function ResultBanner({ wolf, children }: { wolf: boolean; children: ReactNode }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={stepped(4, 0.3)}
+    <div
       className={clsx(
-        'flex flex-col items-center gap-1 rounded-2xl border p-4 text-center',
+        'flex animate-pop flex-col items-center gap-1 rounded-2xl border p-4 text-center',
         wolf ? 'border-wolf/60 bg-wolf/10 shadow-inner-wolf' : 'border-village/50 bg-village/10 shadow-inner-village',
       )}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 

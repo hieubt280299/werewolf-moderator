@@ -201,6 +201,9 @@ export interface WinResult {
 export interface SetupDraft {
   names: string[];
   deck: RoleId[];
+  /** Saved deck the current setup was loaded from, if any. */
+  deckId?: string | null;
+  deckName?: string | null;
   /** Roles the auto-balancer may draw from. */
   pool: RoleId[];
   experience: ExperienceLevel;
@@ -226,6 +229,8 @@ export interface GameState {
   winner: WinResult | null;
   log: GameLogEntry[];
   setup: SetupDraft;
+  /** Set once the finished game has been written to the moderator's history. */
+  recordedAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -239,4 +244,63 @@ export interface BalanceOptions {
   wolfCount?: number;
   /** Deterministic RNG for tests. */
   random?: () => number;
+}
+
+// ---------------------------------------------------------------------------
+// Moderator accounts (v0.1.0)
+// ---------------------------------------------------------------------------
+
+export const MAX_DECKS = 10;
+
+/** A saved role list. Its length is the player count it was built for. */
+export interface Deck {
+  id: string;
+  name: string;
+  roles: RoleId[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LifetimeStats {
+  gamesModerated: number;
+  werewolfWins: number;
+  villageWins: number;
+  /** Vampire, Cult, Lone Wolf and draws. */
+  otherWins: number;
+}
+
+export interface UserProfile {
+  uid: string;
+  username: string;
+  displayName: string;
+  decks: Deck[];
+  stats: LifetimeStats;
+  createdAt: string;
+}
+
+export interface GameRecordPlayer {
+  name: string;
+  seat: number;
+  roleId: RoleId;
+  originalRoleId: RoleId;
+  alive: boolean;
+}
+
+/** A finished game in the moderator's history. */
+export interface GameRecord {
+  id: string;
+  startedAt: string;
+  finishedAt: string;
+  rounds: number;
+  deckName: string | null;
+  winner: WinTeam;
+  players: GameRecordPlayer[];
+  /** Seat indexes of the winning players. */
+  winnerSeats: number[];
+  log: GameLogEntry[];
+}
+
+export interface SessionUser {
+  uid: string;
+  username: string;
 }
