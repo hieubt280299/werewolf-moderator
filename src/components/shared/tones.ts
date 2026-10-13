@@ -62,4 +62,16 @@ export const TONES: Record<CardTone, Tone> = {
     bar: 'bg-cult',
     text: 'text-cult',
   },
+  // Solo roles (Tanner): the earthy brown plate of the printed card.
+  neutral: {
+    accent: '#C48A3F',
+    plate: '#7A5428',
+    plateDark: '#45300F',
+    night: '#1F160B',
+    mist: '#5A4224',
+    glow: 'rgba(196,138,63,0.55)',
+    inner: 'inset 0 0 20px rgba(196,138,63,0.45)',
+    bar: 'bg-[#C48A3F]',
+    text: 'text-[#D9A35A]',
+  },
 };

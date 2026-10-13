@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Droplet, Gavel, Pause, Play, RotateCcw, Timer, Undo2, VolumeX } from 'lucide-react';
+import { DoorOpen, Droplet, Gavel, Ghost, Pause, Play, RotateCcw, Swords, Timer, Undo2, VolumeX } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useEffect, useState } from 'react';
 import type { Nomination } from '../../@types/game';
@@ -18,9 +18,12 @@ export function VotingPanel() {
   const [listRef] = useAutoAnimate<HTMLDivElement>({ duration: 220 });
 
   const silenced = alive.filter((p) => p.status.silenced);
+  const banished = alive.filter((p) => p.status.banished);
+  const ghostSpeaks = state.players.some((p) => !p.alive && p.roleId === 'ghost');
+  const twoExecutions = (state.executionsLeft ?? 1) > 1 || (state.executedToday !== null && state.dayStep !== 'closed');
   const vampirePending = !state.modifiers.vampireTriggeredToday && alive.some((p) => p.status.vampireMarked);
   const executed = byId.get(state.executedToday ?? '');
-  const open = state.dayStep !== 'closed';
+  const isOpen = state.dayStep !== 'closed';
   const nominations = state.nominations.filter((n) => byId.get(n.accusedId)?.alive || n.accusedId === state.executedToday);
 
   return (
@@ -31,7 +34,22 @@ export function VotingPanel() {
             {t('day.silenced')}: {silenced.map((p) => p.name).join(', ')}
           </Chip>
         )}
-        {vampirePending && open && (
+        {banished.length > 0 && (
+          <Chip tone="neutral" icon={<DoorOpen className="h-3 w-3" />}>
+            {t('day.banished')}: {banished.map((p) => p.name).join(', ')}
+          </Chip>
+        )}
+        {ghostSpeaks && (
+          <Chip tone="village" icon={<Ghost className="h-3 w-3" />}>
+            {t('day.ghost')}
+          </Chip>
+        )}
+        {twoExecutions && isOpen && (
+          <Chip tone="ember" icon={<Swords className="h-3 w-3" />}>
+            {t('day.twoExecutions', { left: state.executionsLeft })}
+          </Chip>
+        )}
+        {vampirePending && isOpen && (
           <Chip tone="vampire" icon={<Droplet className="h-3 w-3" />}>
             {t('day.vampirePending')}
           </Chip>
@@ -40,7 +58,7 @@ export function VotingPanel() {
 
       <DebateTimer />
 
-      {open ? (
+      {isOpen ? (
         <>
           <p className="text-sm text-bone-dim">{t('day.discussion')}</p>
           <div ref={listRef} className="space-y-4">
@@ -80,7 +98,8 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
   const accused = byId.get(nomination.accusedId);
   const accuser = byId.get(nomination.accuserId ?? '');
   if (!accused) return null;
-  const count = nomination.voters.length;
+  // Mayor counts double; forced voters (Idiot / Pacifist) are applied by the rules engine.
+  const count = engine.voteCount(nomination.id);
   const majority = count >= votesNeeded;
 
   const toggleVoter = (id: string) =>
@@ -123,7 +142,31 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
                 </Tooltip>
               );
             }
+            // Roles whose vote is fixed by their card, or who have left the village today.
+            const locked =
+              p.status.banished
+                ? { hint: t('day.banishedHint'), label: t('day.banished') }
+                : p.roleId === 'villageIdiot'
+                  ? { hint: t('day.idiotHint'), label: t('day.forcedYes') }
+                  : p.roleId === 'pacifist'
+                    ? { hint: t('day.pacifistHint'), label: t('day.forcedNo') }
+                    : null;
             const on = nomination.voters.includes(p.id);
+            if (locked) {
+              return (
+                <Tooltip
+                  key={p.id}
+                  content={locked.hint}
+                  className={clsx(
+                    'flex min-h-10 cursor-help items-center rounded-full border border-dashed px-3 text-sm',
+                    on ? 'border-ember/70 bg-ember/15 text-bone' : 'border-panel-edge text-bone-faint',
+                  )}
+                >
+                  {p.name}
+                  <span className="sr-only"> — {locked.label}</span>
+                </Tooltip>
+              );
+            }
             return (
               <button
                 key={p.id}
@@ -136,6 +179,11 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
                 )}
               >
                 {p.name}
+                {p.roleId === 'mayor' && (
+                  <span className="ml-1 font-display text-xs text-ember" title={t('day.mayorHint')}>
+                    ×2
+                  </span>
+                )}
               </button>
             );
           })}
@@ -181,7 +229,15 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
           <SectionTitle>{t('day.accused')}</SectionTitle>
           <div className="grid grid-cols-2 gap-2">
             {engine.alive.map((p) => (
-              <PlayerToken key={p.id} player={p} accent="ember" selected={accused === p.id} onClick={() => setAccused(p.id)} />
+              <PlayerToken
+                key={p.id}
+                player={p}
+                accent="ember"
+                selected={accused === p.id}
+                disabled={p.status.banished}
+                note={p.status.banished ? t('day.banished') : undefined}
+                onClick={() => setAccused(p.id)}
+              />
             ))}
           </div>
         </div>
@@ -189,7 +245,7 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
           <SectionTitle>{t('day.accuser')}</SectionTitle>
           <div className="flex flex-wrap gap-2">
             {engine.alive
-              .filter((p) => p.id !== accused && !p.status.silenced)
+              .filter((p) => p.id !== accused && !p.status.silenced && !p.status.banished)
               .map((p) => (
                 <button
                   key={p.id}

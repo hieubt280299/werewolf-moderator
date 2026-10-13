@@ -1,5 +1,5 @@
-import { Droplet, EyeOff, Flame, HeartPulse, Megaphone, PawPrint, VolumeX } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Bandage, DoorOpen, Droplet, EyeOff, Flame, Heart, HeartPulse, Megaphone, PawPrint, Swords, VolumeX } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
 import type { NightReport } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
@@ -14,7 +14,12 @@ import { Chip, RoleBadge } from '../shared/ui';
  */
 export function DawnReport({ report }: { report: NightReport }) {
   const { t } = useI18n();
-  const { byId } = useGameEngine();
+  const { byId, playMetallic } = useGameEngine();
+
+  // The Wolverine's tell is heard by everyone — play it once when the report opens.
+  useEffect(() => {
+    if (report.metallic) playMetallic();
+  }, [report.metallic, report.round, playMetallic]);
   const name = (id: string | null) => (id ? byId.get(id)?.name ?? '?' : '');
 
   const secrets: { icon: ReactNode; text: string }[] = [
@@ -22,6 +27,10 @@ export function DawnReport({ report }: { report: NightReport }) {
     ...report.transformed.map((id) => ({ icon: <PawPrint className="h-4 w-4 text-wolf-bright" />, text: t('dawn.transformed', { name: name(id) }) })),
     ...(report.vampireMarked ? [{ icon: <Droplet className="h-4 w-4 text-vampire" />, text: t('dawn.vampire', { name: name(report.vampireMarked) }) }] : []),
     ...(report.recruited ? [{ icon: <Flame className="h-4 w-4 text-cult" />, text: t('dawn.recruited', { name: name(report.recruited) }) }] : []),
+    ...(report.lovers?.length === 2
+      ? [{ icon: <Heart className="h-4 w-4 text-vampire" />, text: t('dawn.lovers', { name: name(report.lovers[0]), name2: name(report.lovers[1]) }) }]
+      : []),
+    ...(report.wounded ?? []).map((id) => ({ icon: <Bandage className="h-4 w-4 text-ember" />, text: t('dawn.wounded', { name: name(id) }) })),
   ];
 
   return (
@@ -53,6 +62,18 @@ export function DawnReport({ report }: { report: NightReport }) {
               </li>
             );
           })}
+          {report.metallic && (
+            <li className="animate-step-in flex items-center gap-3 rounded-xl border border-wolf/40 bg-wolf/10 px-4 py-3">
+              <Swords className="h-5 w-5 shrink-0 text-wolf-bright" />
+              <span className="italic text-bone">{t('dawn.metallic')}</span>
+            </li>
+          )}
+          {report.banished && (
+            <li className="animate-step-in flex items-center gap-3 rounded-xl border border-[#C48A3F]/40 bg-[#C48A3F]/10 px-4 py-3">
+              <DoorOpen className="h-5 w-5 shrink-0 text-[#D9A35A]" />
+              <span className="text-bone">{t('dawn.banished', { name: name(report.banished) })}</span>
+            </li>
+          )}
           {report.silenced && (
             <li className="animate-step-in flex items-center gap-3 rounded-xl border border-ember/40 bg-ember/10 px-4 py-3">
               <VolumeX className="h-5 w-5 shrink-0 text-ember" />

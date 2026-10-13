@@ -163,3 +163,132 @@ describe('v0.1.0 mechanics', () => {
     expect(stats).toEqual({ gamesModerated: 1, werewolfWins: 0, villageWins: 1, otherWins: 0 });
   });
 });
+
+describe('expansion roles', () => {
+  const day = (s: GameState) => rules.startDay(rules.resolveNight(s));
+
+  it('kills a lover of a broken heart and lets a mixed couple win as the last two', () => {
+    let s = game(['werewolf', 'cupid', 'villager', 'villager', 'villager']);
+    s = withActions(s, { cupidTargets: ['p0', 'p2'], wolfTargets: ['p3'] });
+    s = rules.resolveNight(s);
+    expect(s.players[0].status.lover && s.players[2].status.lover).toBe(true);
+    // The wolf lover and the villager lover end up as the last two alive.
+    s = rules.moderatorEliminate(rules.moderatorEliminate(rules.startDay(s), 'p1'), 'p4');
+    expect(s.winner?.team).toBe('couple');
+    // Killing one lover takes the other.
+    const t = rules.moderatorEliminate(
+      rules.resolveNight(withActions(game(['werewolf', 'cupid', 'villager', 'villager', 'villager']), { cupidTargets: ['p2', 'p3'] })),
+      'p2',
+    );
+    expect(t.players[3].alive).toBe(false);
+    expect(t.players[3].eliminated?.cause).toBe('heartbreak');
+  });
+
+  it('ends the game with a Tanner win when the Tanner is eliminated', () => {
+    let s = day(game(['werewolf', 'tanner', 'villager', 'villager', 'villager']));
+    s = rules.nominate(s, 'p1', null);
+    s = rules.executeNomination(s, s.nominations[0].id);
+    expect(s.winner).toEqual({ team: 'tanner', winnerIds: ['p1'] });
+  });
+
+  it('keeps the Tough Guy alive until the end of the following night', () => {
+    let s = rules.resolveNight(withActions(game(['werewolf', 'toughGuy', 'villager', 'villager', 'villager']), { wolfTargets: ['p1'] }));
+    expect(alive(s, 'p1')).toBe(true);
+    s = rules.resolveNight(rules.startNight(rules.startDay(s)));
+    expect(alive(s, 'p1')).toBe(false);
+  });
+
+  it('promotes the Apprentice Seer and transforms the Doppelganger on death', () => {
+    let s = game(['werewolf', 'seer', 'apprenticeSeer', 'doppelganger', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { doppelgangerTarget: 'p1', wolfTargets: ['p1'] }));
+    expect(s.players[2].roleId).toBe('seer');
+    expect(s.players[3].roleId).toBe('seer');
+  });
+
+  it('links the Dire Wolf to its companion and Virginia Woolf to her target', () => {
+    let s = game(['direWolf', 'werewolf', 'virginiaWoolf', 'villager', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { direWolfTarget: 'p3', virginiaTarget: 'p4' }));
+    s = rules.moderatorEliminate(rules.startDay(s), 'p3');
+    expect(alive(s, 'p0')).toBe(false);
+    s = rules.moderatorEliminate(s, 'p2');
+    expect(alive(s, 'p4')).toBe(false);
+  });
+
+  it('lets the Leprechaun move the attack to a neighbour, and the Witch sees the real victim', () => {
+    const s = withActions(game(['werewolf', 'leprechaun', 'villager', 'villager', 'witch']), { wolfTargets: ['p2'], leprechaunTarget: 'p3' });
+    expect(rules.effectiveWolfTargets(s)).toEqual(['p3']);
+    const after = rules.resolveNight(s);
+    expect(alive(after, 'p2')).toBe(true);
+    expect(alive(after, 'p3')).toBe(false);
+  });
+
+  it('gives the Big Bad Wolf two adjacent kills and stops a lone Fruit Brute', () => {
+    const s = withActions(game(['bigBadWolf', 'villager', 'villager', 'villager', 'villager', 'villager', 'villager']), { wolfTargets: ['p3'] });
+    const step = rules.buildNightSteps(s).find((x) => x.action === 'wolfKill')!;
+    expect(step.targetCount).toBe(2);
+    expect(rules.eligibleTargets(s, step).map((p) => p.id).sort()).toEqual(['p2', 'p3', 'p4']);
+    const brute = game(['fruitBrute', 'villager', 'villager', 'villager', 'villager']);
+    expect(rules.buildNightSteps(brute).find((x) => x.action === 'wolfKill')?.targetCount).toBe(0);
+  });
+
+  it('lets Fang Face sleep after night 1 while other wolves live', () => {
+    let s = game(['fangFace', 'werewolf', 'villager', 'villager', 'villager', 'villager', 'villager']);
+    expect(rules.buildNightSteps(s).find((x) => x.action === 'wolfKill')?.actors).toEqual(['p0', 'p1']);
+    s = rules.startNight(day(s));
+    expect(rules.buildNightSteps(s).find((x) => x.action === 'wolfKill')?.actors).toEqual(['p1']);
+  });
+
+  it('applies Mayor, Village Idiot, Pacifist and Old Hag voting rules', () => {
+    let s = game(['werewolf', 'mayor', 'villageIdiot', 'pacifist', 'oldHag', 'villager', 'villager']);
+    s = day(withActions(s, { oldHagTarget: 'p5' }));
+    s = rules.nominate(s, 'p0', null);
+    const nom = s.nominations[0];
+    expect(nom.voters).toEqual(['p2']); // the Idiot is forced in
+    s = rules.setVoters(s, nom.id, ['p1', 'p3', 'p5']);
+    expect([...s.nominations[0].voters].sort()).toEqual(['p1', 'p2']); // Pacifist & exiled dropped
+    expect(rules.voteCount(s, s.nominations[0])).toBe(3); // Mayor x2 + Idiot
+    expect(rules.votesNeeded(s)).toBe(4); // 6 eligible voters, Mayor counts twice -> 7 votes
+  });
+
+  it('allows two eliminations the day after the Troublemaker acts', () => {
+    let s = day(withActions(game(['werewolf', 'troublemaker', 'villager', 'villager', 'villager', 'villager', 'villager']), { troublemakerActor: 'p1' }));
+    expect(s.executionsLeft).toBe(2);
+    s = rules.nominate(s, 'p2', null);
+    s = rules.executeNomination(s, s.nominations[0].id);
+    expect(s.dayStep).toBe('voting');
+    s = rules.nominate(s, 'p3', null);
+    s = rules.executeNomination(s, s.nominations[0].id);
+    expect(s.dayStep).toBe('closed');
+  });
+
+  it('eliminates the Ghost on night 1 and sobers the Drunk on night 3', () => {
+    const s = rules.resolveNight(game(['werewolf', 'ghost', 'villager', 'villager', 'villager']));
+    expect(s.players[1].eliminated?.cause).toBe('ghost');
+    let d = game(['werewolf', 'drunk', 'villager', 'villager', 'villager', 'villager', 'villager']);
+    d = rules.startNight(day(d));
+    expect(rules.buildNightSteps(d).some((x) => x.action === 'drunkSober')).toBe(false);
+    d = rules.startNight(day(d));
+    expect(rules.buildNightSteps(d).some((x) => x.action === 'drunkSober')).toBe(true);
+    d = rules.resolveNight(withActions(d, { drunkRole: 'hunter' }));
+    expect(d.players[1].roleId).toBe('hunter');
+  });
+
+  it('answers the Aura Seer, P.I. and Wolf Man correctly', () => {
+    const s = game(['wolfMan', 'villager', 'seer', 'villager', 'werewolf', 'villager']);
+    expect(rules.seerResult(s.players[0])).toBe('village');
+    expect(rules.auraResult(s.players[1])).toBe(false);
+    expect(rules.auraResult(s.players[2])).toBe(true);
+    expect(rules.piResult(s, 'p3')).toBe(true); // neighbour p4 is a Werewolf
+    expect(rules.piResult(s, 'p1')).toBe(false); // p0 is the Wolf Man, who looks like a Villager
+  });
+
+  it('keeps difficulty-3 roles out of beginner and standard auto-balanced decks', () => {
+    const pool: RoleId[] = ['seer', 'tanner', 'leprechaun', 'loneWolf', 'drunk', 'priest', 'mayor', 'witch'];
+    for (const experience of ['beginner', 'standard'] as const) {
+      const deck = generateBalancedDeck({ playerCount: 10, pool, experience, random: seeded(3) });
+      expect(deck.some((id) => ['tanner', 'leprechaun', 'loneWolf', 'drunk'].includes(id))).toBe(false);
+    }
+    const beginner = generateBalancedDeck({ playerCount: 10, pool, experience: 'beginner', random: seeded(5) });
+    expect(beginner.includes('witch')).toBe(false); // difficulty 2
+  });
+});

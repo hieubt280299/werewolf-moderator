@@ -15,6 +15,16 @@ import { ROLES, ROLE_ORDER } from '../data/roles';
  * Veterans read the table well, so the deck tilts slightly toward the wolves;
  * new groups get a forgiving, village-leaning deck.
  */
+/**
+ * Highest role difficulty the auto-balancer draws for each table. Third-party teams
+ * (Tanner, Lone Wolf, Vampires, Cult) are difficulty 3, so they only appear for veterans.
+ */
+export const EXPERIENCE_MAX_DIFFICULTY: Record<ExperienceLevel, 1 | 2 | 3> = {
+  beginner: 1,
+  standard: 2,
+  veteran: 3,
+};
+
 export const EXPERIENCE_TARGET: Record<ExperienceLevel, number> = {
   beginner: 2,
   standard: 0,
@@ -111,6 +121,8 @@ export function validateDeck(deck: readonly RoleId[], playerCount: number): Deck
   if (threats === 0) issues.push({ key: 'issue.noThreat' });
   if (threats * 2 >= playerCount && playerCount > 0) issues.push({ key: 'issue.tooManyThreats' });
   if (counts.loneWolf && wolves < 2) issues.push({ key: 'issue.loneWolfAlone' });
+  if (counts.mason === 1) issues.push({ key: 'issue.masonAlone' });
+  if (counts.apprenticeSeer && !counts.seer) issues.push({ key: 'issue.apprenticeNoSeer' });
   for (const [id, n] of Object.entries(counts) as [RoleId, number][]) {
     if (n > ROLES[id].maxCopies) issues.push({ key: 'issue.tooManyCopies', params: { role: id } });
   }
@@ -130,6 +142,8 @@ function isValidDraft(deck: RoleId[], wolfCount: number): boolean {
   if (wolves.length !== wolfCount) return false;
   if (!counts.werewolf) return false; // the pack needs at least one plain Werewolf
   if (counts.loneWolf && wolves.length < 2) return false;
+  if (counts.mason === 1) return false; // Masons come in groups
+  if (counts.apprenticeSeer && !counts.seer) return false;
   return true;
 }
 
@@ -147,7 +161,10 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
     Math.max(1, Math.floor((n - 1) / 2)),
   );
 
-  const pool = Array.from(new Set<RoleId>([...options.pool, 'villager', 'werewolf']));
+  const maxDifficulty = EXPERIENCE_MAX_DIFFICULTY[options.experience];
+  const pool = Array.from(new Set<RoleId>([...options.pool, 'villager', 'werewolf'])).filter(
+    (id) => ROLES[id].difficulty <= maxDifficulty,
+  );
   const wolfPool = pool.filter((id) => ROLES[id].isWolf);
   const specialPool = pool.filter((id) => !ROLES[id].isWolf && id !== 'villager');
 
@@ -208,6 +225,9 @@ export const EMPTY_STATUS: PlayerStatus = {
   vampireMarked: false,
   princeRevealed: false,
   transformed: false,
+  lover: false,
+  banished: false,
+  woundedRound: null,
 };
 
 /** Randomly assigns the deck to seated players. */
@@ -271,7 +291,7 @@ export function timelinePhaseLabel(entry: Pick<GameLogEntry, 'phase' | 'round'>,
 /** Renders a log entry, localising role and team ids at display time. */
 export function formatTimelineEntry(entry: GameLogEntry, tx: Translate): string {
   const params: Record<string, string | number> = { ...entry.params };
-  for (const key of ['role', 'actorRole'] as const) {
+  for (const key of ['role', 'role2', 'actorRole'] as const) {
     if (typeof params[key] === 'string') params[key] = tx(`role.${params[key]}.name`);
   }
   if (typeof params.team === 'string') params.team = tx(`team.${params.team}`);

@@ -7,13 +7,16 @@ import { useI18n } from '../../i18n/I18nContext';
 import { TimelineView } from '../game/TimelineView';
 import { Chip, RoleBadge, SectionTitle, Sheet } from '../shared/ui';
 
-const TEAM_CHIP: Record<WinTeam, 'village' | 'werewolf' | 'vampire' | 'cult' | 'neutral'> = {
+const TEAM_CHIP: Record<WinTeam, 'village' | 'werewolf' | 'vampire' | 'cult' | 'neutral' | 'muted'> = {
   village: 'village',
   werewolf: 'werewolf',
   loneWolf: 'werewolf',
+  couple: 'vampire',
+  tanner: 'neutral',
+  neutral: 'neutral',
   vampire: 'vampire',
   cult: 'cult',
-  draw: 'neutral',
+  draw: 'muted',
 };
 
 /** Career statistics and the log of finished games. */

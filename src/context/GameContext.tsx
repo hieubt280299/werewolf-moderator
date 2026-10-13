@@ -9,8 +9,8 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react';
-import type { GameState, NightActionField, Player, RoleId, SetupDraft } from '../@types/game';
-import { buildGameRecord, createId } from '../utils/gameCalculations';
+import type { GameModifiers, GameState, NightActionField, NightTargetListField, Player, RoleId, SetupDraft } from '../@types/game';
+import { buildGameRecord, createId, EMPTY_STATUS } from '../utils/gameCalculations';
 import * as rules from '../utils/gameRules';
 import { readJSON, STORAGE_KEYS, writeJSON } from '../utils/storage';
 import { useAuth } from './AuthContext';
@@ -25,7 +25,7 @@ export type GameAction =
   | { type: 'START_NIGHT' }
   | { type: 'SET_NIGHT_STEP'; index: number }
   | { type: 'SET_NIGHT_ACTION'; field: NightActionField; value: string | null }
-  | { type: 'SET_WOLF_TARGETS'; targets: string[] }
+  | { type: 'SET_TARGET_LIST'; field: NightTargetListField; targets: string[] }
   | { type: 'RESOLVE_NIGHT' }
   | { type: 'START_DAY' }
   | { type: 'NOMINATE'; accusedId: string; accuserId: string | null }
@@ -57,6 +57,23 @@ const DEFAULT_POOL: RoleId[] = [
 // State
 // ---------------------------------------------------------------------------
 
+const DEFAULT_MODIFIERS: GameModifiers = {
+  wolvesSkipNextNight: false,
+  wolvesDoubleKill: false,
+  bodyguardLastTarget: null,
+  witchHealUsed: false,
+  witchKillUsed: false,
+  vampireTriggeredToday: false,
+  direWolfCompanion: null,
+  doppelgangerTarget: null,
+  virginiaTarget: null,
+  priestUsed: false,
+  piUsed: false,
+  troublemakerUsed: false,
+  extraExecution: false,
+  tannerWinner: null,
+};
+
 export function createInitialState(setup?: Partial<SetupDraft>): GameState {
   const now = Date.now();
   return {
@@ -69,17 +86,11 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
     deck: [],
     nightStepIndex: 0,
     nightActions: rules.emptyNightActions(),
-    modifiers: {
-      wolvesSkipNextNight: false,
-      wolvesDoubleKill: false,
-      bodyguardLastTarget: null,
-      witchHealUsed: false,
-      witchKillUsed: false,
-      vampireTriggeredToday: false,
-    },
+    modifiers: { ...DEFAULT_MODIFIERS },
     lastReport: null,
     nominations: [],
     executedToday: null,
+    executionsLeft: 1,
     pendingTriggers: [],
     winner: null,
     log: [],
@@ -101,6 +112,21 @@ export const isActiveGame = (s: GameState): boolean => s.phase === 'night' || s.
 const isGameState = (value: unknown): value is GameState =>
   !!value && typeof value === 'object' && (value as GameState).version === 1 && Array.isArray((value as GameState).players);
 
+/**
+ * Fills fields added after a game was saved (new roles' modifiers, statuses, report
+ * fields), so older games from localStorage or Firestore keep loading.
+ */
+export function normalizeGameState(s: GameState): GameState {
+  return {
+    ...s,
+    executionsLeft: s.executionsLeft ?? 1,
+    nightActions: { ...rules.emptyNightActions(), ...s.nightActions },
+    modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
+    lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
+    players: s.players.map((p) => ({ ...p, status: { ...EMPTY_STATUS, ...p.status } })),
+  };
+}
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'UPDATE_SETUP':
@@ -120,17 +146,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, nightStepIndex: Math.max(0, action.index) };
     case 'SET_NIGHT_ACTION':
       return { ...state, nightActions: { ...state.nightActions, [action.field]: action.value } };
-    case 'SET_WOLF_TARGETS': {
-      // Retargeting the wolves invalidates a Witch heal aimed at the old victim.
-      const save = state.nightActions.witchSaveTarget;
-      return {
-        ...state,
-        nightActions: {
-          ...state.nightActions,
-          wolfTargets: action.targets,
-          witchSaveTarget: save && action.targets.includes(save) ? save : null,
-        },
-      };
+    case 'SET_TARGET_LIST': {
+      if (action.field === 'cupidTargets') {
+        return { ...state, nightActions: { ...state.nightActions, cupidTargets: action.targets } };
+      }
+      // Retargeting the wolves invalidates the Leprechaun's redirect and a Witch heal
+      // aimed at the old victim.
+      const next = { ...state, nightActions: { ...state.nightActions, wolfTargets: action.targets, leprechaunTarget: null } };
+      const save = next.nightActions.witchSaveTarget;
+      next.nightActions.witchSaveTarget = save && rules.effectiveWolfTargets(next).includes(save) ? save : null;
+      return next;
     }
     case 'RESOLVE_NIGHT':
       return rules.resolveNight(state);
@@ -157,7 +182,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'NEW_GAME':
       return createInitialState({ experience: state.setup.experience, pool: state.setup.pool });
     case 'HYDRATE':
-      return action.state;
+      return normalizeGameState(action.state);
     case 'MARK_RECORDED':
       return { ...state, recordedAt: Date.now() };
     case 'UNDO':
@@ -175,7 +200,7 @@ function historyReducer(history: History, action: GameAction): History {
     const previous = history.past[history.past.length - 1];
     return previous ? { past: history.past.slice(0, -1), present: previous } : history;
   }
-  if (action.type === 'HYDRATE') return { past: [], present: action.state };
+  if (action.type === 'HYDRATE') return { past: [], present: normalizeGameState(action.state) };
 
   const next = gameReducer(history.present, action);
   if (next === history.present) return history;
@@ -209,7 +234,7 @@ export function GameProvider({ uid, children }: { uid: string; children: ReactNo
   const storageKey = `${STORAGE_KEYS.game}:${uid}`;
   const [history, dispatch] = useReducer(historyReducer, undefined, () => {
     const stored = readJSON<unknown>(storageKey, null);
-    return { past: [], present: isGameState(stored) ? stored : createInitialState() };
+    return { past: [], present: isGameState(stored) ? normalizeGameState(stored) : createInitialState() };
   });
   const [syncError, setSyncError] = useState<string | null>(null);
   const syncTimer = useRef<number>();

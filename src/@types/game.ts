@@ -4,11 +4,14 @@
  * localStorage or Firestore as-is.
  */
 
-/** Allegiance used for win checks and card colouring. */
-export type Faction = 'village' | 'werewolf' | 'vampire' | 'cult';
+/** Allegiance used for win checks and card colouring. `neutral` = solo roles (Tanner). */
+export type Faction = 'village' | 'werewolf' | 'vampire' | 'cult' | 'neutral';
 
-/** Which team a role wins with. Lone Wolf wins alone. */
-export type WinTeam = Faction | 'loneWolf' | 'draw';
+/**
+ * Which team a role wins with. Main teams: Village and Wolves; third: The Couple
+ * (Cupid's lovers, formed in play). Lone Wolf, Tanner, Vampires and Cult are rare extras.
+ */
+export type WinTeam = Faction | 'loneWolf' | 'tanner' | 'couple' | 'draw';
 
 /** Colour of the card's text plate — mostly mirrors Faction, but e.g. Cursed prints red. */
 export type CardTone = Faction;
@@ -29,7 +32,33 @@ export type RoleId =
   | 'loneWolf'
   | 'sorceress'
   | 'vampire'
-  | 'cultLeader';
+  | 'cultLeader'
+  // Expansion roles
+  | 'apprenticeSeer'
+  | 'auraSeer'
+  | 'pi'
+  | 'priest'
+  | 'mason'
+  | 'mayor'
+  | 'toughGuy'
+  | 'villageIdiot'
+  | 'pacifist'
+  | 'ghost'
+  | 'oldHag'
+  | 'troublemaker'
+  | 'leprechaun'
+  | 'drunk'
+  | 'cupid'
+  | 'doppelganger'
+  | 'virginiaWoolf'
+  | 'tanner'
+  | 'minion'
+  | 'wolfMan'
+  | 'bigBadWolf'
+  | 'direWolf'
+  | 'fangFace'
+  | 'fruitBrute'
+  | 'wolverine';
 
 /** What the Seer is told when inspecting this role. */
 export type SeerAppearance = 'village' | 'werewolf';
@@ -42,25 +71,23 @@ export type NightActionKind =
   | 'vampireBite'
   | 'witchPotion'
   | 'spellcasterSilence'
-  | 'cultRecruit';
+  | 'cultRecruit'
+  | 'cupidLink'
+  | 'direWolfCompanion'
+  | 'doppelgangerCopy'
+  | 'virginiaFear'
+  | 'masonMeet'
+  | 'minionMeet'
+  | 'leprechaunRedirect'
+  | 'auraInspect'
+  | 'piInspect'
+  | 'priestBless'
+  | 'oldHagBanish'
+  | 'troublemakerStir'
+  | 'drunkSober';
 
-export type RoleIconKey =
-  | 'villager'
-  | 'seer'
-  | 'bodyguard'
-  | 'hunter'
-  | 'witch'
-  | 'prince'
-  | 'diseased'
-  | 'spellcaster'
-  | 'lycan'
-  | 'cursed'
-  | 'werewolf'
-  | 'wolfCub'
-  | 'loneWolf'
-  | 'sorceress'
-  | 'vampire'
-  | 'cultLeader';
+/** 1 = beginner-friendly, 2 = intermediate, 3 = advanced (also rare third-party teams). */
+export type Difficulty = 1 | 2 | 3;
 
 export interface Role {
   id: RoleId;
@@ -69,14 +96,16 @@ export interface Role {
   cardTone: CardTone;
   /** Balance weight printed on the card: + favours village, − favours wolves. */
   weight: number;
-  icon: RoleIconKey;
   /** Counts toward wolf parity and wakes with the pack. */
   isWolf: boolean;
   seerAppearance: SeerAppearance;
   nightAction?: NightActionKind;
   /** Lower wakes earlier. */
   nightOrder?: number;
+  /** Only wakes on night 1. */
+  firstNightOnly?: boolean;
   maxCopies: number;
+  difficulty: Difficulty;
 }
 
 export type Phase = 'setup' | 'night' | 'dawn' | 'day' | 'gameOver';
@@ -84,7 +113,19 @@ export type DayStep = 'discussion' | 'voting' | 'closed';
 export type ExperienceLevel = 'beginner' | 'standard' | 'veteran';
 export type Language = 'en' | 'vi';
 
-export type EliminationCause = 'wolves' | 'witch' | 'vote' | 'hunter' | 'vampire' | 'moderator';
+export type EliminationCause =
+  | 'wolves'
+  | 'witch'
+  | 'vote'
+  | 'hunter'
+  | 'vampire'
+  | 'moderator'
+  /** The Ghost dies on night 1 by design. */
+  | 'ghost'
+  /** A lover dies of a broken heart. */
+  | 'heartbreak'
+  /** Dire Wolf companion / Virginia Woolf link. */
+  | 'linked';
 
 export interface PlayerStatus {
   /** Bodyguard shield for the current night. */
@@ -98,6 +139,12 @@ export interface PlayerStatus {
   princeRevealed: boolean;
   /** Cursed who was attacked and became a Werewolf. */
   transformed: boolean;
+  /** Linked by Cupid. */
+  lover: boolean;
+  /** Old Hag: has left the village for the current day (can't speak, vote or be accused). */
+  banished: boolean;
+  /** Tough Guy attacked by wolves in this round — dies at the end of the next night. */
+  woundedRound: number | null;
 }
 
 export interface Elimination {
@@ -128,9 +175,24 @@ export interface NightActions {
   witchKillTarget: string | null;
   spellcasterTarget: string | null;
   cultTarget: string | null;
+  cupidTargets: string[];
+  direWolfTarget: string | null;
+  doppelgangerTarget: string | null;
+  virginiaTarget: string | null;
+  /** Leprechaun moves the wolves' (first) target to this adjacent player. */
+  leprechaunTarget: string | null;
+  auraSeerTarget: string | null;
+  piTarget: string | null;
+  priestTarget: string | null;
+  oldHagTarget: string | null;
+  /** Set to the Troublemaker's id when they stir up trouble tonight. */
+  troublemakerActor: string | null;
+  /** The real role the Drunk sobers up into on night 3. */
+  drunkRole: string | null;
 }
 
-export type NightActionField = Exclude<keyof NightActions, 'wolfTargets'>;
+export type NightTargetListField = 'wolfTargets' | 'cupidTargets';
+export type NightActionField = Exclude<keyof NightActions, NightTargetListField>;
 
 /** One wake-up call in the night script, derived from the living roles. */
 export interface NightStep {
@@ -143,8 +205,10 @@ export interface NightStep {
   targetCount: number;
   /** Role is in the deck but dead — call it anyway so the table can't deduce it. */
   ghost: boolean;
-  /** Why this step is suppressed, if it is. */
-  note?: 'wolvesSkip' | 'wolvesDouble' | 'noPotions';
+  /** How the moderator records the step. */
+  kind: 'targets' | 'info' | 'role' | 'toggle';
+  /** Why this step is suppressed or special, if it is. */
+  note?: 'wolvesSkip' | 'wolvesDouble' | 'noPotions' | 'bigBadWolf' | 'fruitBrute' | 'used';
 }
 
 export interface NightReport {
@@ -155,6 +219,12 @@ export interface NightReport {
   silenced: string | null;
   recruited: string | null;
   vampireMarked: string | null;
+  /** Wolverine was the closest wolf to the victim: the table hears a metallic sound. */
+  metallic: boolean;
+  banished: string | null;
+  lovers: string[];
+  /** Tough Guy took a wolf attack and will die after the next night. */
+  wounded: string[];
 }
 
 export interface PendingTrigger {
@@ -191,6 +261,16 @@ export interface GameModifiers {
   witchKillUsed: boolean;
   /** Vampire victims already collected this day. */
   vampireTriggeredToday: boolean;
+  direWolfCompanion: string | null;
+  doppelgangerTarget: string | null;
+  virginiaTarget: string | null;
+  priestUsed: boolean;
+  piUsed: boolean;
+  troublemakerUsed: boolean;
+  /** Troublemaker stirred trouble last night: two eliminations allowed today. */
+  extraExecution: boolean;
+  /** Set when the Tanner gets eliminated (they win). */
+  tannerWinner: string | null;
 }
 
 export interface WinResult {
@@ -225,6 +305,8 @@ export interface GameState {
   lastReport: NightReport | null;
   nominations: Nomination[];
   executedToday: string | null;
+  /** Eliminations still allowed today (2 after the Troublemaker acts). */
+  executionsLeft: number;
   pendingTriggers: PendingTrigger[];
   winner: WinResult | null;
   log: GameLogEntry[];
@@ -265,7 +347,7 @@ export interface LifetimeStats {
   gamesModerated: number;
   werewolfWins: number;
   villageWins: number;
-  /** Vampire, Cult, Lone Wolf and draws. */
+  /** The Couple, Tanner, Lone Wolf, Vampires, Cult and draws. */
   otherWins: number;
 }
 

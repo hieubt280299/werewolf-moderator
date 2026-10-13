@@ -116,17 +116,18 @@ export function Sheet({ open, onClose, title, children, tone = 'neutral', closeL
   );
 }
 
-const TONE_CHIP: Record<CardTone | 'ember' | 'neutral', string> = {
+const TONE_CHIP: Record<CardTone | 'ember' | 'muted', string> = {
   village: 'border-village/50 bg-village/15 text-village',
   werewolf: 'border-wolf/50 bg-wolf/15 text-wolf-bright',
   vampire: 'border-vampire/50 bg-vampire/15 text-vampire',
   cult: 'border-cult/50 bg-cult/15 text-cult',
+  neutral: 'border-[#C48A3F]/50 bg-[#C48A3F]/15 text-[#D9A35A]',
   ember: 'border-ember/50 bg-ember/15 text-ember',
-  neutral: 'border-panel-edge bg-panel-2 text-bone-dim',
+  muted: 'border-panel-edge bg-panel-2 text-bone-dim',
 };
 
 export function Chip({
-  tone = 'neutral',
+  tone = 'muted',
   icon,
   children,
   className,

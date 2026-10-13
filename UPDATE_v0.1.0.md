@@ -78,6 +78,18 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
 
 ---
 
+#### 5. 🐺 Expansion Roles, Teams & Difficulty
+
+- **25 new roles** from the Ultimate Werewolf Deluxe set, with printed balance weights and rules, and portraits drawn after the original card art and palette:
+  - **Village:** Apprentice Seer, Aura Seer, P.I., Priest, Mason, Mayor, Tough Guy, Village Idiot, Pacifist, Ghost, Old Hag, Troublemaker, Leprechaun, Drunk, Cupid, Doppelgänger, Virginia Woolf.
+  - **Wolves:** Wolf Man, Big Bad Wolf, Dire Wolf, Fang Face, Fruit Brute, Wolverine, Minion.
+  - **Solo:** Tanner (brown card).
+- **Teams:** the two main teams are **Village** and **Wolves**. The third is **The Couple**: Cupid's lovers, who, when they come from different teams, win only as the last two players alive. Lone Wolf, Tanner, Vampires and Cult are rare extras.
+- **Gameplay follows each card:** linked deaths (lovers, Dire Wolf companion, Virginia Woolf), role changes (Apprentice Seer → Seer, Doppelgänger copies its target, Drunk sobers up on night 3), delayed death (Tough Guy), first-night-only and once-per-game powers, adjacency (Big Bad Wolf, Leprechaun, P.I., Wolverine's metallic sound), forced votes (Village Idiot YES, Pacifist NO, Mayor ×2), Old Hag exile, two eliminations after the Troublemaker, Ghost eliminated on night 1, and a Tanner win when the Tanner is eliminated.
+- **Difficulty Level (1–3)** for every role, shown in the card preview's facts. Auto-balance only uses roles up to the table's level: Beginner 1, Standard ≤ 2, Veteran ≤ 3. Rare third-party teams are difficulty 3.
+
+---
+
 ### ⚡ Performance & Mobile Optimization Checklist
 
 - **Animation Overhaul:** Eliminate lag/stutter on low-end mobile devices caused by heavy JavaScript layout recalculations or layout thrashing in Framer Motion.

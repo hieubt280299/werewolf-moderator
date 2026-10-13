@@ -1,6 +1,6 @@
 # Werewolf Gamemaster
 
-Mobile-first moderator companion for **Ultimate Werewolf** (Deluxe roles), styled after the physical cards ("Deluxe Grimoire" theme). Vietnamese by default, English in settings.
+Mobile-first moderator companion for **Ultimate Werewolf** (Deluxe base and expansion roles), styled after the physical cards ("Deluxe Grimoire" theme). Vietnamese by default, English in settings.
 
 ```bash
 npm install
@@ -16,6 +16,7 @@ npm run build      # typecheck + production build (deploy dist/ to Vercel)
 - **Game setup** — load a saved deck or build a role pool (manual or auto-balanced), then deal. The deal picker only offers roles from the deck, and choosing a role someone else holds swaps the two.
 - **Play** — guided night script, dawn report (who died, never who killed), accusations (the accused can't vote on their own nomination), Hunter / Wolf Cub / Diseased / Cursed / Prince / Vampire / Cult rules, win checks.
 - **Timeline / Diễn biến** — oldest-first game log grouped by Night/Day, every event naming the player and their role.
+- **41 roles** (16 base and 25 expansion) with portraits. Teams: Village, Wolves, The Couple, plus rare solo/third-party teams. Every role has a difficulty level (1–3), and auto-balance respects the table's experience.
 - **Card preview** — tap any card in the deck builder or deck selection to read it full-size.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.

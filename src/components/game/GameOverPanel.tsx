@@ -1,19 +1,23 @@
 import { RotateCcw, Sparkles, Trophy } from 'lucide-react';
-import type { WinResult } from '../../@types/game';
+import type { WinResult, WinTeam } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 import { RoleCard } from '../shared/RoleCard';
-import { TONES } from '../shared/tones';
+import { TONES, type Tone } from '../shared/tones';
 import { Button, SectionTitle } from '../shared/ui';
 
-const TEAM_TONE = {
+const TEAM_TONE: Record<WinTeam, Tone | null> = {
   village: TONES.village,
   werewolf: TONES.werewolf,
   loneWolf: TONES.werewolf,
+  // The Couple glows in Cupid's rose-violet.
+  couple: TONES.vampire,
+  tanner: TONES.neutral,
+  neutral: TONES.neutral,
   vampire: TONES.vampire,
   cult: TONES.cult,
   draw: null,
-} as const;
+};
 
 export function GameOverPanel({ winner }: { winner: WinResult }) {
   const { t } = useI18n();

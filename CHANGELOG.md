@@ -19,6 +19,10 @@ Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://
 - **Profile & settings:** change display name, language, sound cues, sign out. Password change opens on demand from a **Change password** button.
 - **Character portraits:** 16 inline-SVG role illustrations, used on cards and as round badges in lists.
 - **Timeline / Diễn biến:** the game log, oldest first and grouped by Night/Day. Every event names the player and their role, and night actions are now logged too.
+- **25 expansion roles** with card-accurate rules and portraits drawn after the Deluxe card art: Apprentice Seer, Aura Seer, P.I., Priest, Mason, Mayor, Tough Guy, Village Idiot, Pacifist, Ghost, Old Hag, Troublemaker, Leprechaun, Drunk, Cupid, Doppelgänger, Virginia Woolf, Tanner, Minion, Wolf Man, Big Bad Wolf, Dire Wolf, Fang Face, Fruit Brute, Wolverine.
+- **Teams:** Village and Wolves as the main teams, **The Couple** (Cupid's lovers) as the third, and Lone Wolf, Tanner, Vampires and Cult as rare extras. New win conditions for The Couple and the Tanner.
+- **Difficulty Level (1–3)** for every role, shown in the card preview. Auto-balance only picks roles up to the table's experience level.
+- New mechanics: linked deaths, role changes on death, delayed death, first-night-only and once-per-game powers, seat adjacency, forced and double votes, a day exile, double-elimination days, and the Wolverine's metallic sound (with a sound cue).
 - **Back navigation:** the back arrow, browser Back and the Android back gesture return to the previous screen.
 - `firestore.rules`, plus a Firebase setup guide in the README.
 
@@ -28,6 +32,7 @@ Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://
 - **Accused voter chip:** dashed and shows only the name. Hover or tap explains the abstain rule.
 - **Default language:** Vietnamese is now the default; English is in settings.
 - **Animations:** Framer Motion replaced by stepped CSS keyframes (transform/opacity only) and `@formkit/auto-animate`. Main bundle 372 kB → 329 kB.
+- Saved games from earlier builds are upgraded on load, so new fields never break them.
 - In-game components moved to `src/components/game/`. `src/components/dashboard/` now holds the hub screens.
 
 ### Fixed

@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Check, Crown, Droplet, Flame, Shield, Skull, VolumeX } from 'lucide-react';
+import { Bandage, Check, Crown, DoorOpen, Droplet, Flame, Heart, Shield, Skull, VolumeX } from 'lucide-react';
 import type { Player } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
@@ -76,6 +76,11 @@ export function StatusBadges({ player }: { player: Player }) {
       {s.inCult && <Chip tone="cult" icon={<Flame className="h-3 w-3" />}>{t('status.inCult')}</Chip>}
       {s.princeRevealed && <Chip tone="village" icon={<Crown className="h-3 w-3" />}>{t('status.princeRevealed')}</Chip>}
       {s.transformed && <Chip tone="werewolf">{t('status.transformed')}</Chip>}
+      {s.lover && <Chip tone="vampire" icon={<Heart className="h-3 w-3" />}>{t('status.lover')}</Chip>}
+      {s.banished && player.alive && <Chip tone="neutral" icon={<DoorOpen className="h-3 w-3" />}>{t('status.banished')}</Chip>}
+      {s.woundedRound !== null && s.woundedRound !== undefined && player.alive && (
+        <Chip tone="ember" icon={<Bandage className="h-3 w-3" />}>{t('status.wounded')}</Chip>
+      )}
     </div>
   );
 }

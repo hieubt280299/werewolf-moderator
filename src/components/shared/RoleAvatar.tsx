@@ -69,11 +69,15 @@ interface FaceProps {
   brow?: string;
   browWidth?: number;
   lips?: string;
-  mouth?: 'neutral' | 'smirk' | 'flat' | 'none';
+  mouth?: 'neutral' | 'smirk' | 'flat' | 'grin' | 'frown' | 'none';
+  /** Gap-toothed grin (Village Idiot). */
+  gap?: boolean;
+  /** Age lines on forehead and cheeks. */
+  wrinkles?: boolean;
   c: Ctx;
 }
 
-function Face({ eye = '#1a1210', glow, brow = '#2a1c16', browWidth = 1.1, lips = '#5a2e26', mouth = 'neutral', c }: FaceProps) {
+function Face({ eye = '#1a1210', glow, brow = '#2a1c16', browWidth = 1.1, lips = '#5a2e26', mouth = 'neutral', gap, wrinkles, c }: FaceProps) {
   return (
     <g>
       {glow && (
@@ -91,6 +95,24 @@ function Face({ eye = '#1a1210', glow, brow = '#2a1c16', browWidth = 1.1, lips =
       {mouth === 'neutral' && <path d="M46.4 56.6 Q50 58.1 53.6 56.6" stroke={lips} strokeWidth={1.1} fill="none" strokeLinecap="round" />}
       {mouth === 'smirk' && <path d="M46.2 56.9 Q50 57.8 54 55.6" stroke={lips} strokeWidth={1.2} fill="none" strokeLinecap="round" />}
       {mouth === 'flat' && <path d="M46.6 57 L53.4 57" stroke={lips} strokeWidth={1} fill="none" strokeLinecap="round" />}
+      {mouth === 'frown' && <path d="M46.4 57.8 Q50 56.2 53.6 57.8" stroke={lips} strokeWidth={1.1} fill="none" strokeLinecap="round" />}
+      {mouth === 'grin' && (
+        <>
+          <path d="M45 55.2 Q50 61.4 55 55.2 Q50 57.2 45 55.2 Z" fill="#3a0d10" />
+          <path d="M45.9 55.8 Q50 57.5 54.1 55.8 L53.6 57.1 Q50 58.4 46.4 57.1 Z" fill="#f2ece0" />
+          {gap && <rect x={49.3} y={56.3} width={1.4} height={1.6} fill="#2a0a0c" />}
+          <path d="M45 55.2 Q50 61.4 55 55.2" stroke={lips} strokeWidth={0.8} fill="none" />
+        </>
+      )}
+      {wrinkles && (
+        <path
+          d="M43.6 37.2 Q50 35.6 56.4 37.2 M44.6 39 Q50 37.8 55.4 39 M43.2 49.5 Q44.2 53.6 46 56.2 M56.8 49.5 Q55.8 53.6 54 56.2 M41.6 46.6 L40.4 47.6 M58.4 46.6 L59.6 47.6"
+          stroke="#000"
+          strokeOpacity={0.28}
+          strokeWidth={0.7}
+          fill="none"
+        />
+      )}
     </g>
   );
 }
@@ -123,6 +145,18 @@ interface WolfOpts {
   cub?: boolean;
   stripes?: boolean;
   scar?: boolean;
+  /** Big Bad Wolf: a spiky dark mane licked by red light. */
+  mane?: boolean;
+  /** Fang Face's red cap. */
+  cap?: string;
+  /** Wolverine's pale band running from brow over the head. */
+  band?: string;
+  /** Fruit Brute biting an apple. */
+  apple?: boolean;
+  /** Closed-mouth smile instead of a snarl (Dire Wolf). */
+  smile?: boolean;
+  /** Lighter cheek ruff (Dire Wolf). */
+  cheeks?: string;
 }
 
 function wolf(o: WolfOpts): Art {
@@ -136,7 +170,17 @@ function wolf(o: WolfOpts): Art {
           <Grad id={c.id('wfur')} stops={[[0, o.fur], [1, o.furDark]]} />
           <Grad id={c.id('wmuz')} stops={[[0, o.muzzle], [1, o.furDark]]} />
           <Radial id={c.id('weye')} stops={[[0, o.eye, 0.9], [0.4, o.eye, 0.35], [1, o.eye, 0]]} />
+          <Radial id={c.id('wapple')} cx={0.38} cy={0.32} stops={[[0, '#ff8a7a'], [0.5, '#d01a22'], [1, '#5a0408']]} />
         </defs>
+        {o.mane && (
+          <>
+            <path
+              d="M27 42 L16 30 L27 30 L19 15 L33 23 L33 8 L43 19 L50 5 L57 19 L67 8 L67 23 L81 15 L73 30 L84 30 L73 42 Z"
+              fill={o.furDark}
+            />
+            <path d="M84 30 L73 30 L81 15 L67 23 L67 8 L57 19" fill="none" stroke={c.tone.accent} strokeWidth={1.4} opacity={0.75} />
+          </>
+        )}
         <path
           d="M4 101 L8 85 L14 89 L18 77 L26 83 L31 71 L39 79 L50 69 L61 79 L69 71 L74 83 L82 77 L86 89 L92 85 L96 101 Z"
           fill={c.u('wfur')}
@@ -154,8 +198,25 @@ function wolf(o: WolfOpts): Art {
           </>
         )}
         <path d={head} fill={c.u('wfur')} />
-        <path d="M30.5 44 L24 50.5 L31.5 50.5 L26 57 L36 55.5 Z M69.5 44 L76 50.5 L68.5 50.5 L74 57 L64 55.5 Z" fill={c.u('wfur')} />
+        <path
+          d="M30.5 44 L24 50.5 L31.5 50.5 L26 57 L36 55.5 Z M69.5 44 L76 50.5 L68.5 50.5 L74 57 L64 55.5 Z"
+          fill={o.cheeks ?? c.u('wfur')}
+        />
         <path d={head} fill="none" stroke={c.u('rim')} strokeWidth={0.9} />
+        {o.band && (
+          <path
+            d="M31 37 C36 30.5 44 28.5 50 28.5 C56 28.5 64 30.5 69 37 L67.5 40.5 C62 35.5 56 33.6 50 33.6 C44 33.6 38 35.5 32.5 40.5 Z"
+            fill={o.band}
+            opacity={0.9}
+          />
+        )}
+        {o.cap && (
+          <>
+            <path d="M32 31 C31 18 43 12.5 52 12.5 C63 12.5 71 18.5 69.5 28.5 C62 26 42 26.5 32 31 Z" fill={o.cap} />
+            <path d="M32 31 C42 26.5 62 26 69.5 28.5 L70 31 C62 28.8 42 29.2 31.6 33.4 Z" fill="#000" opacity={0.3} />
+            <path d="M34 26 C37 18 45 14.5 52 14.5" stroke="#fff" strokeOpacity={0.25} strokeWidth={1} fill="none" />
+          </>
+        )}
         {o.stripes && (
           <path
             d="M44 22 L47 30.5 L45 31.5 Z M56 22 L53 30.5 L55 31.5 Z M50 21 L50.8 29.5 L49.2 29.5 Z M31.5 39 L38.5 43.5 L37.5 44.8 Z M68.5 39 L61.5 43.5 L62.5 44.8 Z"
@@ -180,8 +241,27 @@ function wolf(o: WolfOpts): Art {
           <>
             <path d="M42 50 C42 44.5 58 44.5 58 50 L57 63 C55 69.5 45 69.5 43 63 Z" fill={c.u('wmuz')} />
             <path d="M46 53.5 C46 51.8 54 51.8 54 53.5 C54 55.5 51.5 57 50 57 C48.5 57 46 55.5 46 53.5 Z" fill="#0b0b0d" />
-            <path d="M43.5 63 Q50 72 56.5 63 Q50 66.5 43.5 63 Z" fill="#4a0a12" />
-            <path d="M45.6 63.8 L46.8 68.2 L48 64.6 Z M54.4 63.8 L53.2 68.2 L52 64.6 Z" fill="#f2efe6" />
+            {o.smile ? (
+              <>
+                <path d="M43.5 62 Q50 66.8 56.5 62" stroke="#2a0a0e" strokeWidth={1.2} fill="none" />
+                <path d="M46 62.7 L46.8 64.8 L47.6 63 Z M54 62.7 L53.2 64.8 L52.4 63 Z" fill="#f2efe6" />
+              </>
+            ) : (
+              <>
+                <path d="M43.5 63 Q50 72 56.5 63 Q50 66.5 43.5 63 Z" fill="#4a0a12" />
+                <path d="M45.6 63.8 L46.8 68.2 L48 64.6 Z M54.4 63.8 L53.2 68.2 L52 64.6 Z" fill="#f2efe6" />
+              </>
+            )}
+          </>
+        )}
+        {o.apple && (
+          <>
+            <circle cx={55} cy={66} r={7} fill={c.u('wapple')} />
+            <path d="M55 59.4 C55.4 57.4 56.6 56.4 58 56" stroke="#4a2a10" strokeWidth={0.9} fill="none" />
+            <path d="M56.4 58 C58.6 56.6 61 57 62 58.4 C60 59.6 58 59.4 56.4 58 Z" fill="#3a8a2a" />
+            <path d="M51.5 63.5 L50 66 L52.5 64.8 L51.8 67.6 L53.8 65.4" stroke="#f2efe6" strokeWidth={0.7} fill="none" />
+            <ellipse cx={61} cy={73} rx={6} ry={4.2} fill={c.u('wfur')} />
+            <path d="M57 71 L56 75 M60 71.6 L59.4 76 M63 72 L63 76" stroke={o.furDark} strokeWidth={0.7} />
           </>
         )}
       </>
@@ -530,6 +610,534 @@ const ART: Record<RoleId, Art> = {
       <circle cx={50} cy={85} r={10} fill={c.u('glow')} />
       <circle cx={50} cy={85} r={4.6} fill={c.u('gold')} />
       <path d="M50 85 a1 1 0 0 1 1 1 a2 2 0 0 1 -2 2 a3 3 0 0 1 -3 -3 a3.6 3.6 0 0 1 3.6 -3.6" stroke="#3a2a0a" strokeWidth={0.8} fill="none" />
+    </>
+  ),
+  // --- Expansion portraits (modelled on the Ultimate Werewolf Deluxe card art) ---
+
+  apprenticeSeer: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('hood')} stops={[[0, '#ece6f4'], [0.6, '#a69bbb'], [1, '#4a4060']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#f0d488'], [1, '#9a7a34']]} />
+        <Radial id={c.id('orbGlow')} stops={[[0, '#b8ffd8', 0.75], [0.5, '#4fe09a', 0.25], [1, '#4fe09a', 0]]} />
+        <Radial id={c.id('orb')} cx={0.4} cy={0.35} stops={[[0, '#f0fff6'], [0.5, '#8ef0bc'], [1, '#1c8a58']]} />
+      </defs>
+      <path d="M30 56 C27 32 37 19 50 19 C63 19 73 32 70 56 C72 68 76 80 82 101 L18 101 C24 80 28 68 30 56 Z" fill={c.u('hood')} />
+      <Bust fill={c.u('hood')} c={c} />
+      <ellipse cx={50} cy={46} rx={15} ry={19} fill="#2b2238" opacity={0.6} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37.6 42 C38 33 44 29.5 50 29.5 C56 29.5 62 33 62.4 42 C59 36.5 54 34.5 50 35 C46 34.5 41 36.5 37.6 42 Z" fill={c.u('hair')} />
+      <path d="M38 37.5 Q50 33.4 62 37.5" stroke="#d9b45a" strokeWidth={0.9} fill="none" />
+      <path d="M48.4 33.4 A2.1 2.1 0 1 0 51.9 34.8 A1.6 1.6 0 1 1 48.4 33.4 Z" fill="#f2d272" />
+      <Face c={c} eye="#5a7a3a" lips="#9a4a4a" brow="#8a6a34" />
+      <FaceShade c={c} />
+      <circle cx={61.6} cy={54.4} r={1.1} fill="#e6c260" />
+      <path d="M30 56 C27 32 37 19 50 19" fill="none" stroke={c.u('rim')} strokeWidth={1} />
+      <circle cx={31} cy={78} r={15} fill={c.u('orbGlow')} />
+      <circle cx={31} cy={78} r={8} fill={c.u('orb')} />
+      <ellipse cx={28.6} cy={75.6} rx={2.2} ry={1.4} fill="#fff" opacity={0.75} />
+      <ellipse cx={37} cy={86} rx={5.2} ry={3.4} fill={c.u('skin')} />
+      <path d="M33.5 84 L30 80.5 M35.6 83 L32.8 78.6" stroke={c.u('skin')} strokeWidth={1.6} strokeLinecap="round" />
+    </>
+  ),
+
+  auraSeer: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('hair')} stops={[[0, '#c0485a'], [0.5, '#7a1a30'], [1, '#2a0610']]} />
+        <Grad id={c.id('dress')} stops={[[0, '#4e2e86'], [1, '#140a28']]} />
+        <Radial id={c.id('orbGlow')} stops={[[0, '#ff6a7a', 0.7], [1, '#ff2a3a', 0]]} />
+        <Radial id={c.id('orb')} cx={0.38} cy={0.32} stops={[[0, '#ffc0c8'], [0.5, '#c8203a'], [1, '#3a0010']]} />
+      </defs>
+      <path
+        d="M34 44 C31 26 40 20 50 20 C61 20 69 27 66 44 C69 58 71 72 77 90 L60 86 C58 74 58 64 58 58 L42 58 C42 64 42 74 40 86 L23 90 C29 72 31 58 34 44 Z"
+        fill={c.u('hair')}
+      />
+      <Bust fill={c.u('skin')} c={c} />
+      <path d="M18 101 C22 90 34 86.5 50 88 C66 86.5 78 90 82 101 Z" fill={c.u('dress')} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37 43 C37.5 31 45 27.5 53 28.5 C59 29.5 63 34 62.8 42 C58 35 51 33 45 35.5 C41 37 38.6 39.6 37 43 Z" fill={c.u('hair')} />
+      <path
+        d="M40 44.2 C40 40.4 44 39.2 47.2 42 C48.4 44.2 47.2 47.2 44 47.6 C41.8 47.8 40.4 46.4 40 44.2 Z M60 44.2 C60 40.4 56 39.2 52.8 42 C51.6 44.2 52.8 47.2 56 47.6 C58.2 47.8 59.6 46.4 60 44.2 Z"
+        fill="#8a6ad8"
+        opacity={0.8}
+      />
+      <path d="M50 37.6 L48.6 39.6 L50 41 L51.4 39.6 Z" fill="#8a6ad8" opacity={0.9} />
+      <Face c={c} eye="#c03a5a" lips="#8a2a3a" mouth="flat" brow="#4a0a1a" />
+      <FaceShade c={c} />
+      <circle cx={65} cy={70} r={12} fill={c.u('orbGlow')} />
+      <circle cx={65} cy={70} r={6.5} fill={c.u('orb')} />
+      <ellipse cx={63} cy={68} rx={1.8} ry={1.1} fill="#fff" opacity={0.7} />
+      <ellipse cx={65} cy={78} rx={6.4} ry={3.6} fill={c.u('skin')} />
+      <g fill="#1a0a1a">
+        <circle cx={60.4} cy={75.6} r={0.8} />
+        <circle cx={63} cy={74.6} r={0.8} />
+        <circle cx={66} cy={74.6} r={0.8} />
+        <circle cx={68.8} cy={75.4} r={0.8} />
+      </g>
+    </>
+  ),
+
+  pi: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('hair')} stops={[[0, '#54392a'], [1, '#160c06']]} />
+        <Grad id={c.id('vest')} stops={[[0, '#6a4480'], [1, '#1e0f26']]} />
+        <Grad id={c.id('shirt')} stops={[[0, '#f2eadc'], [1, '#9a9080']]} />
+      </defs>
+      <Bust fill={c.u('vest')} c={c} />
+      <path d="M38 101 L42 74 L50 78 L58 74 L62 101 Z" fill={c.u('shirt')} />
+      <Neck fill={c.u('skin')} />
+      <path d="M40.5 72 C42 65.5 58 65.5 59.5 72 L57 77 L50 74.5 L43 77 Z" fill={c.u('shirt')} />
+      <Head c={c} />
+      <path
+        d="M36.5 44 C33 34 37 25 44 23 C46 20 52 20 55 22.5 C61 22 66 28 64.5 36 C66 40 64.5 44 63.5 45 C62 38 58 33 50 33.5 C43 33 39 37 36.5 44 Z"
+        fill={c.u('hair')}
+      />
+      <g fill={c.u('hair')}>
+        <circle cx={38} cy={33} r={3} />
+        <circle cx={43} cy={25.6} r={3.2} />
+        <circle cx={50} cy={22.6} r={3.4} />
+        <circle cx={57} cy={24.4} r={3.2} />
+        <circle cx={62.4} cy={30} r={3} />
+      </g>
+      <Face c={c} eye="#2a1a10" brow="#24160c" browWidth={1.4} mouth="flat" />
+      <FaceShade c={c} />
+      <path d="M36 56.6 L40.4 70" stroke="#6a4a2a" strokeWidth={2.6} strokeLinecap="round" />
+      <circle cx={34} cy={48} r={8.6} fill="#c8deee" fillOpacity={0.32} stroke="#8a6a4a" strokeWidth={1.7} />
+      <path d="M29.4 44.6 Q31.4 41.6 35 41.4" stroke="#fff" strokeOpacity={0.7} strokeWidth={0.9} fill="none" />
+      <ellipse cx={40.4} cy={69} rx={4.4} ry={3.6} fill={c.u('skin')} />
+    </>
+  ),
+
+  priest: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('robe')} stops={[[0, '#80502c'], [1, '#22120a']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#6e4c2c'], [1, '#2a1a0c']]} />
+        <Grad id={c.id('book')} x2={1} y2={1} stops={[[0, '#262c3c'], [1, '#05070c']]} />
+      </defs>
+      <Bust fill={c.u('robe')} c={c} />
+      <Neck fill={c.u('skin')} />
+      <path d="M40 70 C42 64 58 64 60 70 L60 74.5 C56 72.4 44 72.4 40 74.5 Z" fill="#5a3418" />
+      <Head c={c} />
+      <path d="M37 42 C36 30 42 25.5 50 25.5 C58 25.5 64 30 63 42 C61 35 57 32 50 32 C43 32 39 35 37 42 Z" fill={c.u('hair')} />
+      <Face c={c} eye="#2a62b8" brow="#3a2414" mouth="smirk" />
+      <FaceShade c={c} />
+      <path d="M56 76 L80 72 L84 98 L60 101 Z" fill={c.u('book')} />
+      <path d="M58.6 78.4 L78.4 75 L81.6 96 L61.6 98.8 Z" fill="none" stroke="#c9a24a" strokeWidth={0.6} />
+      <path d="M80 72 L83 71 L87 97 L84 98 Z" fill="#e8e0c8" />
+      <ellipse cx={66} cy={97} rx={5.4} ry={3.2} fill={c.u('skin')} />
+    </>
+  ),
+
+  mason: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('cloak')} stops={[[0, '#2a3e30'], [1, '#070c09']]} />
+        <Grad id={c.id('cap')} stops={[[0, '#26382e'], [1, '#0a120e']]} />
+      </defs>
+      <Bust fill={c.u('cloak')} c={c} />
+      <Neck fill={c.u('skin')} />
+      <path d="M33 77 C35 65 41 60.5 44 60.5 L50 70 L56 60.5 C59 60.5 65 65 67 77 L58 81 L50 74.5 L42 81 Z" fill="#30483a" />
+      <Head c={c} />
+      <path d="M37 45 C36.5 40.5 37.4 37.4 39 35.4 L40.4 45 Z M63 45 C63.5 40.5 62.6 37.4 61 35.4 L59.6 45 Z" fill="#b0b0ac" />
+      <Face c={c} eye="#4a8090" brow="#8a8a86" mouth="smirk" lips="#7a4a3a" wrinkles />
+      <FaceShade c={c} />
+      <path d="M35.5 36.4 C35 27 42 22 50 22 C59 22 65.5 27 64.5 36.4 C58 33.8 42 33.8 35.5 36.4 Z" fill={c.u('cap')} />
+      <path d="M35.5 36.4 C42 33.8 58 33.8 64.5 36.4 L64.6 38 C58 35.6 42 35.6 35.4 38 Z" fill="#05080a" />
+      <circle cx={50} cy={27.6} r={3.3} fill="#a01a20" stroke="#d9b45a" strokeWidth={0.7} />
+      <path d="M48.3 29.2 L50 25.9 L51.7 29.2 M48.6 28.2 L51.4 28.2" stroke="#e6c260" strokeWidth={0.55} fill="none" />
+    </>
+  ),
+
+  mayor: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('coat')} stops={[[0, '#347a88'], [1, '#0a1e26']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#8e4e2c'], [1, '#3a1a0c']]} />
+        <Grad id={c.id('badge')} x2={1} y2={1} stops={[[0, '#e2a462'], [1, '#6a3c16']]} />
+      </defs>
+      <Bust fill={c.u('coat')} c={c} />
+      <path d="M28 76 L42 69 L50 92 L58 69 L72 76 L66 101 L34 101 Z" fill="#285a66" />
+      <path d="M43 70 L50 90 L57 70 Z" fill="#1c3c48" />
+      <path d="M45.4 74 L54.6 74 M46.4 78 L53.6 78 M47.4 82 L52.6 82" stroke="#3a7080" strokeWidth={1} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37 42 C35.5 30 42 24 51 24 C59 24 64.5 29 63.3 41 C61 33 56 30 49 30.5 C43 31 39 35 37 42 Z" fill={c.u('hair')} />
+      <path d="M42 28 Q49 25.6 57 27.6" stroke="#c07a4a" strokeOpacity={0.6} strokeWidth={0.8} fill="none" />
+      <Face c={c} eye="#4a6a7a" brow="#5a2a14" mouth="smirk" />
+      <FaceShade c={c} />
+      <rect x={26} y={84} width={9} height={11} rx={1.6} transform="rotate(-10 30.5 89.5)" fill={c.u('badge')} stroke="#4a2a10" strokeWidth={0.6} />
+      <path d="M28.6 87 L32.6 86.3 M28.9 89.6 L32.9 88.9 M29.2 92.2 L33.2 91.5" stroke="#4a2a10" strokeWidth={0.5} />
+    </>
+  ),
+
+  toughGuy: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('vest')} stops={[[0, '#70401f'], [1, '#1e0e06']]} />
+        <Grad id={c.id('shirt')} stops={[[0, '#ece0cf'], [1, '#8a8070']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#80502c'], [1, '#3a1e0e']]} />
+      </defs>
+      <Bust fill={c.u('shirt')} c={c} wide />
+      <path d="M8 101 C10 86 21 76.5 34 73.5 L44 86 L48 101 Z M92 101 C90 86 79 76.5 66 73.5 L56 86 L52 101 Z" fill={c.u('vest')} />
+      <path d="M42 72 L50 80 L58 72" stroke="#bfb3a2" strokeWidth={1} fill="none" />
+      <Neck fill={c.u('skin')} thick />
+      <Head c={c} />
+      <path d="M37 41 C36 30 42 25 50 25 C58 25 64 30 63 41 C61 34 56 31.5 50 31.5 C44 31.5 39 34 37 41 Z" fill={c.u('hair')} />
+      <ellipse cx={50} cy={55} rx={10.4} ry={7} fill="#3a2414" opacity={0.26} />
+      <Face c={c} eye="#3a2414" brow="#3a1e0e" browWidth={1.6} mouth="flat" />
+      <FaceShade c={c} />
+    </>
+  ),
+
+  villageIdiot: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('purple')} stops={[[0, '#6e5eb0'], [1, '#261c4c']]} />
+        <Grad id={c.id('yellow')} stops={[[0, '#f0cc52'], [1, '#8a6a10']]} />
+        <Grad id={c.id('cap')} stops={[[0, '#d23a2e'], [1, '#5a0a0a']]} />
+      </defs>
+      <Bust fill={c.u('purple')} c={c} />
+      <path d="M50 73.5 C74 74.5 90 83 92 101 L50 101 Z" fill={c.u('yellow')} />
+      <path d="M50 74 L50 86 M47 77 L53 83 M53 77 L47 83" stroke="#2a1a10" strokeWidth={1} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37 42 C37.6 38 39.4 35.4 42 34 L40.4 45 Z M63 42 C62.4 38 60.6 35.4 58 34 L59.6 45 Z" fill="#5a3a1e" />
+      <Face c={c} eye="#4a3a20" brow="#3a2410" mouth="grin" gap lips="#7a3a2a" />
+      <FaceShade c={c} />
+      <path d="M35 39 C33 27 42 20 51 20 C61 20 68 25 66 33 C67 35 66 38 64 40 C58 35 44 34 35 39 Z" fill={c.u('cap')} />
+      <path d="M35 39 C44 34 58 35 64 40 L63.5 42 C57 37.5 44 37 35.4 41.5 Z" fill="#8a1a14" />
+    </>
+  ),
+
+  pacifist: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('dress')} stops={[[0, '#5e4e24'], [1, '#1a1408']]} />
+        <Grad id={c.id('scarf')} stops={[[0, '#76662c'], [1, '#2a220c']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#c05a30'], [1, '#5a1e0a']]} />
+      </defs>
+      <path d="M58 34 C66 40 69 56 65 74 L60 72 C62 58 61 46 58 40 Z" fill={c.u('hair')} />
+      <Bust fill={c.u('skin')} c={c} />
+      <path d="M12 101 C14 90 22 84 33 82 L64 74 C72 80 84 88 88 101 Z" fill={c.u('dress')} />
+      <path d="M66 76 L69 66" stroke="#3a2c10" strokeWidth={1} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M36.6 42.4 C36 46.4 37 50 38.6 52.4 L40 44.6 Z" fill={c.u('hair')} />
+      <path d="M36 40 C35 28 42 22 50 22 C59 22 65 28 64 38 C60 32 55 29.5 50 29.5 C44 29.5 39 33 36 40 Z" fill={c.u('scarf')} />
+      <Face c={c} eye="#5a3420" lips="#b04e4e" mouth="smirk" brow="#7a3014" />
+      <g fill="#a8582e" opacity={0.45}>
+        <circle cx={43.6} cy={50.4} r={0.5} />
+        <circle cx={45.4} cy={51.2} r={0.5} />
+        <circle cx={55} cy={50.6} r={0.5} />
+        <circle cx={56.6} cy={51.4} r={0.5} />
+      </g>
+      <FaceShade c={c} />
+    </>
+  ),
+
+  ghost: (c) => (
+    <>
+      <defs>
+        <Radial id={c.id('spirit')} cx={0.4} cy={0.36} r={0.7} stops={[[0, '#c8fff0'], [0.55, '#6ab8aa'], [1, '#1e4e48']]} />
+        <Grad id={c.id('robe')} stops={[[0, '#3e8478'], [1, '#08201c']]} />
+        <Radial id={c.id('aura')} stops={[[0, '#9ef0dc', 0.35], [1, '#9ef0dc', 0]]} />
+      </defs>
+      <circle cx={50} cy={50} r={40} fill={c.u('aura')} />
+      <g opacity={0.92}>
+        <path
+          d="M36 44 C34 28 42 22 50 22 C58 22 66 28 64 44 C66 58 67 70 70 84 L60 82 L59 58 L41 58 L40 82 L30 84 C33 70 34 58 36 44 Z"
+          fill="#24564e"
+        />
+        <Bust fill={c.u('robe')} c={c} />
+        <Neck fill={c.u('spirit')} />
+        <Head c={c} fill={c.u('spirit')} />
+        <path d="M42.4 52 Q44 56 46.4 57.4 M57.6 52 Q56 56 53.6 57.4" stroke="#0e2a26" strokeOpacity={0.5} strokeWidth={0.9} fill="none" />
+        <Face c={c} glow="#f0fffa" brow="#1e4a44" browWidth={1.3} mouth="flat" lips="#2a5a52" />
+        <path d="M38 41 C38.5 31 44 28 50 28 C56 28 61.5 31 62 41 C58 34 54 33 50 33.4 C46 33 42 34 38 41 Z" fill="#24564e" />
+      </g>
+      <path d="M27 93 C23 79 23 64 30 53 C34 62 34 79 30 93 Z" fill="#dcecef" opacity={0.85} />
+      <path d="M30 53 L28.6 93" stroke="#8aa8ac" strokeWidth={0.6} />
+      <ellipse cx={31} cy={94} rx={5.4} ry={3.2} fill={c.u('spirit')} />
+    </>
+  ),
+
+  oldHag: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('hood')} stops={[[0, '#70502e'], [1, '#1e1208']]} />
+      </defs>
+      <path d="M29 56 C27 32 37 20 50 20 C63 20 73 32 71 56 C71 66 68 72 64 76.5 L36 76.5 C32 72 29 66 29 56 Z" fill={c.u('hood')} />
+      <path d="M29 56 C27 32 37 20 50 20" fill="none" stroke={c.u('rim')} strokeWidth={1} />
+      <Bust fill={c.u('hood')} c={c} />
+      <ellipse cx={50} cy={47} rx={15.5} ry={19.5} fill="#120a04" opacity={0.7} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M38 41 C38.5 33 44 29.5 50 29.5 C56 29.5 61.5 33 62 41 C59 35.5 54 33.5 50 34 C46 33.5 41 35.5 38 41 Z" fill="#bab6b0" />
+      <Face c={c} eye="#5a2a1e" brow="#8a8680" mouth="frown" lips="#7a4a44" wrinkles />
+      <FaceShade c={c} />
+      <path d="M45 66 L50 71 L55 66 L50 75 Z" fill="#4a2e16" />
+      <path d="M60 58 C64 66 66 76 64 90 C62 84 61 76 58 66 Z" fill="#c8c4bc" />
+      <path d="M59.6 64 L62.6 63 M60.8 70 L64 69 M61.6 76 L64.8 75.4 M62.4 82 L64.8 81.6" stroke="#8a8680" strokeWidth={0.6} />
+    </>
+  ),
+
+  troublemaker: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('blouse')} stops={[[0, '#f6e6e6'], [1, '#a89090']]} />
+        <Grad id={c.id('bodice')} stops={[[0, '#2e2020'], [1, '#080404']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#d44a2c'], [1, '#5a140a']]} />
+      </defs>
+      <circle cx={50} cy={22} r={8} fill={c.u('hair')} />
+      <Bust fill={c.u('blouse')} c={c} />
+      <ellipse cx={17} cy={88} rx={12} ry={9} fill={c.u('blouse')} />
+      <ellipse cx={83} cy={88} rx={12} ry={9} fill={c.u('blouse')} />
+      <path d="M33 87 C40 83 60 83 67 87 L65 101 L35 101 Z" fill={c.u('bodice')} />
+      <path d="M46 90 L54 96 M54 90 L46 96" stroke="#d8c8b0" strokeWidth={0.9} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M36.5 44 C35 30 42 24 50 24 C58 24 65 30 63.5 44 C62 37 58 33 50 33 C42 33 38 37 36.5 44 Z" fill={c.u('hair')} />
+      <path d="M37 44 C34 50 35 56 37 58 M63 44 C66 50 65 56 63 58" stroke="#b03a20" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+      <Face c={c} eye="#4a6a3a" lips="#a02a3a" mouth="grin" brow="#7a2410" browWidth={1.3} />
+      <FaceShade c={c} />
+    </>
+  ),
+
+  leprechaun: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('coat')} stops={[[0, '#2e6232'], [1, '#0a1e0c']]} />
+        <Grad id={c.id('hat')} stops={[[0, '#428846'], [1, '#0e2a12']]} />
+        <Grad id={c.id('beard')} stops={[[0, '#e06e2e'], [1, '#7a2a0a']]} />
+      </defs>
+      <Bust fill={c.u('coat')} c={c} />
+      <path d="M42 72 L50 85 L58 72 Z" fill="#ece4d4" />
+      <path d="M43 76 L50 79 L57 76 L57 82.4 L50 79.6 L43 82.4 Z" fill="#2a7a3a" />
+      <Neck fill={c.u('skin')} />
+      <path d="M37.6 44 L30.6 35 L36.4 51 Z M62.4 44 L69.4 35 L63.6 51 Z" fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37 48 C36 62 42 72.5 50 73.5 C58 72.5 64 62 63 48 C60 56.4 55 58.4 50 58.4 C45 58.4 40 56.4 37 48 Z" fill={c.u('beard')} />
+      <Face c={c} eye="#3a8a3a" brow="#a8401a" mouth="grin" lips="#7a2a14" />
+      <FaceShade c={c} />
+      <ellipse cx={50} cy={33} rx={19} ry={4.2} fill="#1e4a22" />
+      <path d="M38 33 C37 22 42 16 50 16 C58 16 63 22 62 33 Z" fill={c.u('hat')} />
+      <rect x={38.2} y={29} width={23.6} height={3.6} fill="#12100a" />
+      <rect x={46} y={28.4} width={8} height={4.8} rx={0.6} fill="none" stroke="#d9b45a" strokeWidth={1.2} />
+    </>
+  ),
+
+  drunk: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('hat')} stops={[[0, '#704428'], [1, '#2a160a']]} />
+        <Grad id={c.id('vest')} stops={[[0, '#5e3620'], [1, '#1e0e06']]} />
+        <Grad id={c.id('shirt')} stops={[[0, '#f2ebdf'], [1, '#9a9284']]} />
+        <Grad id={c.id('beer')} stops={[[0, '#f6b03a'], [1, '#8a4a08']]} />
+      </defs>
+      <Bust fill={c.u('shirt')} c={c} />
+      <path d="M10 101 C12 87 22 77.5 34 74.5 L42 88 L44 101 Z M90 101 C88 87 78 77.5 66 74.5 L58 88 L56 101 Z" fill={c.u('vest')} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37 44 C36 39 38 35.6 40.4 34 L41.2 46 Z M63 44 C64 39 62 35.6 59.6 34 L58.8 46 Z" fill="#6a3e20" />
+      <Face c={c} eye="#4a3420" brow="#5a3418" mouth="smirk" />
+      <path d="M41.8 44.4 Q45.2 42.6 48.6 44.4 L48.6 43 L41.8 43 Z M51.4 44.4 Q54.8 42.6 58.2 44.4 L58.2 43 L51.4 43 Z" fill={c.u('skin')} />
+      <FaceShade c={c} />
+      <path d="M27 35 C33 31 67 31 73 35 C67 38.5 33 38.5 27 35 Z" fill="#4a2c16" />
+      <path d="M37 34 C36 24 41 19 50 19 C59 19 64 24 63 34 Z" fill={c.u('hat')} />
+      <path d="M37.2 30.6 C45 29 55 29 62.8 30.6 L63 34 C55 32.4 45 32.4 37 34 Z" fill="#e8e2d6" />
+      <rect x={19} y={72} width={17} height={22} rx={2} fill={c.u('beer')} />
+      <rect x={21} y={74} width={3} height={17} rx={1.4} fill="#fff" opacity={0.3} />
+      <ellipse cx={27.5} cy={72} rx={9} ry={3.2} fill="#fffaf0" />
+      <path d="M36 76 C42 76 42 88 36 88" stroke="#d8d0c0" strokeWidth={2} fill="none" />
+      <ellipse cx={38.4} cy={82} rx={4.6} ry={6.2} fill={c.u('skin')} />
+    </>
+  ),
+
+  cupid: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('toga')} stops={[[0, '#f4eee4'], [1, '#b0a698']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#704828'], [1, '#2a1608']]} />
+      </defs>
+      <path d="M17 79 L29 52 L37.5 56 L25.5 83 Z" fill="#c9b08a" />
+      <path d="M31 54 L26 34 M33.4 55 L31 32.6 M35.6 56 L36 34" stroke="#6a4a2a" strokeWidth={1} />
+      <g fill="#f4f4f8">
+        <path d="M26 34 L23.6 28 L27.4 30.4 L28 26.6 L29.4 33 Z" />
+        <path d="M31 32.6 L29.6 26.4 L32.6 29.4 L33.8 25.8 L33.6 32.4 Z" />
+        <path d="M36 34 L35.6 27.6 L38 31 L39.8 27.8 L38.4 34.4 Z" />
+      </g>
+      <path
+        d="M35 46 C32 32 38 22 48 21 C58 20 67 27 65 40 C67 48 66 56 63 60 L60 50 L40 50 L37 60 C35 56 34 51 35 46 Z"
+        fill={c.u('hair')}
+      />
+      <path d="M62.4 44 C68.4 52 66.4 62 60 64.4" stroke="#9a5ab0" strokeWidth={2} fill="none" strokeLinecap="round" />
+      <Bust fill={c.u('skin')} c={c} />
+      <path d="M20 101 C24 90 34 85 46 86 L70 76 C78 84 84 92 84 101 Z" fill={c.u('toga')} />
+      <path d="M29 77 L60 101 L66.4 101 L35.4 75 Z" fill="#6a3a1c" />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <circle cx={50} cy={22.6} r={6.6} fill={c.u('hair')} />
+      <path d="M37.5 42 C38 32 44 28.5 50 28.5 C56 28.5 62 32 62.5 42 C59 36 54 34 50 34.5 C46 34 41 36 37.5 42 Z" fill={c.u('hair')} />
+      <path d="M38 36.6 Q50 32.6 62 36.6" stroke="#d9b45a" strokeWidth={1.4} fill="none" />
+      <Face c={c} eye="#5a3a1a" lips="#8a3a3a" mouth="smirk" brow="#4a2a10" />
+      <FaceShade c={c} />
+    </>
+  ),
+
+  doppelganger: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('dark')} stops={[[0, '#3e281a'], [1, '#100604']]} />
+        <Grad id={c.id('blond')} stops={[[0, '#f4dc94'], [1, '#a8843a']]} />
+        <Radial id={c.id('violet')} cx={0.6} cy={0.38} r={0.75} stops={[[0, '#a898ec'], [0.6, '#6a58b8'], [1, '#2e2464']]} />
+      </defs>
+      <path d="M50 21.5 C40 21.5 33 27 35.5 44 C34 58 32 70 26 87 L40 85 C42 74 42 64 42 58 L50 58 Z" fill={c.u('dark')} />
+      <path d="M50 21.5 C60 21.5 67 27 64.5 44 C66 58 68 70 74 87 L60 85 C58 74 58 64 58 58 L50 58 Z" fill={c.u('blond')} />
+      <Bust fill={c.u('violet')} c={c} />
+      <path d="M50 73.5 C74 74.5 90 83 92 101 L50 101 Z" fill={c.u('skin')} />
+      <path d="M38 90 L50 92 L50 101 L34 101 Z" fill="#2a1a1a" />
+      <path d="M50 92 L64 88 L68 101 L50 101 Z" fill="#e8b4be" />
+      <path d="M22 84 L28 88 M18 90 L25 93 M27 79 L32 83" stroke="#221a4e" strokeWidth={1.4} strokeLinecap="round" />
+      <Neck fill={c.u('skin')} />
+      <path d="M43.5 57 L50 57 L50 76 L42.2 76 Z" fill={c.u('violet')} />
+      <Head c={c} />
+      <path d="M50 30.5 A12.5 15.5 0 0 0 50 61.5 Z" fill={c.u('violet')} />
+      <path d="M39.6 40 L44.6 41.6 M38.8 47 L43.8 47.6 M40.4 53 L45 52.2" stroke="#221a4e" strokeWidth={1.2} strokeLinecap="round" />
+      <Face c={c} eye="#c06020" lips="#a02a3a" mouth="smirk" brow="#2a1a10" />
+      <path d="M37.5 42 C38 32 44 28.5 50 28.5 L50 34 C45 34 40 37 37.5 42 Z" fill={c.u('dark')} />
+      <path d="M62.5 42 C62 32 56 28.5 50 28.5 L50 34 C55 34 60 37 62.5 42 Z" fill={c.u('blond')} />
+      <path d="M50 28 L50 101" stroke="#000" strokeOpacity={0.15} strokeWidth={0.6} />
+    </>
+  ),
+
+  virginiaWoolf: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('blouse')} stops={[[0, '#efede8'], [1, '#8a8680']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#6e4428'], [1, '#2a160a']]} />
+      </defs>
+      <circle cx={61} cy={53} r={6.4} fill={c.u('hair')} />
+      <Bust fill={c.u('blouse')} c={c} />
+      <path d="M36 80 Q42 92 40 101 M64 80 Q58 92 60 101 M46 84 Q50 92 49 101" stroke="#000" strokeOpacity={0.18} strokeWidth={1} fill="none" />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M37 46 C35 30 42 24.5 50 24.5 C58 24.5 65 30 63 46 C61.4 37 57 32.4 50 33 C43 32.4 38.6 37 37 46 Z" fill={c.u('hair')} />
+      <Face c={c} eye="#4a3420" brow="#3a2010" mouth="flat" lips="#8a4a40" />
+      <path d="M41.8 44.6 Q45.2 43.2 48.6 44.6 L48.6 43.4 L41.8 43.4 Z M51.4 44.6 Q54.8 43.2 58.2 44.6 L58.2 43.4 L51.4 43.4 Z" fill={c.u('skin')} />
+      <FaceShade c={c} />
+    </>
+  ),
+
+  tanner: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('vest')} stops={[[0, '#70703c'], [1, '#22220e']]} />
+        <Grad id={c.id('shirt')} stops={[[0, '#ece0cf'], [1, '#8a8070']]} />
+        <Grad id={c.id('scarf')} stops={[[0, '#3e9450'], [1, '#0e3a1a']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#4e3222'], [1, '#160c06']]} />
+      </defs>
+      <path
+        d="M35.5 44 C33 30 41 24 50 24 C59 24 67 30 64.5 44 C66 56 66 64 64 70 L60 66 L60 46 L40 46 L40 66 L36 70 C34 64 34 56 35.5 44 Z"
+        fill={c.u('hair')}
+      />
+      <Bust fill={c.u('shirt')} c={c} />
+      <path d="M12 101 C14 88 24 78 36 75 L42 90 L42 101 Z M88 101 C86 88 76 78 64 75 L58 90 L58 101 Z" fill={c.u('vest')} />
+      <Neck fill={c.u('skin')} />
+      <path d="M38 64 C40 70 60 70 62 64 C64 70 62 76.5 58 80 C52 82.4 46 82.4 42 80 C38 76.5 36 70 38 64 Z" fill={c.u('scarf')} />
+      <path d="M42 72 Q50 75 58 72 M43.6 77 Q50 79.4 56.4 77" stroke="#0a2a12" strokeOpacity={0.5} strokeWidth={0.9} fill="none" />
+      <path d="M37.6 44 L33 37.4 L37 50.6 Z M62.4 44 L67 37.4 L63 50.6 Z" fill={c.u('skin')} />
+      <Head c={c} />
+      <path d="M38 42 C38.5 33 44 30 50 30 C56 30 61.5 33 62 42 C59 36 54 34.5 50 35 C46 34.5 41 36 38 42 Z" fill={c.u('hair')} />
+      <Face c={c} eye="#4a6a7a" brow="#2a1a10" mouth="frown" lips="#9a5a4a" />
+      <path d="M43 53 Q44 57.6 46.4 59 M57 53 Q56 57.6 53.6 59" stroke="#000" strokeOpacity={0.25} strokeWidth={0.8} fill="none" />
+      <FaceShade c={c} />
+    </>
+  ),
+
+  minion: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('vest')} stops={[[0, '#50602e'], [1, '#141a08']]} />
+        <Grad id={c.id('shirt')} stops={[[0, '#ecdfcb'], [1, '#8a8070']]} />
+        <Grad id={c.id('hair')} stops={[[0, '#544030'], [1, '#120c06']]} />
+      </defs>
+      <Bust fill={c.u('shirt')} c={c} />
+      <path d="M10 101 C12 86 22 77 33 74 L44 88 L42 101 Z M90 101 C88 86 78 77 67 74 L56 88 L58 101 Z" fill={c.u('vest')} />
+      <path d="M33 74 L41 66 L46 74 M67 74 L59 66 L54 74" fill="#3e4c22" />
+      <path d="M46.6 80 L53.4 86 M53.4 80 L46.6 86 M46.6 86 L53.4 92 M53.4 86 L46.6 92" stroke="#8a6a50" strokeWidth={0.8} />
+      <Neck fill={c.u('skin')} />
+      <Head c={c} />
+      <path
+        d="M37 42 C35 33 37 26 42 22 L44 15.5 L47 21 L50 12.5 L53 20 L57 14.5 L58 22 C63 25 65 32 63 42 C61 35 57 31 50 31 C43 31 39 35 37 42 Z"
+        fill={c.u('hair')}
+      />
+      <Face c={c} eye="#4a3a20" brow="#2a1a0a" browWidth={1.5} mouth="grin" lips="#7a2a2a" />
+      <path d="M48.4 59.6 L50 64.4 L51.6 59.6 Z" fill="#3a2a1a" />
+      <FaceShade c={c} />
+    </>
+  ),
+
+  wolfMan: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('fur')} stops={[[0, '#b48c4c'], [1, '#4a3416']]} />
+        <Radial id={c.id('furFace')} cx={0.42} cy={0.4} r={0.7} stops={[[0, '#d2aa6a'], [0.6, '#9a7438'], [1, '#4a3416']]} />
+        <Grad id={c.id('shirt')} stops={[[0, '#f4eee2'], [1, '#a8a090']]} />
+      </defs>
+      <Bust fill={c.u('shirt')} c={c} />
+      <path d="M42 72 L50 93 L58 72 Z" fill={c.u('fur')} />
+      <path d="M40 74 Q46 86 50 93 M60 74 Q54 86 50 93" stroke="#d8d0c0" strokeWidth={1.2} fill="none" />
+      <Neck fill={c.u('fur')} thick />
+      <path d="M35 38 L31 25 L41 32 Z M65 38 L69 25 L59 32 Z" fill={c.u('fur')} />
+      <path d="M33 46 C31 30 39 21 50 21 C61 21 69 30 67 46 C68 56 64 66 58 71 L42 71 C36 66 32 56 33 46 Z" fill={c.u('fur')} />
+      <ellipse cx={50} cy={47} rx={12.5} ry={14.5} fill={c.u('furFace')} />
+      <path d="M33 46 C31 30 39 21 50 21 C61 21 69 30 67 46" fill="none" stroke={c.u('rim')} strokeWidth={0.9} />
+      <path d="M39.6 41 Q45 37.2 49 41 M51 41 Q55 37.2 60.4 41" stroke="#3a2410" strokeWidth={2.2} fill="none" strokeLinecap="round" />
+      <circle cx={45} cy={44.4} r={4} fill={c.u('eyeHalo')} />
+      <circle cx={55} cy={44.4} r={4} fill={c.u('eyeHalo')} />
+      <path d="M42 44.4 Q45 42.6 48 44.6 Q45 46 42 44.4 Z M58 44.4 Q55 42.6 52 44.6 Q55 46 58 44.4 Z" fill="#ff5a2a" />
+      <path d="M47 49.4 C47 47.8 53 47.8 53 49.4 C53 51.4 51 52.4 50 52.4 C49 52.4 47 51.4 47 49.4 Z" fill="#2a1a10" />
+      <path d="M43.4 55 Q50 63.6 56.6 55 Q50 57.6 43.4 55 Z" fill="#5a0a12" />
+      <path d="M44.6 55.6 Q50 57.8 55.4 55.6 L55 56.8 Q50 58.6 45 56.8 Z" fill="#f4efe2" />
+      <path d="M45.4 56 L46.4 60 L47.4 56.6 Z M54.6 56 L53.6 60 L52.6 56.6 Z" fill="#f4efe2" />
+      <path d="M36 52 L40 54 M35.6 56 L40 57 M64 52 L60 54 M64.4 56 L60 57" stroke="#4a3416" strokeWidth={0.8} />
+    </>
+  ),
+
+  bigBadWolf: wolf({ fur: '#4c4e5c', furDark: '#0e0f14', muzzle: '#6c6e7a', eye: '#ff8a20', mane: true }),
+  direWolf: wolf({ fur: '#8c7c6a', furDark: '#2a2018', muzzle: '#efe6da', eye: '#f2c23a', smile: true, cheeks: '#e6ddd0' }),
+  fangFace: wolf({ fur: '#aa8c5a', furDark: '#3a2a14', muzzle: '#efe2c8', eye: '#f2c23a', cap: '#c8302a' }),
+
+  fruitBrute: (c) => (
+    <>
+      {wolf({ fur: '#7c4c2a', furDark: '#2a140a', muzzle: '#ead6c2', eye: '#ff9a3c', apple: true })(c)}
+      <path d="M22 72 L58 101 L64 101 L27 70 Z" fill="#d8c8a8" opacity={0.9} />
+      <path d="M8 90 C10 82 22 78 32 82 C36 88 34 98 30 101 L8 101 Z" fill="#6a4a24" />
+      <g>
+        <circle cx={14} cy={86} r={2.4} fill="#6a3a8a" />
+        <circle cx={18} cy={85} r={2.4} fill="#7a4a9a" />
+        <circle cx={16} cy={89} r={2.4} fill="#5a2a7a" />
+        <path d="M20 84 C24 78 30 78 33 81 C29 81 25 82 22 86 Z" fill="#f0c83a" />
+        <circle cx={26} cy={86} r={3.2} fill="#5ab03a" />
+        <path d="M28 92 L36 82 L34 94 Z" fill="#f08a2a" />
+      </g>
+    </>
+  ),
+
+  wolverine: (c) => (
+    <>
+      {wolf({ fur: '#4c3c34', furDark: '#140e0a', muzzle: '#5c4c44', eye: '#d0d8ff', band: '#c8bba8' })(c)}
+      <ellipse cx={74} cy={80} rx={10} ry={8} fill="#1e1612" />
+      <g fill="#ece8e0">
+        <path d="M68 74 C70 60 72 50 70 40 C75 50 75 62 71 75 Z" />
+        <path d="M74 73 C78 60 82 52 82 42 C85 53 83 64 77 75 Z" />
+        <path d="M79 76 C85 66 90 60 92 52 C93 63 89 72 82 79 Z" />
+      </g>
     </>
   ),
 };

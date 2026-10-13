@@ -1,7 +1,8 @@
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Ghost, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Flame, Ghost, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { NightActionField, NightActionKind, NightStep, Player } from '../../@types/game';
+import type { NightActionField, NightActionKind, NightStep, NightTargetListField, Player, RoleId } from '../../@types/game';
+import { ROLES, ROLE_ORDER } from '../../data/roles';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 import { PlayerToken } from '../shared/PlayerToken';
@@ -15,13 +16,33 @@ const SINGLE_FIELD: Partial<Record<NightActionKind, NightActionField>> = {
   vampireBite: 'vampireTarget',
   spellcasterSilence: 'spellcasterTarget',
   cultRecruit: 'cultTarget',
+  direWolfCompanion: 'direWolfTarget',
+  doppelgangerCopy: 'doppelgangerTarget',
+  virginiaFear: 'virginiaTarget',
+  leprechaunRedirect: 'leprechaunTarget',
+  auraInspect: 'auraSeerTarget',
+  piInspect: 'piTarget',
+  priestBless: 'priestTarget',
+  oldHagBanish: 'oldHagTarget',
 };
+
+/** Steps that pick several players at once. */
+const LIST_FIELD: Partial<Record<NightActionKind, NightTargetListField>> = {
+  wolfKill: 'wolfTargets',
+  cupidLink: 'cupidTargets',
+};
+
+/** Powers the role may decline (the moderator just moves on). */
+const OPTIONAL = new Set<NightActionKind>(['piInspect', 'priestBless', 'leprechaunRedirect', 'troublemakerStir']);
 
 const ACCENT: Partial<Record<NightActionKind, 'village' | 'wolf' | 'vampire' | 'cult'>> = {
   wolfKill: 'wolf',
   sorceressInspect: 'wolf',
   vampireBite: 'vampire',
   cultRecruit: 'cult',
+  direWolfCompanion: 'wolf',
+  cupidLink: 'vampire',
+  leprechaunRedirect: 'cult',
 };
 
 /** Step-by-step wake-up assistant. Low-contrast cyan UI so it doesn't light faces in a dark room. */
@@ -125,14 +146,24 @@ function StepView({ step }: { step: NightStep }) {
       {step.note === 'wolvesSkip' && <Notice tone="ember">{t('night.wolvesSkip')}</Notice>}
       {step.note === 'wolvesDouble' && !step.ghost && <Notice tone="wolf">{t('night.wolvesDouble')}</Notice>}
       {step.note === 'noPotions' && !step.ghost && <Notice>{t('night.noPotions')}</Notice>}
+      {step.note === 'bigBadWolf' && !step.ghost && <Notice tone="wolf">{t('night.bigBadWolf')}</Notice>}
+      {step.note === 'fruitBrute' && <Notice tone="ember">{t('night.fruitBrute')}</Notice>}
+      {step.note === 'used' && <Notice>{t('night.used')}</Notice>}
+      {OPTIONAL.has(step.action) && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.optional')}</p>}
 
       {/* Results sit above the picker so the sticky footer never hides them. */}
       {step.action === 'seerInspect' && state.nightActions.seerTarget && <SeerResult playerId={state.nightActions.seerTarget} />}
       {step.action === 'sorceressInspect' && state.nightActions.sorceressTarget && (
         <SorceressResult playerId={state.nightActions.sorceressTarget} />
       )}
+      {step.action === 'auraInspect' && state.nightActions.auraSeerTarget && <AuraResult playerId={state.nightActions.auraSeerTarget} />}
+      {step.action === 'piInspect' && state.nightActions.piTarget && <PiResult playerId={state.nightActions.piTarget} />}
+      {step.action === 'leprechaunRedirect' && step.targetCount > 0 && <WolfTargetSummary />}
 
-      {step.targetCount > 0 && (step.action === 'witchPotion' ? <WitchPanel step={step} /> : <TargetPicker step={step} />)}
+      {step.kind === 'info' && !step.ghost && <InfoPanel step={step} />}
+      {step.kind === 'toggle' && step.targetCount > 0 && <TroublemakerToggle step={step} />}
+      {step.kind === 'role' && step.targetCount > 0 && <DrunkRolePicker />}
+      {step.kind === 'targets' && step.targetCount > 0 && (step.action === 'witchPotion' ? <WitchPanel step={step} /> : <TargetPicker step={step} />)}
     </div>
   );
 }
@@ -143,17 +174,22 @@ function TargetPicker({ step }: { step: NightStep }) {
   const { state } = engine;
   const targets = engine.targetsFor(step);
   const field = SINGLE_FIELD[step.action];
-  const selected = step.action === 'wolfKill' ? state.nightActions.wolfTargets : field ? [state.nightActions[field]].filter(Boolean) : [];
+  const listField = LIST_FIELD[step.action];
+  const selected: string[] = listField
+    ? state.nightActions[listField]
+    : field
+      ? [state.nightActions[field]].filter((x): x is string => !!x)
+      : [];
   const lastProtected = step.action === 'bodyguardProtect' ? state.modifiers.bodyguardLastTarget : null;
   const candidates = lastProtected
     ? [...targets, ...state.players.filter((p) => p.id === lastProtected && p.alive)]
     : targets;
 
   const toggle = (id: string) => {
-    if (step.action === 'wolfKill') {
-      const cur = state.nightActions.wolfTargets;
-      if (cur.includes(id)) engine.setWolfTargets(cur.filter((x) => x !== id));
-      else engine.setWolfTargets([...cur, id].slice(-step.targetCount));
+    if (listField) {
+      const cur = state.nightActions[listField];
+      if (cur.includes(id)) engine.setTargetList(listField, cur.filter((x) => x !== id));
+      else engine.setTargetList(listField, [...cur, id].slice(-step.targetCount));
     } else if (field) {
       engine.setNightAction(field, state.nightActions[field] === id ? null : id);
     }
@@ -162,7 +198,11 @@ function TargetPicker({ step }: { step: NightStep }) {
   return (
     <div>
       <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">
-        {step.targetCount > 1 ? t('night.chooseTargets', { count: step.targetCount }) : t('night.chooseTarget')}
+        {step.action === 'cupidLink'
+          ? t('night.chooseLovers')
+          : step.targetCount > 1
+            ? t('night.chooseTargets', { count: step.targetCount })
+            : t('night.chooseTarget')}
       </p>
       {candidates.length === 0 ? (
         <p className="text-sm text-bone-faint">{t('night.noTargets')}</p>
@@ -191,7 +231,8 @@ function WitchPanel({ step }: { step: NightStep }) {
   const { t } = useI18n();
   const engine = useGameEngine();
   const { state, byId } = engine;
-  const victims = state.nightActions.wolfTargets.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+  // After the Leprechaun's redirect: the Witch sees who will really be attacked.
+  const victims = engine.wolfVictims().map((id) => byId.get(id)).filter((p): p is Player => !!p);
   const killTargets = engine.targetsFor(step, 'kill');
   const { witchHealUsed, witchKillUsed } = state.modifiers;
 
@@ -302,5 +343,111 @@ function Notice({ children, icon, tone = 'village' }: { children: ReactNode; ico
       <span className="mt-0.5 shrink-0">{icon ?? <Info className="h-4 w-4" />}</span>
       <span>{children}</span>
     </div>
+  );
+}
+
+function InfoPanel({ step }: { step: NightStep }) {
+  const { t } = useI18n();
+  const { alive } = useGameEngine();
+  // Masons meet each other; the Minion is shown the wolves.
+  const minion = step.action === 'minionMeet';
+  const shown = minion ? alive.filter((p) => ROLES[p.roleId].isWolf) : alive.filter((p) => step.actors.includes(p.id));
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">{minion ? t('night.minionSees') : t('night.masons')}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {shown.map((p) => (
+          <PlayerToken key={p.id} player={p} accent={minion ? 'wolf' : 'village'} selected />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WolfTargetSummary() {
+  const { t } = useI18n();
+  const { state, byId } = useGameEngine();
+  const target = byId.get(state.nightActions.wolfTargets[0] ?? '');
+  if (!target) return <Notice>{t('night.leprechaunNoTarget')}</Notice>;
+  return (
+    <div className="space-y-2">
+      <PlayerToken player={target} accent="wolf" selected />
+      <p className="text-xs text-bone-faint">{t('night.leprechaunKeep')}</p>
+    </div>
+  );
+}
+
+function TroublemakerToggle({ step }: { step: NightStep }) {
+  const { t } = useI18n();
+  const engine = useGameEngine();
+  const on = !!engine.state.nightActions.troublemakerActor;
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={() => engine.setNightAction('troublemakerActor', on ? null : (step.actors[0] ?? null))}
+      className={clsx(
+        'press flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border font-display uppercase tracking-grimoire',
+        on ? 'border-ember bg-ember/15 text-bone shadow-inner-ember' : 'border-panel-edge bg-panel-2 text-bone-dim',
+      )}
+    >
+      <Flame className="h-5 w-5" />
+      {on ? t('night.stirOn') : t('night.stir')}
+    </button>
+  );
+}
+
+function DrunkRolePicker() {
+  const { t } = useI18n();
+  const engine = useGameEngine();
+  const chosen = engine.state.nightActions.drunkRole;
+  const options = ROLE_ORDER.filter((id) => id !== 'drunk');
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">{t('night.drunkPick')}</p>
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+        {options.map((id: RoleId) => (
+          <RoleCard
+            key={id}
+            roleId={id}
+            size="xs"
+            showWeight={false}
+            className="!w-full"
+            selected={chosen === id}
+            onClick={() => engine.setNightAction('drunkRole', chosen === id ? null : id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuraResult({ playerId }: { playerId: string }) {
+  const { t } = useI18n();
+  const { byId, auraResult } = useGameEngine();
+  const p = byId.get(playerId);
+  if (!p) return null;
+  const special = auraResult(p);
+  return (
+    <ResultBanner wolf={special} key={playerId}>
+      <span className={clsx('font-display text-xl font-bold uppercase tracking-grimoire', special ? 'text-wolf-bright' : 'text-village')}>
+        {special ? t('night.auraSpecial', { name: p.name }) : t('night.auraOrdinary', { name: p.name })}
+      </span>
+    </ResultBanner>
+  );
+}
+
+function PiResult({ playerId }: { playerId: string }) {
+  const { t } = useI18n();
+  const { byId, piResult } = useGameEngine();
+  const p = byId.get(playerId);
+  if (!p) return null;
+  const found = piResult(playerId);
+  return (
+    <ResultBanner wolf={found} key={playerId}>
+      <span className={clsx('font-display text-xl font-bold uppercase tracking-grimoire', found ? 'text-wolf-bright' : 'text-village')}>
+        {found ? t('night.piYes', { name: p.name }) : t('night.piNo', { name: p.name })}
+      </span>
+    </ResultBanner>
   );
 }
