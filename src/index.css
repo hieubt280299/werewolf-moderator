@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-ink font-body text-bone antialiased;
+    min-height: 100dvh;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display font-bold uppercase tracking-grimoire;
+  }
+  button {
+    touch-action: manipulation;
+  }
+  :focus-visible {
+    outline: 2px solid #00A3E0;
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Keeps Vietnamese diacritics crisp on charcoal. */
+  .text-shadow-crisp {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+  .text-shadow-title {
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.6);
+  }
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl bg-panel-gradient shadow-card;
+  }
+  /* Faint card-stock grain + vignette, like the printed card backgrounds. */
+  .grimoire-texture {
+    background-image:
+      radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.05), transparent 60%),
+      radial-gradient(ellipse at 50% 120%, rgba(0, 0, 0, 0.85), transparent 60%),
+      linear-gradient(160deg, #12141c 0%, #1a1d26 100%);
+  }
+}

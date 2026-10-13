@@ -1,0 +1,223 @@
+import type { BalanceOptions, ExperienceLevel, Player, PlayerStatus, RoleId } from '../@types/game';
+import { ROLES, ROLE_ORDER } from '../data/roles';
+
+/**
+ * Target deck weight per experience level.
+ * Veterans read the table well, so the deck tilts slightly toward the wolves;
+ * new groups get a forgiving, village-leaning deck.
+ */
+export const EXPERIENCE_TARGET: Record<ExperienceLevel, number> = {
+  beginner: 2,
+  standard: 0,
+  veteran: -2,
+};
+
+/** Within this distance of the target a deck is called balanced. */
+export const BALANCE_TOLERANCE = 2;
+
+export const MIN_PLAYERS = 5;
+export const MAX_PLAYERS = 30;
+
+// ---------------------------------------------------------------------------
+// Randomness
+// ---------------------------------------------------------------------------
+
+/** Uniform float in [0,1) — crypto-backed when available so deals can't be predicted. */
+export function secureRandom(): number {
+  if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return buf[0] / 2 ** 32;
+  }
+  return Math.random();
+}
+
+/** Fisher–Yates shuffle; returns a new array. */
+export function shuffle<T>(items: readonly T[], random: () => number = secureRandom): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+export function pickOne<T>(items: readonly T[], random: () => number = secureRandom): T {
+  return items[Math.floor(random() * items.length)];
+}
+
+export function createId(prefix = 'id'): string {
+  const rand = Math.floor(secureRandom() * 36 ** 6).toString(36).padStart(6, '0');
+  return `${prefix}_${Date.now().toString(36)}${rand}`;
+}
+
+// ---------------------------------------------------------------------------
+// Balance weights
+// ---------------------------------------------------------------------------
+
+export function calculateBalance(deck: readonly RoleId[]): number {
+  return deck.reduce((sum, id) => sum + ROLES[id].weight, 0);
+}
+
+export type BalanceVerdict = 'village' | 'balanced' | 'wolves';
+
+export function balanceVerdict(sum: number, target = 0): BalanceVerdict {
+  const delta = sum - target;
+  if (delta > BALANCE_TOLERANCE) return 'village';
+  if (delta < -BALANCE_TOLERANCE) return 'wolves';
+  return 'balanced';
+}
+
+/** Roughly one wolf per 4–5 players, never a majority. */
+export function suggestedWolfCount(playerCount: number): number {
+  const raw = Math.max(1, Math.round(playerCount / 4.5));
+  return Math.min(raw, Math.max(1, Math.floor((playerCount - 1) / 2)));
+}
+
+export function countRoles(deck: readonly RoleId[]): Partial<Record<RoleId, number>> {
+  const counts: Partial<Record<RoleId, number>> = {};
+  for (const id of deck) counts[id] = (counts[id] ?? 0) + 1;
+  return counts;
+}
+
+/** Sort a deck into catalogue order for stable display. */
+export function sortDeck(deck: readonly RoleId[]): RoleId[] {
+  return [...deck].sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+}
+
+export interface DeckIssue {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
+/** Structural problems that would make a deck unplayable. */
+export function validateDeck(deck: readonly RoleId[], playerCount: number): DeckIssue[] {
+  const issues: DeckIssue[] = [];
+  const counts = countRoles(deck);
+  if (deck.length !== playerCount) {
+    issues.push({ key: 'issue.deckSize', params: { cards: deck.length, players: playerCount } });
+  }
+  const wolves = deck.filter((id) => ROLES[id].isWolf).length;
+  const threats = wolves + (counts.vampire ?? 0);
+  if (threats === 0) issues.push({ key: 'issue.noThreat' });
+  if (threats * 2 >= playerCount && playerCount > 0) issues.push({ key: 'issue.tooManyThreats' });
+  if (counts.loneWolf && wolves < 2) issues.push({ key: 'issue.loneWolfAlone' });
+  for (const [id, n] of Object.entries(counts) as [RoleId, number][]) {
+    if (n > ROLES[id].maxCopies) issues.push({ key: 'issue.tooManyCopies', params: { role: id } });
+  }
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-balancer
+// ---------------------------------------------------------------------------
+
+function isValidDraft(deck: RoleId[], wolfCount: number): boolean {
+  const counts = countRoles(deck);
+  for (const [id, n] of Object.entries(counts) as [RoleId, number][]) {
+    if (n > ROLES[id].maxCopies) return false;
+  }
+  const wolves = deck.filter((id) => ROLES[id].isWolf);
+  if (wolves.length !== wolfCount) return false;
+  if (!counts.werewolf) return false; // the pack needs at least one plain Werewolf
+  if (counts.loneWolf && wolves.length < 2) return false;
+  return true;
+}
+
+/**
+ * Generates a deck of `playerCount` roles drawn from `pool` whose weight sum lands
+ * as close as possible to the experience target, preferring decks that use more of
+ * the selected special roles. Greedy seed + hill-climb; deterministic with `random`.
+ */
+export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
+  const random = options.random ?? secureRandom;
+  const n = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, options.playerCount));
+  const target = EXPERIENCE_TARGET[options.experience];
+  const wolfCount = Math.min(
+    Math.max(1, options.wolfCount ?? suggestedWolfCount(n)),
+    Math.max(1, Math.floor((n - 1) / 2)),
+  );
+
+  const pool = Array.from(new Set<RoleId>([...options.pool, 'villager', 'werewolf']));
+  const wolfPool = pool.filter((id) => ROLES[id].isWolf);
+  const specialPool = pool.filter((id) => !ROLES[id].isWolf && id !== 'villager');
+
+  // Seed: plain wolves + the most informative specials, padded with villagers.
+  const seed: RoleId[] = Array.from({ length: wolfCount }, () => 'werewolf' as RoleId);
+  const villageSlots = n - wolfCount;
+  const prioritized = shuffle(specialPool, random).sort((a, b) =>
+    a === 'seer' ? -1 : b === 'seer' ? 1 : 0,
+  );
+  seed.push(...prioritized.slice(0, Math.ceil(villageSlots * 0.6)));
+  while (seed.length < n) seed.push('villager');
+
+  const score = (deck: RoleId[]): number => {
+    const balance = Math.abs(calculateBalance(deck) - target);
+    // The Seer anchors the village's information game, so dropping it costs extra.
+    const missing = specialPool.reduce((n, id) => n + (deck.includes(id) ? 0 : id === 'seer' ? 4 : 1), 0);
+    const villagers = deck.filter((id) => id === 'villager').length;
+    return balance * 10 + missing * 0.5 + (villagers === 0 ? 0 : 0.01 * villagers);
+  };
+
+  let best = seed;
+  let bestScore = score(best);
+  let current = best;
+  let currentScore = bestScore;
+
+  for (let iter = 0; iter < 1500; iter++) {
+    const candidate = [...current];
+    const slot = Math.floor(random() * n);
+    if (ROLES[candidate[slot]].isWolf) {
+      candidate[slot] = pickOne(wolfPool, random);
+    } else {
+      candidate[slot] = pickOne([...specialPool, 'villager'] as RoleId[], random);
+    }
+    if (!isValidDraft(candidate, wolfCount)) continue;
+    const s = score(candidate);
+    // Accept improvements, and sideways moves half the time to escape plateaus.
+    if (s < currentScore || (s === currentScore && random() < 0.5)) {
+      current = candidate;
+      currentScore = s;
+      if (s < bestScore) {
+        best = candidate;
+        bestScore = s;
+      }
+    }
+  }
+
+  return sortDeck(best);
+}
+
+// ---------------------------------------------------------------------------
+// Dealing
+// ---------------------------------------------------------------------------
+
+export const EMPTY_STATUS: PlayerStatus = {
+  protected: false,
+  silenced: false,
+  inCult: false,
+  vampireMarked: false,
+  princeRevealed: false,
+  transformed: false,
+};
+
+/** Randomly assigns the deck to seated players. */
+export function dealRoles(
+  names: readonly string[],
+  deck: readonly RoleId[],
+  random: () => number = secureRandom,
+): Player[] {
+  if (names.length !== deck.length) {
+    throw new Error(`Cannot deal ${deck.length} cards to ${names.length} players`);
+  }
+  const shuffled = shuffle(deck, random);
+  return names.map((name, seat) => ({
+    id: createId('p'),
+    name: name.trim() || `#${seat + 1}`,
+    seat,
+    roleId: shuffled[seat],
+    originalRoleId: shuffled[seat],
+    alive: true,
+    status: { ...EMPTY_STATUS },
+  }));
+}
