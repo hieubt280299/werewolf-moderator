@@ -23,7 +23,10 @@ function Shell() {
     window.scrollTo({ top: 0 });
   }, []);
 
-  useEffect(() => window.scrollTo({ top: 0 }), []);
+  // Braced body: in recent Chromium, scrollTo() returns a Promise, which must not leak out as an effect cleanup.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, []);
 
   return (
     <>
