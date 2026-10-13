@@ -6,7 +6,7 @@ import type { Player } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 import { Button, Chip, SectionTitle } from '../shared/ui';
-import { ChroniclePanel } from './ChronicleView';
+import { TimelinePanel } from './TimelineView';
 import { DawnReport } from './DawnReport';
 import { GameOverPanel } from './GameOverPanel';
 import { HunterTriggerSheet } from './HunterTriggerSheet';
@@ -18,7 +18,7 @@ import { VotingPanel } from './VotingPanel';
 
 /**
  * In-game moderator board: phase timeline, the control panel for the current phase
- * (night script / dawn report / day voting / results), the live player grid and chronicle.
+ * (night script / dawn report / day voting / results), the live player grid and timeline.
  */
 export function ModeratorDashboard() {
   const { t } = useI18n();
@@ -125,7 +125,7 @@ export function ModeratorDashboard() {
               ))}
             </div>
 
-            <ChroniclePanel log={state.log} />
+            <TimelinePanel log={state.log} />
           </section>
         </div>
       </div>

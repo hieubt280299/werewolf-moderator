@@ -6,6 +6,7 @@ import type { Nomination } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 import { PlayerToken } from '../shared/PlayerToken';
+import { Tooltip } from '../shared/Tooltip';
 import { Button, Chip, SectionTitle, Sheet } from '../shared/ui';
 
 /** Nomination, defense and public execution tracker for the day phase. */
@@ -112,13 +113,14 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
             // The accused can't vote on their own nomination: always counted as NO / abstain.
             if (p.id === accused.id) {
               return (
-                <span
+                <Tooltip
                   key={p.id}
-                  className="flex min-h-10 items-center rounded-full border border-dashed border-panel-edge px-3 text-sm text-bone-faint"
-                  title={t('day.abstain')}
+                  content={t('day.abstainHint')}
+                  className="flex min-h-10 cursor-help items-center rounded-full border border-dashed border-panel-edge px-3 text-sm text-bone-faint"
                 >
-                  {p.name} · {t('day.abstain')}
-                </span>
+                  {p.name}
+                  <span className="sr-only"> — {t('day.abstain')}</span>
+                </Tooltip>
               );
             }
             const on = nomination.voters.includes(p.id);

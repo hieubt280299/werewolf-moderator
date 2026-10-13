@@ -1,5 +1,5 @@
 import { MoonStar } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { DashboardHome } from './components/dashboard/DashboardHome';
 import { DeckBuilder } from './components/dashboard/DeckBuilder';
@@ -15,22 +15,59 @@ import { I18nProvider, useI18n } from './i18n/I18nContext';
 
 export type View = 'home' | 'game' | 'decks' | 'history' | 'profile';
 
-function Shell() {
-  const { state } = useGame();
-  const [view, setView] = useState<View>('home');
-  const navigate = useCallback((next: View) => {
-    setView(next);
+interface NavState {
+  view: View;
+  /** Depth in this app's own history, so Back never leaves the app. */
+  depth: number;
+}
+
+/**
+ * Screen navigation backed by the History API: the header's Back arrow, the browser
+ * Back button and the Android back gesture all return to the previous screen.
+ */
+function useViewHistory() {
+  const [nav, setNav] = useState<NavState>({ view: 'home', depth: 0 });
+  const navRef = useRef(nav);
+  navRef.current = nav;
+
+  useEffect(() => {
+    window.history.replaceState({ view: 'home', depth: 0 } satisfies NavState, '');
+    window.scrollTo({ top: 0 });
+    const onPop = (e: PopStateEvent) => {
+      const state = e.state as NavState | null;
+      setNav(state?.view ? state : { view: 'home', depth: 0 });
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const navigate = useCallback((view: View) => {
+    const current = navRef.current;
+    if (current.view === view) return;
+    // pushState stays outside any state updater (StrictMode would run it twice).
+    const next: NavState = { view, depth: current.depth + 1 };
+    window.history.pushState(next, '');
+    navRef.current = next;
+    setNav(next);
     window.scrollTo({ top: 0 });
   }, []);
 
-  // Braced body: in recent Chromium, scrollTo() returns a Promise, which must not leak out as an effect cleanup.
-  useEffect(() => {
-    window.scrollTo({ top: 0 });
-  }, []);
+  const back = useCallback(() => {
+    if (nav.depth > 0) window.history.back();
+    else navigate('home');
+  }, [nav.depth, navigate]);
+
+  return { view: nav.view, navigate, back };
+}
+
+function Shell() {
+  const { state } = useGame();
+  const { view, navigate, back } = useViewHistory();
 
   return (
     <>
-      <AppHeader view={view} onNavigate={navigate} />
+      <AppHeader view={view} onNavigate={navigate} onBack={back} />
       <main>
         {view === 'home' && <DashboardHome onNavigate={navigate} />}
         {view === 'game' && (state.phase === 'setup' ? <SetupScreen /> : <ModeratorDashboard />)}

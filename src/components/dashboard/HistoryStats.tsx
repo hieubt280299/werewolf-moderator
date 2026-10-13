@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import type { GameRecord, WinTeam } from '../../@types/game';
 import { useAuth } from '../../context/AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
-import { ChronicleView } from '../game/ChronicleView';
+import { TimelineView } from '../game/TimelineView';
 import { Chip, RoleBadge, SectionTitle, Sheet } from '../shared/ui';
 
 const TEAM_CHIP: Record<WinTeam, 'village' | 'werewolf' | 'vampire' | 'cult' | 'neutral'> = {
@@ -114,7 +114,7 @@ export function HistoryStats() {
             </div>
             <div>
               <SectionTitle>{t('dash.log')}</SectionTitle>
-              <ChronicleView log={open.log} />
+              <TimelineView log={open.log} />
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import { Moon, ScrollText, Sun, Trophy, Users } from 'lucide-react';
 import type { GameLogEntry } from '../../@types/game';
 import { useI18n } from '../../i18n/I18nContext';
-import { formatChronicleEntry, groupChronicle } from '../../utils/gameCalculations';
+import { formatTimelineEntry, groupTimeline } from '../../utils/gameCalculations';
 
 const PHASE_ICON = { night: Moon, dawn: Moon, day: Sun, setup: Users, gameOver: Trophy } as const;
 
@@ -10,9 +10,9 @@ const PHASE_ICON = { night: Moon, dawn: Moon, day: Sun, setup: Users, gameOver: 
  * Chronological game timeline — oldest first, grouped into phase blocks
  * (Night 1 → Day 1 → Night 2…). Every event names the player and their role.
  */
-export function ChronicleView({ log, className }: { log: readonly GameLogEntry[]; className?: string }) {
+export function TimelineView({ log, className }: { log: readonly GameLogEntry[]; className?: string }) {
   const { t, tx } = useI18n();
-  const groups = groupChronicle(log, tx);
+  const groups = groupTimeline(log, tx);
 
   if (groups.length === 0) return <p className={clsx('text-sm text-bone-faint', className)}>{t('dash.logEmpty')}</p>;
 
@@ -38,7 +38,7 @@ export function ChronicleView({ log, className }: { log: readonly GameLogEntry[]
             <ul className="space-y-1">
               {group.entries.map((entry) => (
                 <li key={entry.id} className="text-sm leading-snug text-bone/85">
-                  {formatChronicleEntry(entry, tx)}
+                  {formatTimelineEntry(entry, tx)}
                 </li>
               ))}
             </ul>
@@ -49,8 +49,8 @@ export function ChronicleView({ log, className }: { log: readonly GameLogEntry[]
   );
 }
 
-/** Collapsible chronicle panel for the in-game board. */
-export function ChroniclePanel({ log }: { log: readonly GameLogEntry[] }) {
+/** Collapsible timeline panel for the in-game board. */
+export function TimelinePanel({ log }: { log: readonly GameLogEntry[] }) {
   const { t } = useI18n();
   return (
     <details className="panel group mt-5 overflow-hidden">
@@ -61,7 +61,7 @@ export function ChroniclePanel({ log }: { log: readonly GameLogEntry[] }) {
         <span className="text-xs">{log.length}</span>
       </summary>
       <div className="max-h-96 overflow-y-auto border-t border-panel-edge px-4 py-4">
-        <ChronicleView log={log} />
+        <TimelineView log={log} />
       </div>
     </details>
   );

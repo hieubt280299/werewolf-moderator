@@ -53,19 +53,26 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
   - **Custom Decks** (Deck builder studio)
   - **Game History & Analytics** (Career stats and game logs)
   - **Profile & Settings** (Change password, edit name, language switch)
+    - The Change password form is hidden by default; a **Change password** button in the bottom action group (above Sign out) reveals it, with Cancel to collapse it again.
+- **Back Navigation:** The header back arrow (and the browser / Android back gesture) returns to the *previous* screen, not always the hub — e.g. opening Profile mid-game and pressing back returns to the game.
 
 #### 3. 🃏 Custom Deck Management (Max 10 Decks)
 - Moderators can build, edit, and store up to 10 favorite role decks.
 - Each deck defines a preset role pool (e.g., "Standard 10-Player", "Chaotic Veteran Deck").
+- **Card Preview:** In the Deck Builder and the in-game Deck Selection, tapping a card does NOT add it to the deck. It opens the card in full size with its complete role description (plus team, balance weight and night behaviour) so the moderator can learn what it does. Counts are changed with the ± steppers (also available inside the preview).
 
 #### 4. 🎲 Gameplay Mechanics Updates
 - **Deck Selection Phase:** Include an interactive deck selector before card distribution so moderators can load one of their saved presets or create a custom role pool on the fly.
 - **Role Deal & Swap System:**
   - The "Deal" phase role picker MUST ONLY list cards/roles included in the setup deck.
   - Selecting a role for a player that is already assigned to another player automatically **swaps** roles between the two players.
+- **Dawn Announcement:**
+  - Each elimination reads only *"Player 2 was eliminated"* — never who or what killed them (the village doesn't learn the cause; the cause is kept in the moderator Timeline).
+  - The row and its tag are coloured by the eliminated player's **side** (village blue, wolf red, vampire purple, cult green), with the tag showing their role.
 - **Voting Logic (Accusations):**
   - The accused player is automatically prohibited from voting for themselves (their vote automatically counts as a "NO / Abstain" vote in the tally engine).
-- **Chronicle (Game Log Timeline):**
+  - In the voter list the accused appears as a dashed chip showing **only their name**. Hovering (desktop) or tapping (mobile) the chip shows a tooltip explaining the abstain rule.
+- **Timeline (EN) / Diễn biến (VI) — the game log:**
   - Events must explicitly include both **Player Name** and **Role Name** (e.g., *"Day 1: Alex (Werewolf) was executed by vote"*).
   - Chronological ordering: Oldest events first (Day 1 $\rightarrow$ Night 1 $\rightarrow$ Day 2...), tracking the true time flow of the game.
 
@@ -87,9 +94,9 @@ src/
 │   └── game.ts          # Updated type definitions (User, Deck, Log, Player, Role)
 ├── context/
 │   ├── AuthContext.tsx  # Simple Username/Password auth & profile sync
-│   └── GameContext.tsx  # Game state machine, swap logic, chronicle logging
+│   └── GameContext.tsx  # Game state machine, swap logic, timeline logging
 ├── utils/
-│   └── gameCalculations.ts # Role balancing & dynamic chronicle formatting
+│   └── gameCalculations.ts # Role balancing & dynamic timeline formatting
 ├── components/
 │   ├── auth/
 │   │   └── AuthScreen.tsx       # Combined login/signup view
@@ -101,7 +108,7 @@ src/
 │   │   ├── DeckSelection.tsx    # Deck picker during game setup
 │   │   ├── RoleDealPicker.tsx   # Swap-enabled role dealer
 │   │   ├── VotingPanel.tsx      # Accusation panel with self-vote restriction
-│   │   └── ChronicleView.tsx    # Chronological history timeline
+│   │   └── TimelineView.tsx     # Chronological game timeline (Timeline / Diễn biến)
 │   └── shared/
 │       └── RoleCard.tsx         # Dual-language card with character avatars
 ├── App.tsx

@@ -6,9 +6,9 @@ import {
   calculateBalance,
   EMPTY_STATUS,
   EXPERIENCE_TARGET,
-  formatChronicleEntry,
+  formatTimelineEntry,
   generateBalancedDeck,
-  groupChronicle,
+  groupTimeline,
   swapRole,
   validateDeck,
 } from './gameCalculations';
@@ -142,7 +142,7 @@ describe('v0.1.0 mechanics', () => {
     expect(s.nominations[0].voters).toEqual(['p1', 'p2']);
   });
 
-  it('writes a chronological chronicle naming player and role', () => {
+  it('writes a chronological timeline naming player and role', () => {
     let s = game(['werewolf', 'seer', 'villager', 'villager', 'villager']);
     s = rules.resolveNight(withActions(s, { wolfTargets: ['p2'], seerTarget: 'p0' }));
     s = rules.startDay(s);
@@ -150,10 +150,10 @@ describe('v0.1.0 mechanics', () => {
     s = rules.executeNomination(s, s.nominations[0].id);
     const tx = (key: string, params?: Record<string, string | number>) =>
       key + (params ? ' ' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join(' ') : '');
-    const groups = groupChronicle(s.log, tx);
+    const groups = groupTimeline(s.log, tx);
     expect(groups.map((g) => g.label)).toEqual(['phase.nightN round=1', 'phase.dayN round=1', 'phase.gameOver']);
     const vote = s.log.find((e) => e.key === 'log.eliminated.vote')!;
-    expect(formatChronicleEntry(vote, tx)).toContain('name=P0 role=role.werewolf.name');
+    expect(formatTimelineEntry(vote, tx)).toContain('name=P0 role=role.werewolf.name');
   });
 
   it('keeps lifetime stats right when a game is re-recorded with a new winner', () => {

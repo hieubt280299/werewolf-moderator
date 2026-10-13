@@ -5,7 +5,7 @@ Mobile-first moderator companion for **Ultimate Werewolf** (Deluxe roles), style
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # rules engine, balancer, swap/vote/chronicle tests
+npm test           # rules engine, balancer, swap/vote/timeline tests
 npm run build      # typecheck + production build (deploy dist/ to Vercel)
 ```
 
@@ -14,8 +14,11 @@ npm run build      # typecheck + production build (deploy dist/ to Vercel)
 - **Moderator accounts** — username + password; profile with display name, up to 10 saved decks, game history and lifetime stats.
 - **Hub** — start / continue a game, deck studio, history & analytics, profile & settings.
 - **Game setup** — load a saved deck or build a role pool (manual or auto-balanced), then deal. The deal picker only offers roles from the deck, and choosing a role someone else holds swaps the two.
-- **Play** — guided night script, dawn report, accusations (the accused can't vote on their own nomination), Hunter / Wolf Cub / Diseased / Cursed / Prince / Vampire / Cult rules, win checks.
-- **Chronicle** — oldest-first timeline grouped by Night/Day, every event naming the player and their role.
+- **Play** — guided night script, dawn report (who died, never who killed), accusations (the accused can't vote on their own nomination), Hunter / Wolf Cub / Diseased / Cursed / Prince / Vampire / Cult rules, win checks.
+- **Timeline / Diễn biến** — oldest-first game log grouped by Night/Day, every event naming the player and their role.
+- **Card preview** — tap any card in the deck builder or deck selection to read it full-size.
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Storage modes
 

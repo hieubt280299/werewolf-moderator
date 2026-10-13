@@ -1,11 +1,17 @@
-import { Droplet, EyeOff, Flame, HeartPulse, Megaphone, PawPrint, Skull, VolumeX } from 'lucide-react';
+import { Droplet, EyeOff, Flame, HeartPulse, Megaphone, PawPrint, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NightReport } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { Chip } from '../shared/ui';
+import { ROLES } from '../../data/roles';
+import { TONES } from '../shared/tones';
+import { Chip, RoleBadge } from '../shared/ui';
 
-/** Morning summary: public announcements first, moderator-only secrets below. */
+/**
+ * Morning summary: public announcements first, moderator-only secrets below.
+ * Deaths are announced without the cause (the village shouldn't learn who killed);
+ * the row is tinted by the victim's side so the moderator can reveal it if their table does.
+ */
 export function DawnReport({ report }: { report: NightReport }) {
   const { t } = useI18n();
   const { byId } = useGameEngine();
@@ -30,16 +36,23 @@ export function DawnReport({ report }: { report: NightReport }) {
               {t('dawn.peaceful')}
             </li>
           )}
-          {report.deaths.map((d) => (
-            <li
-              key={d.playerId}
-              className="animate-step-in flex items-center gap-3 rounded-xl border border-wolf/50 bg-wolf/10 px-4 py-3 shadow-inner-wolf"
-            >
-              <Skull className="h-5 w-5 shrink-0 text-wolf-bright" />
-              <span className="flex-1 font-semibold text-bone text-shadow-crisp">{t('dawn.died', { name: name(d.playerId) })}</span>
-              <Chip tone="werewolf">{t(`cause.${d.cause}`)}</Chip>
-            </li>
-          ))}
+          {report.deaths.map((d) => {
+            const player = byId.get(d.playerId);
+            if (!player) return null;
+            const faction = ROLES[player.roleId].faction;
+            const tone = TONES[faction];
+            return (
+              <li
+                key={d.playerId}
+                className="animate-step-in flex items-center gap-3 rounded-xl border px-3 py-2.5"
+                style={{ borderColor: `${tone.accent}80`, background: `${tone.accent}14`, boxShadow: tone.inner }}
+              >
+                <RoleBadge roleId={player.roleId} size={36} dead />
+                <span className="min-w-0 flex-1 font-semibold text-bone text-shadow-crisp">{t('dawn.died', { name: player.name })}</span>
+                <Chip tone={faction}>{t(`role.${player.roleId}.name`)}</Chip>
+              </li>
+            );
+          })}
           {report.silenced && (
             <li className="animate-step-in flex items-center gap-3 rounded-xl border border-ember/40 bg-ember/10 px-4 py-3">
               <VolumeX className="h-5 w-5 shrink-0 text-ember" />

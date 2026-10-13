@@ -116,7 +116,7 @@ const en = {
   'dash.startDay': 'Start the day',
   'dash.nightfall': 'Nightfall',
   'dash.players': 'Players',
-  'dash.log': 'Chronicle',
+  'dash.log': "Timeline",
   'dash.logEmpty': 'Nothing has happened yet.',
   'dash.nightIntro': 'Everyone, close your eyes. The village sleeps…',
   'dash.dayIntro': 'Everyone, open your eyes.',
@@ -337,7 +337,7 @@ const en = {
   'deal.onlyDeck': "Only roles in this deck are listed. Picking a role someone else holds swaps the two.",
   'deal.heldBy': "Held by {names}",
   'deal.tapToChange': "Tap a player to change their role.",
-  'day.abstain': "Abstains — accused",
+  'day.abstain': "Abstains",
   'history.title': "History & analytics",
   'history.empty': "No finished games yet.",
   'history.games': "Games moderated",
@@ -363,6 +363,15 @@ const en = {
   'profile.account': "Account",
   'profile.storageCloud': "Synced with Firebase",
   'profile.storageLocal': "Stored on this device only",
+
+  // v0.1.0 ----------------------------------------------------------------
+  'day.abstainHint': "The accused can't vote on their own nomination — their vote always counts as NO.",
+  'card.team': "Team",
+  'card.weight': "Balance weight",
+  'card.nightAction': "Wakes at night",
+  'card.noNight': "No night action",
+  'card.wolfPack': "Wakes with the Werewolves",
+  'card.inDeck': "In deck",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -482,7 +491,7 @@ const vi: Dictionary = {
   'dash.startDay': 'Bắt đầu ngày mới',
   'dash.nightfall': 'Màn đêm buông xuống',
   'dash.players': 'Người chơi',
-  'dash.log': 'Biên niên sử',
+  'dash.log': "Diễn biến",
   'dash.logEmpty': 'Chưa có gì xảy ra.',
   'dash.nightIntro': 'Mọi người hãy nhắm mắt lại. Cả làng chìm vào giấc ngủ…',
   'dash.dayIntro': 'Mọi người hãy mở mắt.',
@@ -697,7 +706,7 @@ const vi: Dictionary = {
   'deal.onlyDeck': "Chỉ hiện các vai trong bộ bài này. Chọn vai mà người khác đang giữ sẽ hoán đổi hai người.",
   'deal.heldBy': "Đang giữ: {names}",
   'deal.tapToChange': "Chạm vào người chơi để đổi vai.",
-  'day.abstain': "Không bỏ phiếu — bị buộc tội",
+  'day.abstain': "Không bỏ phiếu",
   'history.title': "Lịch sử & thống kê",
   'history.empty': "Chưa có ván nào kết thúc.",
   'history.games': "Số ván đã quản trò",
@@ -723,6 +732,15 @@ const vi: Dictionary = {
   'profile.account': "Tài khoản",
   'profile.storageCloud': "Đồng bộ với Firebase",
   'profile.storageLocal': "Chỉ lưu trên thiết bị này",
+
+  // v0.1.0
+  'day.abstainHint': "Người bị buộc tội không thể bỏ phiếu cho chính mình — phiếu của họ luôn tính là KHÔNG.",
+  'card.team': "Phe",
+  'card.weight': "Điểm cân bằng",
+  'card.nightAction': "Thức dậy vào ban đêm",
+  'card.noNight': "Không có hành động ban đêm",
+  'card.wolfPack': "Thức dậy cùng bầy Sói",
+  'card.inDeck': "Trong bộ bài",
 };
 
 export const dictionaries: Record<'en' | 'vi', Dictionary> = { en, vi };

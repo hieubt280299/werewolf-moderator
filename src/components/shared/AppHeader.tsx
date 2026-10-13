@@ -11,7 +11,14 @@ const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.decks' | 'hub.h
   profile: 'hub.profile',
 };
 
-export function AppHeader({ view, onNavigate }: { view: View; onNavigate: (view: View) => void }) {
+interface AppHeaderProps {
+  view: View;
+  onNavigate: (view: View) => void;
+  /** Returns to the previous screen (not always home). */
+  onBack: () => void;
+}
+
+export function AppHeader({ view, onNavigate, onBack }: AppHeaderProps) {
   const { t } = useI18n();
   const { profile } = useAuth();
   const { state, canUndo, undo } = useGameEngine();
@@ -26,7 +33,7 @@ export function AppHeader({ view, onNavigate }: { view: View; onNavigate: (view:
             <MoonStar className="h-5 w-5 text-wolf" />
           </span>
         ) : (
-          <button type="button" onClick={() => onNavigate('home')} aria-label={t('hub.home')} className="press rounded-full p-2.5 text-bone-dim hover:text-bone">
+          <button type="button" onClick={onBack} aria-label={t('setup.back')} className="press rounded-full p-2.5 text-bone-dim hover:text-bone">
             <ArrowLeft className="h-5 w-5" />
           </button>
         )}

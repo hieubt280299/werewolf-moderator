@@ -288,7 +288,7 @@ export function resolveNight(state: GameState): GameState {
   return finalize(s);
 }
 
-/** Writes who did what tonight into the chronicle (before deaths are applied). */
+/** Writes who did what tonight into the timeline (before deaths are applied). */
 function logNightActions(s: GameState) {
   const a = s.nightActions;
   const actor = (roleId: RoleId) => {

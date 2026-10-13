@@ -248,13 +248,13 @@ export function swapRole(players: readonly Player[], playerId: string, roleId: R
 }
 
 // ---------------------------------------------------------------------------
-// Chronicle formatting
+// Timeline formatting
 // ---------------------------------------------------------------------------
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
 /** "Night 2", "Day 2", "Setup"… — dawn events belong to the night that produced them. */
-export function chroniclePhaseLabel(entry: Pick<GameLogEntry, 'phase' | 'round'>, tx: Translate): string {
+export function timelinePhaseLabel(entry: Pick<GameLogEntry, 'phase' | 'round'>, tx: Translate): string {
   switch (entry.phase) {
     case 'night':
     case 'dawn':
@@ -269,7 +269,7 @@ export function chroniclePhaseLabel(entry: Pick<GameLogEntry, 'phase' | 'round'>
 }
 
 /** Renders a log entry, localising role and team ids at display time. */
-export function formatChronicleEntry(entry: GameLogEntry, tx: Translate): string {
+export function formatTimelineEntry(entry: GameLogEntry, tx: Translate): string {
   const params: Record<string, string | number> = { ...entry.params };
   for (const key of ['role', 'actorRole'] as const) {
     if (typeof params[key] === 'string') params[key] = tx(`role.${params[key]}.name`);
@@ -278,16 +278,16 @@ export function formatChronicleEntry(entry: GameLogEntry, tx: Translate): string
   return tx(entry.key, params);
 }
 
-export interface ChronicleGroup {
+export interface TimelineGroup {
   label: string;
   entries: GameLogEntry[];
 }
 
 /** Oldest first, grouped into consecutive phase blocks (Night 1 → Day 1 → Night 2…). */
-export function groupChronicle(log: readonly GameLogEntry[], tx: Translate): ChronicleGroup[] {
-  const groups: ChronicleGroup[] = [];
+export function groupTimeline(log: readonly GameLogEntry[], tx: Translate): TimelineGroup[] {
+  const groups: TimelineGroup[] = [];
   for (const entry of log) {
-    const label = chroniclePhaseLabel(entry, tx);
+    const label = timelinePhaseLabel(entry, tx);
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.entries.push(entry);
     else groups.push({ label, entries: [entry] });

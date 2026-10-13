@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Cloud, HardDrive, KeyRound, LogOut, Save, Trash2 } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { isActiveGame, useGame } from '../../context/GameContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -20,6 +20,24 @@ export function ProfileSettings() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // The password form stays hidden until asked for, so settings stay short.
+  const [pwOpen, setPwOpen] = useState(false);
+  const pwSection = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (pwOpen) pwSection.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [pwOpen]);
+
+  const openPassword = () => {
+    setPwMsg(null);
+    setPwOpen(true);
+  };
+
+  const closePassword = () => {
+    setCurrent('');
+    setNext('');
+    setPwOpen(false);
+  };
 
   const saveName = async (e: FormEvent) => {
     e.preventDefault();
@@ -36,8 +54,7 @@ export function ProfileSettings() {
     e.preventDefault();
     try {
       await auth.changePassword(current, next);
-      setCurrent('');
-      setNext('');
+      closePassword();
       setPwMsg({ ok: true, text: t('profile.passwordChanged') });
     } catch (err) {
       const code = err instanceof AuthError ? err.code : 'generic';
@@ -73,25 +90,6 @@ export function ProfileSettings() {
         {nameMsg && <p className="text-xs text-bone-dim">{nameMsg}</p>}
       </Section>
 
-      <Section title={t('profile.password')}>
-        <form onSubmit={changePassword} className="space-y-3">
-          <TextField label={t('profile.currentPassword')} type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required />
-          <TextField
-            label={t('profile.newPassword')}
-            hint={t('auth.passwordHint')}
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-          <Button type="submit" icon={<KeyRound className="h-4 w-4" />}>
-            {t('profile.changePassword')}
-          </Button>
-          {pwMsg && <p className={clsx('text-xs', pwMsg.ok ? 'text-village' : 'text-wolf-bright')}>{pwMsg.text}</p>}
-        </form>
-      </Section>
-
       <Section title={t('settings.language')}>
         <LanguageToggle wide />
       </Section>
@@ -118,7 +116,47 @@ export function ProfileSettings() {
         </label>
       </Section>
 
+      {pwOpen && (
+        <div ref={pwSection}>
+          <Section title={t('profile.password')}>
+            <form onSubmit={changePassword} className="space-y-3">
+              <TextField
+                label={t('profile.currentPassword')}
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                autoComplete="current-password"
+                autoFocus
+                required
+              />
+              <TextField
+                label={t('profile.newPassword')}
+                hint={t('auth.passwordHint')}
+                type="password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+              {pwMsg && !pwMsg.ok && <p className="text-xs text-wolf-bright">{pwMsg.text}</p>}
+              <div className="flex gap-2">
+                <Button onClick={closePassword}>{t('decks.cancel')}</Button>
+                <Button type="submit" variant="village" block icon={<KeyRound className="h-4 w-4" />}>
+                  {t('profile.changePassword')}
+                </Button>
+              </div>
+            </form>
+          </Section>
+        </div>
+      )}
+
       <div className="space-y-3 pt-2">
+        {pwMsg?.ok && <p className="text-center text-xs text-village">{pwMsg.text}</p>}
+        {!pwOpen && (
+          <Button block onClick={openPassword} icon={<KeyRound className="h-4 w-4" />}>
+            {t('profile.password')}
+          </Button>
+        )}
         {isActiveGame(state) && (
           <Button
             variant="wolf"
