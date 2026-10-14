@@ -2,7 +2,7 @@
  * Optional sound cues synthesised with the Web Audio API — no audio files, no BGM.
  * Kept deliberately soft so they don't startle a dark room.
  */
-export type SfxCue = 'wake' | 'sleep' | 'dawn' | 'death' | 'select' | 'vote';
+export type SfxCue = 'wake' | 'sleep' | 'dawn' | 'death' | 'select' | 'vote' | 'metal';
 
 let enabled = true;
 let ctx: AudioContext | null = null;
@@ -20,6 +20,8 @@ const CUES: Record<SfxCue, { type: OscillatorType; gain: number; notes: Note[] }
   death: { type: 'sawtooth', gain: 0.05, notes: [[146.83, 0, 0.6], [110, 0.25, 0.9]] },
   select: { type: 'sine', gain: 0.06, notes: [[880, 0, 0.08]] },
   vote: { type: 'square', gain: 0.04, notes: [[220, 0, 0.12], [220, 0.16, 0.12]] },
+  // Wolverine: a short, inharmonic clang of claws on steel.
+  metal: { type: 'square', gain: 0.05, notes: [[1567, 0, 0.25], [2217, 0.01, 0.35], [2960, 0.03, 0.2]] },
 };
 
 export function playCue(cue: SfxCue) {

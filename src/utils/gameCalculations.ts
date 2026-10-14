@@ -1,4 +1,13 @@
-import type { BalanceOptions, ExperienceLevel, Player, PlayerStatus, RoleId } from '../@types/game';
+import type {
+  BalanceOptions,
+  ExperienceLevel,
+  GameLogEntry,
+  GameRecord,
+  GameState,
+  Player,
+  PlayerStatus,
+  RoleId,
+} from '../@types/game';
 import { ROLES, ROLE_ORDER } from '../data/roles';
 
 /**
@@ -6,6 +15,16 @@ import { ROLES, ROLE_ORDER } from '../data/roles';
  * Veterans read the table well, so the deck tilts slightly toward the wolves;
  * new groups get a forgiving, village-leaning deck.
  */
+/**
+ * Highest role difficulty the auto-balancer draws for each table. Third-party teams
+ * (Tanner, Lone Wolf, Vampires, Cult) are difficulty 3, so they only appear for veterans.
+ */
+export const EXPERIENCE_MAX_DIFFICULTY: Record<ExperienceLevel, 1 | 2 | 3> = {
+  beginner: 1,
+  standard: 2,
+  veteran: 3,
+};
+
 export const EXPERIENCE_TARGET: Record<ExperienceLevel, number> = {
   beginner: 2,
   standard: 0,
@@ -68,6 +87,9 @@ export function balanceVerdict(sum: number, target = 0): BalanceVerdict {
   return 'balanced';
 }
 
+/** Auto-balance keeps Villagers strictly below half the table (e.g. at most 4 of 10). */
+export const maxAutoVillagers = (playerCount: number): number => Math.max(0, Math.ceil(playerCount / 2) - 1);
+
 /** Roughly one wolf per 4–5 players, never a majority. */
 export function suggestedWolfCount(playerCount: number): number {
   const raw = Math.max(1, Math.round(playerCount / 4.5));
@@ -102,6 +124,8 @@ export function validateDeck(deck: readonly RoleId[], playerCount: number): Deck
   if (threats === 0) issues.push({ key: 'issue.noThreat' });
   if (threats * 2 >= playerCount && playerCount > 0) issues.push({ key: 'issue.tooManyThreats' });
   if (counts.loneWolf && wolves < 2) issues.push({ key: 'issue.loneWolfAlone' });
+  if (counts.mason === 1) issues.push({ key: 'issue.masonAlone' });
+  if (counts.apprenticeSeer && !counts.seer) issues.push({ key: 'issue.apprenticeNoSeer' });
   for (const [id, n] of Object.entries(counts) as [RoleId, number][]) {
     if (n > ROLES[id].maxCopies) issues.push({ key: 'issue.tooManyCopies', params: { role: id } });
   }
@@ -121,6 +145,8 @@ function isValidDraft(deck: RoleId[], wolfCount: number): boolean {
   if (wolves.length !== wolfCount) return false;
   if (!counts.werewolf) return false; // the pack needs at least one plain Werewolf
   if (counts.loneWolf && wolves.length < 2) return false;
+  if (counts.mason === 1) return false; // Masons come in groups
+  if (counts.apprenticeSeer && !counts.seer) return false;
   return true;
 }
 
@@ -138,7 +164,10 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
     Math.max(1, Math.floor((n - 1) / 2)),
   );
 
-  const pool = Array.from(new Set<RoleId>([...options.pool, 'villager', 'werewolf']));
+  const maxDifficulty = EXPERIENCE_MAX_DIFFICULTY[options.experience];
+  const pool = Array.from(new Set<RoleId>([...options.pool, 'villager', 'werewolf'])).filter(
+    (id) => ROLES[id].difficulty <= maxDifficulty,
+  );
   const wolfPool = pool.filter((id) => ROLES[id].isWolf);
   const specialPool = pool.filter((id) => !ROLES[id].isWolf && id !== 'villager');
 
@@ -148,7 +177,9 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   const prioritized = shuffle(specialPool, random).sort((a, b) =>
     a === 'seer' ? -1 : b === 'seer' ? 1 : 0,
   );
-  seed.push(...prioritized.slice(0, Math.ceil(villageSlots * 0.6)));
+  // Enough specials to keep Villagers under half the table, when the pool allows it.
+  const villagerCap = maxAutoVillagers(n);
+  seed.push(...prioritized.slice(0, Math.max(Math.ceil(villageSlots * 0.6), villageSlots - villagerCap)));
   while (seed.length < n) seed.push('villager');
 
   const score = (deck: RoleId[]): number => {
@@ -156,7 +187,9 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
     // The Seer anchors the village's information game, so dropping it costs extra.
     const missing = specialPool.reduce((n, id) => n + (deck.includes(id) ? 0 : id === 'seer' ? 4 : 1), 0);
     const villagers = deck.filter((id) => id === 'villager').length;
-    return balance * 10 + missing * 0.5 + (villagers === 0 ? 0 : 0.01 * villagers);
+    const overCap = Math.max(0, villagers - villagerCap);
+    // The villager cap outweighs balance; it's only exceeded if the pool is too small.
+    return overCap * 1000 + balance * 10 + missing * 0.5 + (villagers === 0 ? 0 : 0.01 * villagers);
   };
 
   let best = seed;
@@ -199,25 +232,165 @@ export const EMPTY_STATUS: PlayerStatus = {
   vampireMarked: false,
   princeRevealed: false,
   transformed: false,
+  lover: false,
+  banished: false,
+  woundedRound: null,
 };
 
-/** Randomly assigns the deck to seated players. */
-export function dealRoles(
-  names: readonly string[],
-  deck: readonly RoleId[],
-  random: () => number = secureRandom,
-): Player[] {
-  if (names.length !== deck.length) {
-    throw new Error(`Cannot deal ${deck.length} cards to ${names.length} players`);
+/** Seats players with the given roles, in seat order. */
+export function createPlayers(names: readonly string[], roles: readonly RoleId[]): Player[] {
+  if (names.length !== roles.length) {
+    throw new Error(`Cannot deal ${roles.length} cards to ${names.length} players`);
   }
-  const shuffled = shuffle(deck, random);
   return names.map((name, seat) => ({
     id: createId('p'),
     name: name.trim() || `#${seat + 1}`,
     seat,
-    roleId: shuffled[seat],
-    originalRoleId: shuffled[seat],
+    roleId: roles[seat],
+    originalRoleId: roles[seat],
     alive: true,
     status: { ...EMPTY_STATUS },
   }));
+}
+
+/** Randomly assigns the deck to seated players. */
+export function dealRoles(names: readonly string[], deck: readonly RoleId[], random: () => number = secureRandom): Player[] {
+  return createPlayers(names, shuffle(deck, random));
+}
+
+// ---------------------------------------------------------------------------
+// Deal board (drag & drop): fixed player seats, plus a tray of undealt cards.
+// ---------------------------------------------------------------------------
+
+export interface DealState {
+  /** Card in each seat, by seat index (null = empty). */
+  slots: (RoleId | null)[];
+  /** Cards not yet dealt, kept in catalogue order. */
+  tray: RoleId[];
+}
+
+export type DealLocation = { kind: 'tray'; roleId: RoleId } | { kind: 'slot'; index: number } | { kind: 'trayZone' };
+
+/** Every card back in the tray. */
+export const emptyDeal = (seats: number, deck: readonly RoleId[]): DealState => ({
+  slots: Array.from({ length: seats }, () => null),
+  tray: sortDeck(deck),
+});
+
+/** Every seat filled at random. */
+export const randomDeal = (deck: readonly RoleId[], random: () => number = secureRandom): DealState => ({
+  slots: shuffle(deck, random),
+  tray: [],
+});
+
+/**
+ * Moves one card. Dropping on an occupied seat swaps: a tray card sends the occupant back
+ * to the tray, a seated card trades places. Dropping a seated card on the tray unassigns it.
+ * The multiset of cards (seats + tray) never changes.
+ */
+export function moveCard(state: DealState, from: DealLocation, to: DealLocation): DealState {
+  const slots = [...state.slots];
+  const tray = [...state.tray];
+  const takeFromTray = (roleId: RoleId) => {
+    const i = tray.indexOf(roleId);
+    if (i < 0) return false;
+    tray.splice(i, 1);
+    return true;
+  };
+
+  if (from.kind === 'tray' && to.kind === 'slot') {
+    if (!takeFromTray(from.roleId)) return state;
+    const occupant = slots[to.index];
+    slots[to.index] = from.roleId;
+    if (occupant) tray.push(occupant);
+  } else if (from.kind === 'slot' && to.kind === 'slot') {
+    if (from.index === to.index || !slots[from.index]) return state;
+    [slots[from.index], slots[to.index]] = [slots[to.index], slots[from.index]];
+  } else if (from.kind === 'slot' && (to.kind === 'tray' || to.kind === 'trayZone')) {
+    const card = slots[from.index];
+    if (!card) return state;
+    slots[from.index] = null;
+    tray.push(card);
+  } else {
+    return state;
+  }
+  return { slots, tray: sortDeck(tray) };
+}
+
+/** True once every seat holds a card. */
+export const dealComplete = (state: DealState): boolean => state.slots.every((r) => r !== null);
+
+// ---------------------------------------------------------------------------
+// Timeline formatting
+// ---------------------------------------------------------------------------
+
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+/** "Night 2", "Day 2", "Setup"… — dawn events belong to the night that produced them. */
+export function timelinePhaseLabel(entry: Pick<GameLogEntry, 'phase' | 'round'>, tx: Translate): string {
+  switch (entry.phase) {
+    case 'night':
+    case 'dawn':
+      return tx('phase.nightN', { round: entry.round });
+    case 'day':
+      return tx('phase.dayN', { round: entry.round });
+    case 'setup':
+      return tx('phase.setup');
+    case 'gameOver':
+      return tx('phase.gameOver');
+  }
+}
+
+/** Renders a log entry, localising role and team ids at display time. */
+export function formatTimelineEntry(entry: GameLogEntry, tx: Translate): string {
+  const params: Record<string, string | number> = { ...entry.params };
+  for (const key of ['role', 'role2', 'actorRole'] as const) {
+    if (typeof params[key] === 'string') params[key] = tx(`role.${params[key]}.name`);
+  }
+  if (typeof params.team === 'string') params.team = tx(`team.${params.team}`);
+  return tx(entry.key, params);
+}
+
+export interface TimelineGroup {
+  label: string;
+  entries: GameLogEntry[];
+}
+
+/** Oldest first, grouped into consecutive phase blocks (Night 1 → Day 1 → Night 2…). */
+export function groupTimeline(log: readonly GameLogEntry[], tx: Translate): TimelineGroup[] {
+  const groups: TimelineGroup[] = [];
+  for (const entry of log) {
+    const label = timelinePhaseLabel(entry, tx);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.entries.push(entry);
+    else groups.push({ label, entries: [entry] });
+  }
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+/** Snapshot of a finished game for the moderator's history. */
+export function buildGameRecord(state: GameState): GameRecord | null {
+  if (!state.winner) return null;
+  const winners = new Set(state.winner.winnerIds);
+  return {
+    id: state.id,
+    startedAt: new Date(state.createdAt).toISOString(),
+    finishedAt: new Date().toISOString(),
+    rounds: state.round,
+    poolName: state.setup.poolName ?? null,
+    winner: state.winner.team,
+    players: state.players.map((p) => ({
+      name: p.name,
+      seat: p.seat,
+      roleId: p.roleId,
+      originalRoleId: p.originalRoleId,
+      alive: p.alive,
+    })),
+    winnerSeats: state.players.filter((p) => winners.has(p.id)).map((p) => p.seat),
+    log: state.log,
+  };
 }

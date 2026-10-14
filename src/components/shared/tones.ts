@@ -15,9 +15,11 @@ export interface Tone {
   /** Tailwind classes for accent bars / chips. */
   bar: string;
   text: string;
+  /** Two-sided cards (Cursed): left and right halves. */
+  split?: [Tone, Tone];
 }
 
-export const TONES: Record<CardTone, Tone> = {
+const BASE_TONES: Record<Exclude<CardTone, 'dual'>, Tone> = {
   village: {
     accent: '#00A3E0',
     plate: '#2160A8',
@@ -62,4 +64,69 @@ export const TONES: Record<CardTone, Tone> = {
     bar: 'bg-cult',
     text: 'text-cult',
   },
+  // Solo roles (Tanner): the earthy brown plate of the printed card.
+  neutral: {
+    accent: '#C48A3F',
+    plate: '#7A5428',
+    plateDark: '#45300F',
+    night: '#1F160B',
+    mist: '#5A4224',
+    glow: 'rgba(196,138,63,0.55)',
+    inner: 'inset 0 0 20px rgba(196,138,63,0.45)',
+    bar: 'bg-[#C48A3F]',
+    text: 'text-[#D9A35A]',
+  },
 };
+
+export const TONES: Record<CardTone, Tone> = {
+  ...BASE_TONES,
+  dual: {
+    ...BASE_TONES.village,
+    glow: 'rgba(150,60,120,0.5)',
+    bar: 'bg-gradient-to-b from-village to-wolf',
+    // w-fit: the gradient spans the word itself, not the whole row.
+    text: 'w-fit bg-gradient-to-r from-village to-wolf-bright bg-clip-text text-transparent',
+    split: [BASE_TONES.village, BASE_TONES.werewolf],
+  },
+};
+
+// CSS helpers — each handles split tones with a hard 50/50 edge.
+
+/** Portrait backdrop of a card. */
+export function toneBackdrop(t: Tone): string {
+  if (t.split) {
+    const [a, b] = t.split;
+    return `radial-gradient(110% 75% at 38% 30%, transparent 0%, rgba(5,5,5,.35) 55%, #050505 100%), linear-gradient(100deg, ${a.mist} 0%, ${a.night} 50%, ${b.night} 50%, ${b.mist} 100%)`;
+  }
+  return `radial-gradient(110% 75% at 38% 30%, ${t.mist} 0%, ${t.night} 48%, #050505 100%)`;
+}
+
+/** Rules plate of a card. */
+export function tonePlate(t: Tone): string {
+  if (t.split) {
+    const [a, b] = t.split;
+    return `linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.4) 100%), linear-gradient(100deg, ${a.plate} 50%, ${b.plate} 50%)`;
+  }
+  return `linear-gradient(180deg, ${t.plate} 0%, ${t.plateDark} 100%)`;
+}
+
+/** Outer glow for highlighted / large cards. */
+export function toneGlow(t: Tone): string {
+  if (t.split) return `-10px 0 28px -8px ${t.split[0].glow}, 10px 0 28px -8px ${t.split[1].glow}`;
+  return `0 0 28px -6px ${t.glow}`;
+}
+
+/** Solid accent, or a two-colour accent for split tones (for bars, rings, badges). */
+export function toneAccentFill(t: Tone, direction = '180deg'): string {
+  if (t.split) return `linear-gradient(${direction}, ${t.split[0].accent} 50%, ${t.split[1].accent} 50%)`;
+  return t.accent;
+}
+
+/** Round badge background. */
+export function toneBadge(t: Tone): string {
+  if (t.split) {
+    const [a, b] = t.split;
+    return `linear-gradient(90deg, ${a.night} 50%, ${b.night} 50%)`;
+  }
+  return `radial-gradient(circle at 40% 30%, ${t.mist}, ${t.night} 70%)`;
+}

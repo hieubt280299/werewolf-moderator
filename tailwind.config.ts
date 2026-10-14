@@ -36,6 +36,41 @@ export default {
         'inner-cult': 'inset 0 0 20px rgba(47,168,79,0.45)',
         'inner-ember': 'inset 0 0 20px rgba(242,106,33,0.45)',
       },
+      /**
+       * Frame-by-frame motion: every animation uses steps() timing so it reads like a
+       * flip-book, and only animates transform/opacity so it stays on the GPU compositor.
+       */
+      keyframes: {
+        'step-in': {
+          from: { opacity: '0', transform: 'translate3d(0,12px,0)' },
+          to: { opacity: '1', transform: 'translate3d(0,0,0)' },
+        },
+        'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        'fade-out': { from: { opacity: '1' }, to: { opacity: '0' } },
+        'sheet-in': { from: { transform: 'translate3d(0,100%,0)' }, to: { transform: 'translate3d(0,0,0)' } },
+        'sheet-out': { from: { transform: 'translate3d(0,0,0)' }, to: { transform: 'translate3d(0,100%,0)' } },
+        deal: {
+          from: { opacity: '0', transform: 'perspective(800px) rotateY(90deg) scale(0.9)' },
+          to: { opacity: '1', transform: 'perspective(800px) rotateY(0deg) scale(1)' },
+        },
+        pop: {
+          from: { opacity: '0', transform: 'scale(0.88)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+        'grow-x': { from: { transform: 'scaleX(0)' }, to: { transform: 'scaleX(1)' } },
+      },
+      // `backwards` fill: hold the first frame during any delay, but leave no transform/opacity
+      // behind afterwards (a lingering transform would trap position:fixed descendants).
+      animation: {
+        'step-in': 'step-in 320ms steps(4, end) backwards',
+        'fade-in': 'fade-in 200ms steps(3, end) backwards',
+        'fade-out': 'fade-out 200ms steps(3, end) forwards',
+        'sheet-in': 'sheet-in 300ms steps(6, end) backwards',
+        'sheet-out': 'sheet-out 220ms steps(4, end) forwards',
+        deal: 'deal 400ms steps(5, end) backwards',
+        pop: 'pop 300ms steps(4, end) backwards',
+        'grow-x': 'grow-x 600ms steps(6, end) backwards',
+      },
       backgroundImage: {
         'panel-gradient': 'linear-gradient(160deg, #12141C 0%, #1A1D26 100%)',
         'day-border': 'linear-gradient(90deg, #B8321A, #F26A21, #C8102E)',

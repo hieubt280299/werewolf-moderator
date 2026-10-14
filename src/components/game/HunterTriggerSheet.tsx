@@ -14,7 +14,9 @@ export function HunterTriggerSheet() {
   const hunter = trigger ? engine.byId.get(trigger.sourcePlayerId) : undefined;
   const [target, setTarget] = useState<string | null>(null);
 
-  useEffect(() => setTarget(null), [trigger?.id]);
+  useEffect(() => {
+    setTarget(null);
+  }, [trigger?.id]);
 
   return (
     <Sheet open={!!trigger && !!hunter} title={t('trigger.hunter.title')} tone="day">

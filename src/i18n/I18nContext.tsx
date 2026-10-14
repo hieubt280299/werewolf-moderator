@@ -22,7 +22,7 @@ const interpolate = (text: string, params?: Params) =>
 function detectLanguage(): Language {
   const stored = readJSON<Language | null>(STORAGE_KEYS.language, null);
   if (stored === 'en' || stored === 'vi') return stored;
-  return typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('vi') ? 'vi' : 'en';
+  return 'vi'; // Vietnamese is the default language; English is a hot-swap in settings.
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {

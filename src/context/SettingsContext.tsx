@@ -4,14 +4,13 @@ import { readJSON, STORAGE_KEYS, writeJSON } from '../utils/storage';
 
 export interface Settings {
   sfx: boolean;
-  cloudSync: boolean;
 }
 
 interface SettingsValue extends Settings {
   update: (patch: Partial<Settings>) => void;
 }
 
-const DEFAULTS: Settings = { sfx: true, cloudSync: false };
+const DEFAULTS: Settings = { sfx: true };
 const SettingsContext = createContext<SettingsValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {

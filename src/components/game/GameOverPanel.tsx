@@ -1,21 +1,23 @@
-import { motion } from 'framer-motion';
 import { RotateCcw, Sparkles, Trophy } from 'lucide-react';
-import type { WinResult } from '../../@types/game';
+import type { WinResult, WinTeam } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { cardDeal, stepped } from '../../utils/motion';
 import { RoleCard } from '../shared/RoleCard';
-import { TONES } from '../shared/tones';
+import { TONES, type Tone } from '../shared/tones';
 import { Button, SectionTitle } from '../shared/ui';
 
-const TEAM_TONE = {
+const TEAM_TONE: Record<WinTeam, Tone | null> = {
   village: TONES.village,
   werewolf: TONES.werewolf,
   loneWolf: TONES.werewolf,
+  // The Couple glows in Cupid's rose-violet.
+  couple: TONES.vampire,
+  tanner: TONES.neutral,
+  neutral: TONES.neutral,
   vampire: TONES.vampire,
   cult: TONES.cult,
   draw: null,
-} as const;
+};
 
 export function GameOverPanel({ winner }: { winner: WinResult }) {
   const { t } = useI18n();
@@ -25,11 +27,8 @@ export function GameOverPanel({ winner }: { winner: WinResult }) {
 
   return (
     <div className="space-y-5">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.85 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={stepped(6, 0.5)}
-        className="relative overflow-hidden rounded-2xl border p-6 text-center"
+      <div
+        className="relative animate-pop overflow-hidden rounded-2xl border p-6 text-center"
         style={{
           borderColor: tone?.accent ?? '#2A2E3B',
           background: tone ? `radial-gradient(120% 100% at 50% 0%, ${tone.mist}, ${tone.night} 60%, #050505)` : '#12141C',
@@ -38,19 +37,19 @@ export function GameOverPanel({ winner }: { winner: WinResult }) {
       >
         <Trophy className="mx-auto mb-2 h-10 w-10 text-bone" style={{ filter: tone ? `drop-shadow(0 0 10px ${tone.glow})` : undefined }} />
         <h2 className="text-3xl text-bone text-shadow-title sm:text-4xl">{t(`win.${winner.team}`)}</h2>
-      </motion.div>
+      </div>
 
       <div>
         <SectionTitle>{t('win.reveal')}</SectionTitle>
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4" style={{ perspective: 800 }}>
+        <div className="role-grid" style={{ perspective: 800 }}>
           {engine.state.players.map((p, i) => (
-            <motion.div key={p.id} custom={i} variants={cardDeal} initial="hidden" animate="show" className="flex flex-col items-center gap-1.5">
+            <div key={p.id} className="flex w-[var(--card-w)] animate-deal flex-col items-center gap-1.5" style={{ animationDelay: `${i * 40}ms` }}>
               <RoleCard roleId={p.roleId} size="sm" dead={!p.alive} className="!w-full" />
               <span className="flex max-w-full items-center gap-1 truncate text-sm font-semibold text-bone">
                 {winners.has(p.id) && <Sparkles className="h-3.5 w-3.5 shrink-0 text-ember" aria-label={t('win.winners')} />}
                 {p.name}
               </span>
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>

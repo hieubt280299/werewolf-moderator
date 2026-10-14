@@ -1,17 +1,24 @@
 import { useMemo } from 'react';
-import type { NightActionField, NightStep, Player, RoleId } from '../@types/game';
+import type { NightActionField, NightStep, NightTargetListField, Player, RoleId } from '../@types/game';
 import { useGame } from '../context/GameContext';
 import { ROLES } from '../data/roles';
 import { playCue } from '../services/sfx';
 import { calculateBalance } from '../utils/gameCalculations';
 import {
   alivePlayers,
+  auraResult,
   buildNightSteps,
+  canNominate,
+  effectiveWolfTargets,
   eligibleTargets,
+  eligibleVoters,
   evaluateWinner,
   isWolfPlayer,
+  neighbors,
+  piResult,
   seerResult,
   sorceressResult,
+  voteCount,
   votesNeeded,
   type WitchMode,
 } from '../utils/gameRules';
@@ -40,6 +47,7 @@ export function useGameEngine() {
       deckBalance: calculateBalance(state.deck),
       votesNeeded: votesNeeded(state),
       pendingTrigger: state.pendingTriggers[0] ?? null,
+      canNominate: canNominate(state),
       projectedWinner: evaluateWinner(state.players),
     };
   }, [state]);
@@ -62,17 +70,19 @@ export function useGameEngine() {
         dispatch({ type: 'SET_NIGHT_ACTION', field, value });
         playCue('select');
       },
-      setWolfTargets: (targets: string[]) => {
-        dispatch({ type: 'SET_WOLF_TARGETS', targets });
+      setTargetList: (field: NightTargetListField, targets: string[]) => {
+        dispatch({ type: 'SET_TARGET_LIST', field, targets });
         playCue('select');
       },
       resolveNight: () => {
         dispatch({ type: 'RESOLVE_NIGHT' });
         playCue('dawn');
       },
+      /** Wolverine's tell, played aloud at dawn. */
+      playMetallic: () => playCue('metal'),
       startDay: () => dispatch({ type: 'START_DAY' }),
-      nominate: (accusedId: string, accuserId: string | null) => {
-        dispatch({ type: 'NOMINATE', accusedId, accuserId });
+      nominate: (accusedId: string, accuserIds: string[]) => {
+        dispatch({ type: 'NOMINATE', accusedId, accuserIds });
         playCue('vote');
       },
       setVoters: (nominationId: string, voters: string[]) => dispatch({ type: 'SET_VOTERS', nominationId, voters }),
@@ -103,6 +113,15 @@ export function useGameEngine() {
       targetsFor: (step: NightStep, mode?: WitchMode) => eligibleTargets(state, step, mode),
       seerResult,
       sorceressResult,
+      auraResult,
+      piResult: (id: string) => piResult(state, id),
+      neighborsOf: (id: string) => neighbors(state.players, id),
+      wolfVictims: () => effectiveWolfTargets(state),
+      voteCount: (nominationId: string) => {
+        const nom = state.nominations.find((n) => n.id === nominationId);
+        return nom ? voteCount(state, nom) : 0;
+      },
+      voters: () => eligibleVoters(state),
       role: (id: RoleId) => ROLES[id],
     }),
     [state],

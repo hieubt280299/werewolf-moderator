@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Werewolf Gamemaster — every document lives under users/{uid} and is private to its owner.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      // Profile: at most 10 saved role pools; the username can't be changed after sign-up.
+      allow create: if isOwner(uid)
+        && request.resource.data.get('pools', []).size() <= 10;
+      allow update: if isOwner(uid)
+        && request.resource.data.get('pools', []).size() <= 10
+        && request.resource.data.username == resource.data.username;
+
+      // Finished games and the in-progress game.
+      match /games/{gameId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /session/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+  }
+}

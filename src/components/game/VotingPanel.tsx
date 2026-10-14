@@ -1,12 +1,12 @@
 import clsx from 'clsx';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Droplet, Gavel, Pause, Play, RotateCcw, Timer, Undo2, VolumeX } from 'lucide-react';
+import { DoorOpen, Droplet, Gavel, Ghost, Pause, Play, RotateCcw, Swords, Timer, Undo2, VolumeX } from 'lucide-react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useEffect, useState } from 'react';
 import type { Nomination } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { fadeStep } from '../../utils/motion';
 import { PlayerToken } from '../shared/PlayerToken';
+import { Tooltip } from '../shared/Tooltip';
 import { Button, Chip, SectionTitle, Sheet } from '../shared/ui';
 
 /** Nomination, defense and public execution tracker for the day phase. */
@@ -15,11 +15,15 @@ export function VotingPanel() {
   const engine = useGameEngine();
   const { state, alive, byId } = engine;
   const [nominating, setNominating] = useState(false);
+  const [listRef] = useAutoAnimate<HTMLDivElement>({ duration: 220 });
 
   const silenced = alive.filter((p) => p.status.silenced);
+  const banished = alive.filter((p) => p.status.banished);
+  const ghostSpeaks = state.players.some((p) => !p.alive && p.roleId === 'ghost');
+  const twoExecutions = (state.executionsLeft ?? 1) > 1 || (state.executedToday !== null && state.dayStep !== 'closed');
   const vampirePending = !state.modifiers.vampireTriggeredToday && alive.some((p) => p.status.vampireMarked);
   const executed = byId.get(state.executedToday ?? '');
-  const open = state.dayStep !== 'closed';
+  const isOpen = state.dayStep !== 'closed';
   const nominations = state.nominations.filter((n) => byId.get(n.accusedId)?.alive || n.accusedId === state.executedToday);
 
   return (
@@ -30,7 +34,22 @@ export function VotingPanel() {
             {t('day.silenced')}: {silenced.map((p) => p.name).join(', ')}
           </Chip>
         )}
-        {vampirePending && open && (
+        {banished.length > 0 && (
+          <Chip tone="neutral" icon={<DoorOpen className="h-3 w-3" />}>
+            {t('day.banished')}: {banished.map((p) => p.name).join(', ')}
+          </Chip>
+        )}
+        {ghostSpeaks && (
+          <Chip tone="village" icon={<Ghost className="h-3 w-3" />}>
+            {t('day.ghost')}
+          </Chip>
+        )}
+        {twoExecutions && isOpen && (
+          <Chip tone="ember" icon={<Swords className="h-3 w-3" />}>
+            {t('day.twoExecutions', { left: state.executionsLeft })}
+          </Chip>
+        )}
+        {vampirePending && isOpen && (
           <Chip tone="vampire" icon={<Droplet className="h-3 w-3" />}>
             {t('day.vampirePending')}
           </Chip>
@@ -39,18 +58,16 @@ export function VotingPanel() {
 
       <DebateTimer />
 
-      {open ? (
+      {isOpen ? (
         <>
           <p className="text-sm text-bone-dim">{t('day.discussion')}</p>
-          <AnimatePresence initial={false}>
+          <div ref={listRef} className="space-y-4">
             {nominations.map((nom) => (
-              <motion.div key={nom.id} variants={fadeStep} initial="hidden" animate="show" exit="exit" layout>
-                <NominationCard nomination={nom} />
-              </motion.div>
+              <NominationCard key={nom.id} nomination={nom} />
             ))}
-          </AnimatePresence>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Button variant="ember" size="lg" onClick={() => setNominating(true)} icon={<Gavel className="h-5 w-5" />}>
+            <Button variant="ember" size="lg" disabled={!engine.canNominate} onClick={() => setNominating(true)} icon={<Gavel className="h-5 w-5" />}>
               {t('day.nominate')}
             </Button>
             <Button size="lg" onClick={engine.closeDay}>
@@ -79,9 +96,9 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
   const engine = useGameEngine();
   const { alive, byId, votesNeeded } = engine;
   const accused = byId.get(nomination.accusedId);
-  const accuser = byId.get(nomination.accuserId ?? '');
   if (!accused) return null;
-  const count = nomination.voters.length;
+  // Mayor counts double; forced voters (Idiot / Pacifist) are applied by the rules engine.
+  const count = engine.voteCount(nomination.id);
   const majority = count >= votesNeeded;
 
   const toggleVoter = (id: string) =>
@@ -98,7 +115,11 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
           <div>
             <p className="text-xs uppercase tracking-wide text-bone-dim">{t('day.accused')}</p>
             <p className="font-display text-2xl font-bold uppercase tracking-grimoire text-bone text-shadow-crisp">{accused.name}</p>
-            {accuser && <p className="text-xs text-bone-faint">← {accuser.name}</p>}
+            {nomination.accuserIds.length > 0 && (
+              <p className="text-xs text-bone-faint">
+                {t(nomination.accuserIds.length === 1 ? 'day.accusedByOne' : 'day.accusedBy', { count: nomination.accuserIds.length })}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p className={clsx('font-display text-2xl font-bold', majority ? 'text-wolf-bright' : 'text-bone')}>
@@ -111,7 +132,44 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
         <p className="text-xs text-bone-faint">{t('day.tapVoters')}</p>
         <div className="flex flex-wrap gap-2">
           {alive.map((p) => {
+            // The accused can't vote on their own nomination: always counted as NO / abstain.
+            if (p.id === accused.id) {
+              return (
+                <Tooltip
+                  key={p.id}
+                  content={t('day.abstainHint')}
+                  className="flex min-h-10 cursor-help items-center rounded-full border border-dashed border-panel-edge px-3 text-sm text-bone-faint"
+                >
+                  {p.name}
+                  <span className="sr-only"> — {t('day.abstain')}</span>
+                </Tooltip>
+              );
+            }
+            // Roles whose vote is fixed by their card, or who have left the village today.
+            const locked =
+              p.status.banished
+                ? { hint: t('day.banishedHint'), label: t('day.banished') }
+                : p.roleId === 'villageIdiot'
+                  ? { hint: t('day.idiotHint'), label: t('day.forcedYes') }
+                  : p.roleId === 'pacifist'
+                    ? { hint: t('day.pacifistHint'), label: t('day.forcedNo') }
+                    : null;
             const on = nomination.voters.includes(p.id);
+            if (locked) {
+              return (
+                <Tooltip
+                  key={p.id}
+                  content={locked.hint}
+                  className={clsx(
+                    'flex min-h-10 cursor-help items-center rounded-full border border-dashed px-3 text-sm',
+                    on ? 'border-ember/70 bg-ember/15 text-bone' : 'border-panel-edge text-bone-faint',
+                  )}
+                >
+                  {p.name}
+                  <span className="sr-only"> — {locked.label}</span>
+                </Tooltip>
+              );
+            }
             return (
               <button
                 key={p.id}
@@ -119,11 +177,16 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
                 aria-pressed={on}
                 onClick={() => toggleVoter(p.id)}
                 className={clsx(
-                  'min-h-10 rounded-full border px-3 text-sm font-medium transition-colors',
+                  'press min-h-10 rounded-full border px-3 text-sm font-medium transition-colors',
                   on ? 'border-ember bg-ember/20 text-bone shadow-inner-ember' : 'border-panel-edge bg-panel-2 text-bone-dim',
                 )}
               >
                 {p.name}
+                {p.roleId === 'mayor' && (
+                  <span className="ml-1 font-display text-xs text-ember" title={t('day.mayorHint')}>
+                    ×2
+                  </span>
+                )}
               </button>
             );
           })}
@@ -147,18 +210,18 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
   const { t } = useI18n();
   const engine = useGameEngine();
   const [accused, setAccused] = useState<string | null>(null);
-  const [accuser, setAccuser] = useState<string | null>(null);
+  const [accusers, setAccusers] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
       setAccused(null);
-      setAccuser(null);
+      setAccusers([]);
     }
   }, [open]);
 
   const confirm = () => {
     if (!accused) return;
-    engine.nominate(accused, accuser);
+    engine.nominate(accused, accusers.filter((id) => id !== accused));
     onClose();
   };
 
@@ -169,7 +232,15 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
           <SectionTitle>{t('day.accused')}</SectionTitle>
           <div className="grid grid-cols-2 gap-2">
             {engine.alive.map((p) => (
-              <PlayerToken key={p.id} player={p} accent="ember" selected={accused === p.id} onClick={() => setAccused(p.id)} />
+              <PlayerToken
+                key={p.id}
+                player={p}
+                accent="ember"
+                selected={accused === p.id}
+                disabled={p.status.banished}
+                note={p.status.banished ? t('day.banished') : undefined}
+                onClick={() => setAccused(p.id)}
+              />
             ))}
           </div>
         </div>
@@ -177,16 +248,16 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
           <SectionTitle>{t('day.accuser')}</SectionTitle>
           <div className="flex flex-wrap gap-2">
             {engine.alive
-              .filter((p) => p.id !== accused && !p.status.silenced)
+              .filter((p) => p.id !== accused && !p.status.silenced && !p.status.banished)
               .map((p) => (
                 <button
                   key={p.id}
                   type="button"
-                  aria-pressed={accuser === p.id}
-                  onClick={() => setAccuser(accuser === p.id ? null : p.id)}
+                  aria-pressed={accusers.includes(p.id)}
+                  onClick={() => setAccusers((cur) => (cur.includes(p.id) ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
                   className={clsx(
                     'min-h-10 rounded-full border px-3 text-sm',
-                    accuser === p.id ? 'border-ember bg-ember/20 text-bone' : 'border-panel-edge bg-panel-2 text-bone-dim',
+                    accusers.includes(p.id) ? 'border-ember bg-ember/20 text-bone' : 'border-panel-edge bg-panel-2 text-bone-dim',
                   )}
                 >
                   {p.name}
