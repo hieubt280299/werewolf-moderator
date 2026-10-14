@@ -41,9 +41,9 @@ export function GameOverPanel({ winner }: { winner: WinResult }) {
 
       <div>
         <SectionTitle>{t('win.reveal')}</SectionTitle>
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4" style={{ perspective: 800 }}>
+        <div className="role-grid" style={{ perspective: 800 }}>
           {engine.state.players.map((p, i) => (
-            <div key={p.id} className="flex animate-deal flex-col items-center gap-1.5" style={{ animationDelay: `${i * 40}ms` }}>
+            <div key={p.id} className="flex w-[var(--card-w)] animate-deal flex-col items-center gap-1.5" style={{ animationDelay: `${i * 40}ms` }}>
               <RoleCard roleId={p.roleId} size="sm" dead={!p.alive} className="!w-full" />
               <span className="flex max-w-full items-center gap-1 truncate text-sm font-semibold text-bone">
                 {winners.has(p.id) && <Sparkles className="h-3.5 w-3.5 shrink-0 text-ember" aria-label={t('win.winners')} />}

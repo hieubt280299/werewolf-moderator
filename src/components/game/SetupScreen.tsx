@@ -68,7 +68,7 @@ export function SetupScreen() {
         {step === 'deal' && deal && <RoleDealPicker names={filledNames} deck={deck} deal={deal} onChange={(next) => updateSetup({ deal: next })} />}
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-edge bg-ink/95 pb-safe pt-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-edge bg-ink/95 pb-safe pt-3">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4">
           {stepIndex > 0 && (
             <Button onClick={() => goTo(STEPS[stepIndex - 1])} icon={<ChevronLeft className="h-4 w-4" />}>
@@ -156,7 +156,7 @@ function PlayersStep({
         </SectionTitle>
         <ol className="grid gap-2 sm:grid-cols-2">
           {names.map((name, i) => (
-            <li key={i} className="flex items-center gap-2 rounded-xl border border-panel-edge bg-panel-2 pl-3">
+            <li key={i} className="flex min-w-0 items-center gap-2 rounded-xl border border-panel-edge bg-panel-2 pl-3">
               <span className="w-6 font-display text-sm text-bone-faint">{i + 1}</span>
               <input
                 value={name}

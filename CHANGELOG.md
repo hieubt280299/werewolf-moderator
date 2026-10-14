@@ -27,6 +27,7 @@ Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://
 - **Difficulty Level (1–3)** for every role, shown in the card preview. Auto-balance only picks roles up to the table's experience level.
 - New mechanics: linked deaths, role changes on death, delayed death, first-night-only and once-per-game powers, seat adjacency, forced and double votes, a day exile, double-elimination days, and the Wolverine's metallic sound (with a sound cue).
 - **Back navigation:** the back arrow, browser Back and the Android back gesture return to the previous screen.
+- **Installable app (PWA):** add Werewolf Gamemaster to the home screen or install it from the browser. It opens full-screen with its own icon and works offline after the first visit. Updates download in the background and apply on the next launch, never in the middle of a game.
 - `firestore.rules`, plus a Firebase setup guide in the README.
 
 ### Changed
@@ -58,6 +59,9 @@ Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://
 
 - Opening Settings during game setup reset the wizard to the Players step.
 - A page-wide horizontal scroll on the deck screens (the balance meter's marker layer overflowed).
+- Resizing the window lagged on the card screens, showing a clipped, stale layout. Cards now keep a fixed width per breakpoint, columns adjust around them, and off-screen cards skip rendering. Blurred sticky bars are now solid.
+- Swiping down at the top of the page no longer triggers pull-to-refresh or a rubber-band bounce.
+- Player name rows overflowed on screens narrower than 300 px.
 
 ### Removed
 - Settings sheet and manual cloud-sync toggle. With Firebase configured, the in-progress game syncs automatically.

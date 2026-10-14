@@ -52,7 +52,7 @@ export function PoolBuilder() {
             className="min-h-12 w-full rounded-xl border border-panel-edge bg-ink px-3 text-lg text-bone placeholder:text-bone-faint focus:border-village focus:outline-none"
           />
         </label>
-        <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3 backdrop-blur">
+        <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3">
           <span className="whitespace-nowrap font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: draft.roles.length })}</span>
           <div className="flex-1" />
           <Button
@@ -72,7 +72,7 @@ export function PoolBuilder() {
           sectionToggles={['village', 'wolves']}
         />
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-edge bg-ink/95 pb-safe pt-3 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-edge bg-ink/95 pb-safe pt-3">
           <div className="mx-auto flex max-w-3xl items-center gap-3 px-4">
             <Button onClick={() => setDraft(null)}>{t('pools.cancel')}</Button>
             <p className="min-w-0 flex-1 truncate text-xs text-ember">{error}</p>

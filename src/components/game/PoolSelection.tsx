@@ -50,7 +50,7 @@ export function PoolSelection({ pool, poolId, onChange }: PoolSelectionProps) {
         )}
       </div>
 
-      <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3 backdrop-blur">
+      <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3">
         <span className="whitespace-nowrap font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: pool.length })}</span>
         <div className="flex-1" />
         <Button

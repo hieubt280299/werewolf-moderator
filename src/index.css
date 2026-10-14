@@ -6,10 +6,13 @@
   html {
     color-scheme: dark;
     -webkit-tap-highlight-color: transparent;
+    /* No pull-to-refresh or rubber-band bounce: a swipe down at the top must never reload a game. */
+    overscroll-behavior-y: none;
   }
   body {
     @apply bg-ink font-body text-bone antialiased;
     min-height: 100dvh;
+    overscroll-behavior-y: none;
   }
   h1, h2, h3, h4 {
     @apply font-display font-bold uppercase tracking-grimoire;
@@ -61,6 +64,30 @@
     @apply rounded-2xl bg-panel-gradient shadow-card;
   }
   /* Faint card-stock grain + vignette, like the printed card backgrounds. */
+  /*
+   * Card grid. Cards keep a fixed width per breakpoint and columns come and go around them:
+   * a card that stretched with the window would re-style and re-paint its container-query
+   * contents on every resize frame.
+   */
+  .role-grid {
+    --card-w: 5.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+    justify-items: center;
+    gap: 1.25rem 0.75rem;
+  }
+  @media (min-width: 360px) {
+    .role-grid { --card-w: 6.25rem; }
+  }
+  @media (min-width: 390px) {
+    .role-grid { --card-w: 6.75rem; }
+  }
+  @media (min-width: 430px) {
+    .role-grid { --card-w: 7.5rem; }
+  }
+  @media (min-width: 640px) {
+    .role-grid { --card-w: 8.5rem; }
+  }
   .grimoire-texture {
     background-image:
       radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.05), transparent 60%),

@@ -94,13 +94,13 @@ export function RoleGrid(props: RoleGridProps) {
                   </button>
                 )}
               </h3>
-              <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
+              <div className="role-grid">
                 {roles.map((id) => {
                   const n = counts[id] ?? 0;
                   const on = props.mode === 'select' ? props.selected.includes(id) : n > 0;
                   const tone = TONES[ROLES[id].cardTone];
                   return (
-                    <div key={id} className="flex flex-col items-center gap-2">
+                    <div key={id} className="flex w-[var(--card-w)] flex-col items-center gap-2">
                       <RoleCard roleId={id} size="sm" muted={!on} className="!w-full" onClick={() => setPreview(id)}>
                         {props.mode === 'count' && n > 0 && (
                           <span

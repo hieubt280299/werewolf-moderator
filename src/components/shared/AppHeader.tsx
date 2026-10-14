@@ -26,7 +26,7 @@ export function AppHeader({ view, onBack, onOpenSettings }: AppHeaderProps) {
   const subtitle = view === 'home' ? t('app.tagline') : view === 'game' && state.phase !== 'setup' ? t(`phase.${state.phase}`) : t(TITLES[view as Exclude<View, 'home'>]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-panel-edge/70 bg-ink/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-panel-edge/70 bg-ink/95">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-2 sm:px-4">
         {view === 'home' ? (
           <span className="flex h-10 w-10 items-center justify-center">

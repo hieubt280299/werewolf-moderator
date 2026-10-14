@@ -91,7 +91,7 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
           </p>
         )}
 
-      <div className="sticky bottom-0 -mx-5 mt-2 border-t border-village/15 bg-panel/95 px-5 pt-3 backdrop-blur pb-safe">
+      <div className="sticky bottom-0 -mx-5 mt-2 border-t border-village/15 bg-panel/95 px-5 pt-3 pb-safe">
         {step && (
           <p className="mb-3 flex items-center gap-2 text-sm italic text-village/80">
             <EyeOff className="h-4 w-4 shrink-0" />

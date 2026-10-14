@@ -104,6 +104,9 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
 - **Animation Overhaul:** Eliminate lag/stutter on low-end mobile devices caused by heavy JavaScript layout recalculations or layout thrashing in Framer Motion.
 - **GPU-Accelerated CSS Transitions:** Use pure CSS `transform: translate3d(...)`, `opacity`, and `will-change` properties for UI phase shifts and card flipping.
 - **Asset Efficiency:** Ensure card avatars use optimized inline SVGs, vector assets, or lightweight CSS masking rather than unoptimized, heavy bitmapped assets.
+- **Smooth Resizing:** The layout must reflow immediately while the window is resized. Card grids keep fixed card widths per breakpoint, with columns adjusting around them, so cards are not re-styled every frame.
+- **Installable PWA:** Web app manifest, icons (including maskable and Apple touch), and a service worker that precaches the app so it launches standalone and works offline. Updates apply on the next launch, never mid-game.
+- **No Pull-to-Refresh:** `overscroll-behavior-y: none` on the page, so a downward swipe at the top never reloads a game in progress.
 
 ---
 

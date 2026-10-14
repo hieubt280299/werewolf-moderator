@@ -190,7 +190,7 @@ function Tray({
       ref={setNodeRef}
       onClick={() => selected?.kind === 'slot' && onTap({ kind: 'trayZone' } as DealLocation)}
       className={clsx(
-        'sticky top-14 z-20 -mx-4 border-y bg-ink/95 px-4 py-3 backdrop-blur transition-colors',
+        'sticky top-14 z-20 -mx-4 border-y bg-ink/95 px-4 py-3 transition-colors',
         isOver ? 'border-village/60 shadow-inner-village' : 'border-panel-edge',
       )}
     >

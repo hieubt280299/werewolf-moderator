@@ -60,7 +60,7 @@ export function TimelinePanel({ log }: { log: readonly GameLogEntry[] }) {
         </span>
         <span className="text-xs">{log.length}</span>
       </summary>
-      <div className="max-h-96 overflow-y-auto border-t border-panel-edge px-4 py-4">
+      <div className="max-h-96 overflow-y-auto overscroll-contain border-t border-panel-edge px-4 py-4">
         <TimelineView log={log} />
       </div>
     </details>

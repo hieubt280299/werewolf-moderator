@@ -27,7 +27,7 @@ export function DeckSelection({ deck, pool, playerCount, experience, onChange }:
 
   return (
     <div className="space-y-5">
-      <div className="sticky top-14 z-20 -mx-4 bg-ink/95 px-4 pb-3 pt-1 backdrop-blur">
+      <div className="sticky top-14 z-20 -mx-4 bg-ink/95 px-4 pb-3 pt-1">
         <BalanceMeter sum={calculateBalance(deck)} target={EXPERIENCE_TARGET[experience]} />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className={clsx('font-display text-sm uppercase tracking-grimoire', deck.length === playerCount ? 'text-bone' : 'text-ember')}>
