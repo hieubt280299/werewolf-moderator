@@ -52,12 +52,13 @@ export function PoolBuilder() {
             className="min-h-12 w-full rounded-xl border border-panel-edge bg-ink px-3 text-lg text-bone placeholder:text-bone-faint focus:border-village focus:outline-none"
           />
         </label>
-        <div className="sticky top-14 z-20 -mx-4 flex items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3 backdrop-blur">
-          <span className="font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: draft.roles.length })}</span>
+        <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3 backdrop-blur">
+          <span className="whitespace-nowrap font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: draft.roles.length })}</span>
           <div className="flex-1" />
           <Button
             size="sm"
             variant="plain"
+            className="whitespace-nowrap"
             onClick={() => setDraft({ ...draft, roles: allSelected ? [...ALWAYS_IN_POOL] : [...ROLE_ORDER] })}
             icon={allSelected ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
           >

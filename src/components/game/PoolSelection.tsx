@@ -51,17 +51,18 @@ export function PoolSelection({ pool, poolId, onChange }: PoolSelectionProps) {
       </div>
 
       <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3 backdrop-blur">
-        <span className="font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: pool.length })}</span>
+        <span className="whitespace-nowrap font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: pool.length })}</span>
         <div className="flex-1" />
         <Button
           size="sm"
           variant="plain"
+          className="whitespace-nowrap"
           onClick={() => setRoles(allSelected ? [] : [...ROLE_ORDER])}
           icon={allSelected ? <X className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
         >
           {allSelected ? t('pools.deselectAll') : t('pools.selectAll')}
         </Button>
-        <Button size="sm" variant="village" onClick={() => setSaving(true)} icon={<Save className="h-4 w-4" />}>
+        <Button size="sm" variant="village" className="whitespace-nowrap" onClick={() => setSaving(true)} icon={<Save className="h-4 w-4" />}>
           {t('pools.save')}
         </Button>
       </div>

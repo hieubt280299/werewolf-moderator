@@ -73,7 +73,7 @@ export function RoleGrid(props: RoleGridProps) {
           const showToggle = props.mode === 'select' && props.sectionToggles?.includes(section.id);
           return (
             <section key={section.id}>
-              <h3 className="mb-3 flex min-h-9 items-center gap-2 text-sm text-bone-dim">
+              <h3 className="mb-3 flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-bone-dim">
                 <span
                   aria-hidden
                   className={clsx(
@@ -87,10 +87,10 @@ export function RoleGrid(props: RoleGridProps) {
                   <button
                     type="button"
                     onClick={() => toggleSection(roles, sectionAllOn)}
-                    className="press ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-display text-xs uppercase tracking-grimoire text-bone-dim hover:text-bone"
+                    className="press ml-auto flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 font-display text-xs uppercase tracking-grimoire text-bone-dim hover:text-bone"
                   >
                     {sectionAllOn ? <X className="h-3.5 w-3.5" /> : <CheckCheck className="h-3.5 w-3.5" />}
-                    {sectionAllOn ? t('pools.deselectAll') : t('pools.selectAll')}
+                    {t(sectionAllOn ? `pools.deselectSection.${section.id}` : `pools.selectSection.${section.id}`)}
                   </button>
                 )}
               </h3>
@@ -128,7 +128,6 @@ export function RoleGrid(props: RoleGridProps) {
                           aria-checked={on}
                           aria-disabled={locked.has(id) || undefined}
                           aria-label={t(`role.${id}.name`)}
-                          title={locked.has(id) ? t('pools.locked') : undefined}
                           onClick={() => toggle(id)}
                           className={clsx(
                             'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold uppercase tracking-wide transition-colors',
@@ -145,7 +144,7 @@ export function RoleGrid(props: RoleGridProps) {
                           >
                             {on && <Check className="h-3 w-3" strokeWidth={3} />}
                           </span>
-                          {locked.has(id) ? t('pools.locked') : t('pools.include')}
+                          {t('pools.include')}
                           {locked.has(id) && <Lock className="h-3 w-3 text-bone-dim" />}
                         </button>
                       )}

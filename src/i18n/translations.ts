@@ -511,8 +511,8 @@ const en = {
   'pools.include': "Include",
   'pools.selected': "{count} roles selected",
   'pools.roleCount': "{count} roles",
-  'pools.selectAll': "Select all",
-  'pools.deselectAll': "Deselect all",
+  'pools.selectAll': "Select all roles",
+  'pools.deselectAll': "Deselect all roles",
   'pools.save': "Save pool",
   'pools.saveAsNew': "Save as a new pool",
   'pools.overwrite': "Or replace an existing pool",
@@ -526,8 +526,13 @@ const en = {
   'pools.deleteConfirm': "Delete the pool “{name}”?",
   'pools.limit': "You can keep up to {max} pools.",
   'pools.saveError': "Could not save: {error}",
-  'pools.locked': "Always included",
   'history.pool': "Pool: {name}",
+  'pools.selectSection.village': "Select all Village roles",
+  'pools.deselectSection.village': "Deselect all Village roles",
+  'pools.selectSection.wolves': "Select all Wolf roles",
+  'pools.deselectSection.wolves': "Deselect all Wolf roles",
+  'pools.selectSection.other': "Select all Other roles",
+  'pools.deselectSection.other': "Deselect all Other roles",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -1036,8 +1041,8 @@ const vi: Dictionary = {
   'pools.include': "Chọn",
   'pools.selected': "Đã chọn {count} chức năng",
   'pools.roleCount': "{count} chức năng",
-  'pools.selectAll': "Chọn tất cả",
-  'pools.deselectAll': "Bỏ chọn tất cả",
+  'pools.selectAll': "Chọn tất cả chức năng",
+  'pools.deselectAll': "Bỏ chọn tất cả chức năng",
   'pools.save': "Lưu danh sách",
   'pools.saveAsNew': "Lưu thành danh sách mới",
   'pools.overwrite': "Hoặc thay thế danh sách có sẵn",
@@ -1052,7 +1057,12 @@ const vi: Dictionary = {
   'pools.limit': "Bạn có thể lưu tối đa {max} danh sách.",
   'pools.saveError': "Không lưu được: {error}",
   'history.pool': "Danh sách: {name}",
-  'pools.locked': "Luôn có sẵn",
+  'pools.selectSection.village': "Chọn tất cả chức năng phe Dân",
+  'pools.deselectSection.village': "Bỏ chọn tất cả chức năng phe Dân",
+  'pools.selectSection.wolves': "Chọn tất cả chức năng phe Sói",
+  'pools.deselectSection.wolves': "Bỏ chọn tất cả chức năng phe Sói",
+  'pools.selectSection.other': "Chọn tất cả chức năng phe khác",
+  'pools.deselectSection.other': "Bỏ chọn tất cả chức năng phe khác",
 };
 
 export const dictionaries: Record<'en' | 'vi', Dictionary> = { en, vi };
