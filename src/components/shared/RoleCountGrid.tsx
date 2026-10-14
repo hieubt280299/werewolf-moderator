@@ -6,7 +6,7 @@ import { useI18n } from '../../i18n/I18nContext';
 import { countRoles, sortDeck } from '../../utils/gameCalculations';
 import { RoleCard } from './RoleCard';
 import { RoleDetailSheet } from './RoleDetailSheet';
-import { TONES } from './tones';
+import { toneAccentFill, TONES } from './tones';
 
 interface RoleCountGridProps {
   deck: RoleId[];
@@ -47,7 +47,7 @@ export function RoleCountGrid({ deck, onDeck, pool, onPool }: RoleCountGridProps
                 {n > 0 && (
                   <span
                     className="absolute left-1.5 top-1.5 flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 font-display text-sm font-bold text-bone shadow-card"
-                    style={{ background: tone.accent }}
+                    style={{ background: toneAccentFill(tone, '90deg') }}
                   >
                     ×{n}
                   </span>

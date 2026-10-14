@@ -230,42 +230,88 @@ export const EMPTY_STATUS: PlayerStatus = {
   woundedRound: null,
 };
 
-/** Randomly assigns the deck to seated players. */
-export function dealRoles(
-  names: readonly string[],
-  deck: readonly RoleId[],
-  random: () => number = secureRandom,
-): Player[] {
-  if (names.length !== deck.length) {
-    throw new Error(`Cannot deal ${deck.length} cards to ${names.length} players`);
+/** Seats players with the given roles, in seat order. */
+export function createPlayers(names: readonly string[], roles: readonly RoleId[]): Player[] {
+  if (names.length !== roles.length) {
+    throw new Error(`Cannot deal ${roles.length} cards to ${names.length} players`);
   }
-  const shuffled = shuffle(deck, random);
   return names.map((name, seat) => ({
     id: createId('p'),
     name: name.trim() || `#${seat + 1}`,
     seat,
-    roleId: shuffled[seat],
-    originalRoleId: shuffled[seat],
+    roleId: roles[seat],
+    originalRoleId: roles[seat],
     alive: true,
     status: { ...EMPTY_STATUS },
   }));
 }
 
-/**
- * Assigns `roleId` to a player. If another player already holds that role, the two
- * swap — so the dealt hand always stays exactly the setup deck.
- */
-export function swapRole(players: readonly Player[], playerId: string, roleId: RoleId): Player[] {
-  const target = players.find((p) => p.id === playerId);
-  if (!target || target.roleId === roleId) return [...players];
-  const holder = players.find((p) => p.id !== playerId && p.roleId === roleId);
-  const giveBack = target.roleId;
-  return players.map((p) => {
-    if (p.id === playerId) return { ...p, roleId, originalRoleId: roleId };
-    if (holder && p.id === holder.id) return { ...p, roleId: giveBack, originalRoleId: giveBack };
-    return p;
-  });
+/** Randomly assigns the deck to seated players. */
+export function dealRoles(names: readonly string[], deck: readonly RoleId[], random: () => number = secureRandom): Player[] {
+  return createPlayers(names, shuffle(deck, random));
 }
+
+// ---------------------------------------------------------------------------
+// Deal board (drag & drop): fixed player seats, plus a tray of undealt cards.
+// ---------------------------------------------------------------------------
+
+export interface DealState {
+  /** Card in each seat, by seat index (null = empty). */
+  slots: (RoleId | null)[];
+  /** Cards not yet dealt, kept in catalogue order. */
+  tray: RoleId[];
+}
+
+export type DealLocation = { kind: 'tray'; roleId: RoleId } | { kind: 'slot'; index: number } | { kind: 'trayZone' };
+
+/** Every card back in the tray. */
+export const emptyDeal = (seats: number, deck: readonly RoleId[]): DealState => ({
+  slots: Array.from({ length: seats }, () => null),
+  tray: sortDeck(deck),
+});
+
+/** Every seat filled at random. */
+export const randomDeal = (deck: readonly RoleId[], random: () => number = secureRandom): DealState => ({
+  slots: shuffle(deck, random),
+  tray: [],
+});
+
+/**
+ * Moves one card. Dropping on an occupied seat swaps: a tray card sends the occupant back
+ * to the tray, a seated card trades places. Dropping a seated card on the tray unassigns it.
+ * The multiset of cards (seats + tray) never changes.
+ */
+export function moveCard(state: DealState, from: DealLocation, to: DealLocation): DealState {
+  const slots = [...state.slots];
+  const tray = [...state.tray];
+  const takeFromTray = (roleId: RoleId) => {
+    const i = tray.indexOf(roleId);
+    if (i < 0) return false;
+    tray.splice(i, 1);
+    return true;
+  };
+
+  if (from.kind === 'tray' && to.kind === 'slot') {
+    if (!takeFromTray(from.roleId)) return state;
+    const occupant = slots[to.index];
+    slots[to.index] = from.roleId;
+    if (occupant) tray.push(occupant);
+  } else if (from.kind === 'slot' && to.kind === 'slot') {
+    if (from.index === to.index || !slots[from.index]) return state;
+    [slots[from.index], slots[to.index]] = [slots[to.index], slots[from.index]];
+  } else if (from.kind === 'slot' && (to.kind === 'tray' || to.kind === 'trayZone')) {
+    const card = slots[from.index];
+    if (!card) return state;
+    slots[from.index] = null;
+    tray.push(card);
+  } else {
+    return state;
+  }
+  return { slots, tray: sortDeck(tray) };
+}
+
+/** True once every seat holds a card. */
+export const dealComplete = (state: DealState): boolean => state.slots.every((r) => r !== null);
 
 // ---------------------------------------------------------------------------
 // Timeline formatting

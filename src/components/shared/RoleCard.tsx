@@ -6,7 +6,7 @@ import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { dictionaries } from '../../i18n/translations';
 import { RoleAvatar } from './RoleAvatar';
-import { TONES } from './tones';
+import { toneBackdrop, toneGlow, tonePlate, TONES } from './tones';
 
 type CardSize = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -97,7 +97,7 @@ export const RoleCard = memo(function RoleCard({
       style={{
         aspectRatio: '5 / 7',
         containerType: 'size',
-        boxShadow: selected || size === 'lg' ? `0 0 28px -6px ${tone.glow}, 0 10px 30px -8px rgba(0,0,0,.9)` : RESTING_SHADOW,
+        boxShadow: selected || size === 'lg' ? `${toneGlow(tone)}, 0 10px 30px -8px rgba(0,0,0,.9)` : RESTING_SHADOW,
         ...style,
       }}
     >
@@ -105,7 +105,7 @@ export const RoleCard = memo(function RoleCard({
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{ background: `radial-gradient(110% 75% at 38% 30%, ${tone.mist} 0%, ${tone.night} 48%, #050505 100%)` }}
+        style={{ background: toneBackdrop(tone) }}
       />
       <div
         aria-hidden
@@ -147,14 +147,14 @@ export const RoleCard = memo(function RoleCard({
         style={{
           height: withText ? '30%' : '17%',
           clipPath: 'polygon(0 16%, 100% 0, 100% 100%, 0 100%)',
-          background: `linear-gradient(180deg, ${tone.plate} 0%, ${tone.plateDark} 100%)`,
+          background: tonePlate(tone),
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,.25)',
           padding: withText ? '4.5cqh 8cqw 3cqh' : '0 4cqw 2.2cqh',
         }}
       >
         <span
-          className="block min-w-0 flex-1 truncate font-display font-bold uppercase text-bone text-shadow-crisp"
-          style={{ fontSize: withText ? '7.4cqw' : '10cqw', letterSpacing: '0.04em', lineHeight: 1.15, flex: withText ? 'none' : undefined, width: withText ? '100%' : undefined }}
+          className="block min-w-0 flex-1 truncate font-display font-bold text-bone text-shadow-crisp"
+          style={{ fontSize: withText ? '7.8cqw' : '10.5cqw', letterSpacing: '0.02em', lineHeight: 1.15, flex: withText ? 'none' : undefined, width: withText ? '100%' : undefined }}
         >
           {localName}
         </span>

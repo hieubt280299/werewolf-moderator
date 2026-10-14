@@ -52,8 +52,9 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
   - **Continue Game** (enabled only if an active game state exists in local cache/Firestore)
   - **Custom Decks** (Deck builder studio)
   - **Game History & Analytics** (Career stats and game logs)
-  - **Profile & Settings** (Change password, edit name, language switch)
+  - **Profile & Settings** (Change password, edit name, language switch). Opens as a **modal** over the current screen, from the header chip or the hub, so an in-progress setup or game keeps its place.
     - The Change password form is hidden by default; a **Change password** button in the bottom action group (above Sign out) reveals it, with Cancel to collapse it again.
+- **Setup wizard progress** (current step and the deal board) is saved with the game, so leaving the screen or reloading never resets it to the Players step.
 - **Back Navigation:** The header back arrow (and the browser / Android back gesture) returns to the *previous* screen, not always the hub — e.g. opening Profile mid-game and pressing back returns to the game.
 
 #### 3. 🃏 Custom Deck Management (Max 10 Decks)
@@ -63,9 +64,11 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
 
 #### 4. 🎲 Gameplay Mechanics Updates
 - **Deck Selection Phase:** Include an interactive deck selector before card distribution so moderators can load one of their saved presets or create a custom role pool on the fly.
-- **Role Deal & Swap System:**
-  - The "Deal" phase role picker MUST ONLY list cards/roles included in the setup deck.
-  - Selecting a role for a player that is already assigned to another player automatically **swaps** roles between the two players.
+- **Role Deal (drag & drop):**
+  - Player seats are fixed. The moderator drags each role card from the tray of undealt cards onto the seat of the player who received it. Only cards from the setup deck appear in the tray.
+  - Dropping a card on a filled seat swaps the cards; dragging a seated card back to the tray unassigns it.
+  - On touch screens, press and hold to drag; tapping a card and then a seat also works.
+  - **Reshuffle** deals every card at random, and **Clear** returns them all to the tray. The game can start once every seat has a card.
 - **Dawn Announcement:**
   - Each elimination reads only *"Player 2 was eliminated"* — never who or what killed them (the village doesn't learn the cause; the cause is kept in the moderator Timeline).
   - The row and its tag are coloured by the eliminated player's **side** (village blue, wolf red, vampire purple, cult green), with the tag showing their role.
@@ -84,7 +87,7 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
   - **Village:** Apprentice Seer, Aura Seer, P.I., Priest, Mason, Mayor, Tough Guy, Village Idiot, Pacifist, Ghost, Old Hag, Troublemaker, Leprechaun, Drunk, Cupid, Doppelgänger, Virginia Woolf.
   - **Wolves:** Wolf Man, Big Bad Wolf, Dire Wolf, Fang Face, Fruit Brute, Wolverine, Minion.
   - **Solo:** Tanner (brown card).
-- **Teams:** the two main teams are **Village** and **Wolves**. The third is **The Couple**: Cupid's lovers, who, when they come from different teams, win only as the last two players alive. Lone Wolf, Tanner, Vampires and Cult are rare extras.
+- **Teams:** the two main teams are **Village** and **Wolves**. Cupid is on the Village team. **The Couple** forms only when Cupid links two players from *different* teams. Those lovers leave their original teams and win only as the last team standing, and while they live no other team can win. Lovers from the same team simply play on with that team, so no Couple team forms. Lone Wolf, Tanner, Vampires and Cult are rare extras.
 - **Gameplay follows each card:** linked deaths (lovers, Dire Wolf companion, Virginia Woolf), role changes (Apprentice Seer → Seer, Doppelgänger copies its target, Drunk sobers up on night 3), delayed death (Tough Guy), first-night-only and once-per-game powers, adjacency (Big Bad Wolf, Leprechaun, P.I., Wolverine's metallic sound), forced votes (Village Idiot YES, Pacifist NO, Mayor ×2), Old Hag exile, two eliminations after the Troublemaker, Ghost eliminated on night 1, and a Tanner win when the Tanner is eliminated.
 - **Difficulty Level (1–3)** for every role, shown in the card preview's facts. Auto-balance only uses roles up to the table's level: Beginner 1, Standard ≤ 2, Veteran ≤ 3. Rare third-party teams are difficulty 3.
 

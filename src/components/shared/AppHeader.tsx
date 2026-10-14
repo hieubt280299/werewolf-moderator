@@ -4,21 +4,21 @@ import { useAuth } from '../../context/AuthContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 
-const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.decks' | 'hub.history' | 'hub.profile'> = {
+const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.decks' | 'hub.history'> = {
   game: 'hub.newGame',
   decks: 'hub.decks',
   history: 'hub.history',
-  profile: 'hub.profile',
 };
 
 interface AppHeaderProps {
   view: View;
-  onNavigate: (view: View) => void;
   /** Returns to the previous screen (not always home). */
   onBack: () => void;
+  /** Opens the settings modal over the current screen. */
+  onOpenSettings: () => void;
 }
 
-export function AppHeader({ view, onNavigate, onBack }: AppHeaderProps) {
+export function AppHeader({ view, onBack, onOpenSettings }: AppHeaderProps) {
   const { t } = useI18n();
   const { profile } = useAuth();
   const { state, canUndo, undo } = useGameEngine();
@@ -55,7 +55,7 @@ export function AppHeader({ view, onNavigate, onBack }: AppHeaderProps) {
         )}
         <button
           type="button"
-          onClick={() => onNavigate('profile')}
+          onClick={onOpenSettings}
           aria-label={t('hub.profile')}
           className="press flex items-center gap-2 rounded-full border border-panel-edge bg-panel-2 py-1 pl-1 pr-3 text-xs text-bone-dim hover:text-bone"
         >

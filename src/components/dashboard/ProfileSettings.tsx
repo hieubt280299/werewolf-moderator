@@ -7,10 +7,23 @@ import { useSettings } from '../../context/SettingsContext';
 import { useI18n } from '../../i18n/I18nContext';
 import { AuthError } from '../../services/profileStore';
 import { LanguageToggle } from '../shared/LanguageToggle';
-import { Button, TextField } from '../shared/ui';
+import { Button, Sheet, TextField } from '../shared/ui';
+
+/**
+ * Profile & settings as a modal sheet, so opening it never unmounts the screen underneath
+ * (an in-progress setup wizard or game keeps its place).
+ */
+export function ProfileSettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Sheet open={open} onClose={onClose} title={t('profile.title')} closeLabel={t('settings.close')}>
+      <ProfileSettings onDone={onClose} />
+    </Sheet>
+  );
+}
 
 /** Profile (name, password) and app settings (language, sound), plus sign-out. */
-export function ProfileSettings() {
+function ProfileSettings({ onDone }: { onDone: () => void }) {
   const { t } = useI18n();
   const auth = useAuth();
   const settings = useSettings();
@@ -66,7 +79,7 @@ export function ProfileSettings() {
   };
 
   return (
-    <div className="mx-auto max-w-xl space-y-5 px-4 pb-16 pt-6">
+    <div className="space-y-4 pb-6">
       <Section title={t('profile.account')}>
         <p className="font-display text-lg tracking-grimoire text-bone">@{auth.user?.username}</p>
         <p className={clsx('flex items-center gap-1.5 text-xs', auth.mode === 'firebase' ? 'text-village' : 'text-bone-faint')}>
@@ -162,7 +175,12 @@ export function ProfileSettings() {
             variant="wolf"
             block
             icon={<Trash2 className="h-4 w-4" />}
-            onClick={() => window.confirm(t('settings.abandonConfirm')) && dispatch({ type: 'NEW_GAME' })}
+            onClick={() => {
+              if (window.confirm(t('settings.abandonConfirm'))) {
+                dispatch({ type: 'NEW_GAME' });
+                onDone();
+              }
+            }}
           >
             {t('settings.abandon')}
           </Button>

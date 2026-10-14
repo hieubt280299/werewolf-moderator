@@ -13,7 +13,9 @@ export function BalanceMeter({ sum, target }: { sum: number; target: number }) {
   const label = sum > 0 ? `+${sum}` : `${sum}`;
 
   return (
-    <div className="panel p-4">
+    // overflow-hidden: the marker layer is translated up to 100% of the track width and
+    // would otherwise widen the page (horizontal scroll). The padding keeps the marker visible.
+    <div className="panel overflow-hidden p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 font-display text-sm uppercase tracking-grimoire text-bone-dim">
           <Scale className="h-4 w-4" /> {t('balance.title')}

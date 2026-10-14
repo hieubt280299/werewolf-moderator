@@ -13,8 +13,8 @@ export type Faction = 'village' | 'werewolf' | 'vampire' | 'cult' | 'neutral';
  */
 export type WinTeam = Faction | 'loneWolf' | 'tanner' | 'couple' | 'draw';
 
-/** Colour of the card's text plate — mostly mirrors Faction, but e.g. Cursed prints red. */
-export type CardTone = Faction;
+/** Card colouring — mirrors Faction, plus `dual` for Cursed (half Village, half Wolves). */
+export type CardTone = Faction | 'dual';
 
 export type RoleId =
   | 'villager'
@@ -287,6 +287,9 @@ export interface SetupDraft {
   /** Roles the auto-balancer may draw from. */
   pool: RoleId[];
   experience: ExperienceLevel;
+  /** Wizard step and deal board, saved so leaving the screen (or reloading) keeps your place. */
+  step?: 'players' | 'deck' | 'deal';
+  deal?: { slots: (RoleId | null)[]; tray: RoleId[] } | null;
 }
 
 export interface GameState {

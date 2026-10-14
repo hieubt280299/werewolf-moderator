@@ -312,16 +312,22 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
 
 export function evaluateWinner(players: readonly Player[], tannerWinner: string | null = null): WinResult | null {
   const alive = alivePlayers(players);
-  const onTeam = (team: string) => players.filter((p) => ROLES[p.roleId].winTeam === team).map((p) => p.id);
+
+  // The Couple exists only when Cupid links players from two different teams. Those lovers
+  // leave their original teams: they win together as the last team standing, or not at all.
+  const lovers = players.filter((p) => p.status.lover);
+  const mixedCouple = lovers.length === 2 && ROLES[lovers[0].roleId].winTeam !== ROLES[lovers[1].roleId].winTeam;
+  const coupleIds = new Set(mixedCouple ? lovers.map((p) => p.id) : []);
+  const onTeam = (team: string) =>
+    players.filter((p) => ROLES[p.roleId].winTeam === team && !coupleIds.has(p.id)).map((p) => p.id);
 
   if (tannerWinner) return { team: 'tanner', winnerIds: [tannerWinner] };
   if (alive.length === 0) return { team: 'draw', winnerIds: [] };
 
-  // The Couple: lovers from different teams win only as the last two standing.
-  const lovers = players.filter((p) => p.status.lover);
-  const mixedCouple = lovers.length === 2 && ROLES[lovers[0].roleId].winTeam !== ROLES[lovers[1].roleId].winTeam;
-  if (mixedCouple && alive.length === 2 && alive.every((p) => p.status.lover)) {
-    return { team: 'couple', winnerIds: lovers.map((p) => p.id) };
+  // Lovers die together, so a living mixed couple means both are alive: no other team can
+  // win until the couple falls, and the couple wins once everyone else is gone.
+  if (mixedCouple && lovers.every((p) => p.alive)) {
+    return alive.length === 2 ? { team: 'couple', winnerIds: lovers.map((p) => p.id) } : null;
   }
 
   const leader = alive.find((p) => p.roleId === 'cultLeader');

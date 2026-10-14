@@ -50,7 +50,8 @@ const SPECS: Record<RoleId, Spec> = {
   leprechaun: { faction: 'village', weight: 5, difficulty: 3, nightAction: 'leprechaunRedirect', nightOrder: 12 },
   drunk: { faction: 'village', weight: 4, difficulty: 3, nightAction: 'drunkSober', nightOrder: 75 },
   lycan: { faction: 'village', weight: -1, difficulty: 2, seerAppearance: 'werewolf' },
-  cursed: { faction: 'village', weight: -3, difficulty: 2, cardTone: 'werewolf' },
+  // Can end up on either team, so the card is split Village blue / Wolf red.
+  cursed: { faction: 'village', weight: -3, difficulty: 2, cardTone: 'dual' },
   cupid: { faction: 'village', weight: -3, difficulty: 2, nightAction: 'cupidLink', nightOrder: 1, firstNightOnly: true },
   doppelganger: { faction: 'village', weight: -2, difficulty: 3, nightAction: 'doppelgangerCopy', nightOrder: 2, firstNightOnly: true },
   virginiaWoolf: { faction: 'village', weight: -2, difficulty: 2, nightAction: 'virginiaFear', nightOrder: 3, firstNightOnly: true },

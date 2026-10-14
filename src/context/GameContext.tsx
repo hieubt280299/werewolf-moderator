@@ -178,7 +178,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'REVIVE':
       return rules.revivePlayer(state, action.playerId);
     case 'REMATCH':
-      return createInitialState({ ...state.setup, names: state.players.map((p) => p.name) });
+      // Same players and deck, but the wizard starts over at the Players step.
+      return createInitialState({ ...state.setup, names: state.players.map((p) => p.name), step: 'players', deal: null });
     case 'NEW_GAME':
       return createInitialState({ experience: state.setup.experience, pool: state.setup.pool });
     case 'HYDRATE':

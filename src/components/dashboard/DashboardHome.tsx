@@ -9,7 +9,7 @@ import { RoleBadge } from '../shared/ui';
 import type { View } from '../../App';
 
 /** Authenticated landing hub: career snapshot + navigation. */
-export function DashboardHome({ onNavigate }: { onNavigate: (view: View) => void }) {
+export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (view: View) => void; onOpenSettings: () => void }) {
   const { t } = useI18n();
   const { profile } = useAuth();
   const { state, dispatch } = useGame();
@@ -83,7 +83,7 @@ export function DashboardHome({ onNavigate }: { onNavigate: (view: View) => void
           icon={<UserCog className="h-6 w-6" />}
           title={t('hub.profile')}
           hint={t('hub.profileHint')}
-          onClick={() => onNavigate('profile')}
+          onClick={onOpenSettings}
           delay={260}
         />
       </nav>

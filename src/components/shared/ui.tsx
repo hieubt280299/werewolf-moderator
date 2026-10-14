@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import type { CardTone, RoleId } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { RoleAvatar } from './RoleAvatar';
-import { TONES } from './tones';
+import { toneAccentFill, toneBadge, TONES } from './tones';
 
 type ButtonVariant = 'village' | 'wolf' | 'ember' | 'ghost' | 'plain';
 
@@ -122,6 +122,7 @@ const TONE_CHIP: Record<CardTone | 'ember' | 'muted', string> = {
   vampire: 'border-vampire/50 bg-vampire/15 text-vampire',
   cult: 'border-cult/50 bg-cult/15 text-cult',
   neutral: 'border-[#C48A3F]/50 bg-[#C48A3F]/15 text-[#D9A35A]',
+  dual: 'border-wolf/40 bg-gradient-to-r from-village/15 to-wolf/15 text-bone',
   ember: 'border-ember/50 bg-ember/15 text-ember',
   muted: 'border-panel-edge bg-panel-2 text-bone-dim',
 };
@@ -169,8 +170,10 @@ export function RoleBadge({ roleId, size = 40, dead, className }: { roleId: Role
       style={{
         width: size,
         height: size,
-        background: `radial-gradient(circle at 40% 30%, ${tone.mist}, ${tone.night} 70%)`,
-        boxShadow: `0 0 0 1.5px ${tone.accent}, 0 0 10px -2px ${tone.glow}`,
+        // Ring drawn as a border-box background so split tones (Cursed) get a two-colour ring.
+        border: '1.5px solid transparent',
+        background: `${toneBadge(tone)} padding-box, ${toneAccentFill(tone, '90deg')} border-box`,
+        boxShadow: `0 0 10px -2px ${tone.glow}`,
       }}
     >
       <RoleAvatar roleId={roleId} variant="badge" className="h-full w-full" />

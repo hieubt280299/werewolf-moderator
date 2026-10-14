@@ -4,7 +4,7 @@ import { AuthScreen } from './components/auth/AuthScreen';
 import { DashboardHome } from './components/dashboard/DashboardHome';
 import { DeckBuilder } from './components/dashboard/DeckBuilder';
 import { HistoryStats } from './components/dashboard/HistoryStats';
-import { ProfileSettings } from './components/dashboard/ProfileSettings';
+import { ProfileSettingsSheet } from './components/dashboard/ProfileSettings';
 import { ModeratorDashboard } from './components/game/ModeratorDashboard';
 import { SetupScreen } from './components/game/SetupScreen';
 import { AppHeader } from './components/shared/AppHeader';
@@ -13,7 +13,7 @@ import { GameProvider, useGame } from './context/GameContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 
-export type View = 'home' | 'game' | 'decks' | 'history' | 'profile';
+export type View = 'home' | 'game' | 'decks' | 'history';
 
 interface NavState {
   view: View;
@@ -64,17 +64,20 @@ function useViewHistory() {
 function Shell() {
   const { state } = useGame();
   const { view, navigate, back } = useViewHistory();
+  // Settings is a modal on top of the current screen, not a screen of its own.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
 
   return (
     <>
-      <AppHeader view={view} onNavigate={navigate} onBack={back} />
+      <AppHeader view={view} onBack={back} onOpenSettings={openSettings} />
       <main>
-        {view === 'home' && <DashboardHome onNavigate={navigate} />}
+        {view === 'home' && <DashboardHome onNavigate={navigate} onOpenSettings={openSettings} />}
         {view === 'game' && (state.phase === 'setup' ? <SetupScreen /> : <ModeratorDashboard />)}
         {view === 'decks' && <DeckBuilder />}
         {view === 'history' && <HistoryStats />}
-        {view === 'profile' && <ProfileSettings />}
       </main>
+      <ProfileSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

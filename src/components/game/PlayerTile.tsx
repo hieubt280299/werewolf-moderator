@@ -5,7 +5,7 @@ import type { Player } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { StatusBadges } from '../shared/PlayerToken';
-import { TONES } from '../shared/tones';
+import { toneAccentFill, TONES } from '../shared/tones';
 import { RoleBadge } from '../shared/ui';
 
 interface PlayerTileProps {
@@ -44,7 +44,7 @@ export const PlayerTile = memo(function PlayerTile({ player, shielded, onClick }
       style={{ boxShadow: glow }}
     >
       {/* Faction edge, like the coloured plate on the physical card. */}
-      <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: `linear-gradient(180deg, ${tone.accent}, ${tone.plateDark})` }} />
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ background: tone.split ? toneAccentFill(tone) : `linear-gradient(180deg, ${tone.accent}, ${tone.plateDark})` }} />
       <div className="flex items-center gap-2.5">
         <RoleBadge roleId={player.roleId} size={40} />
         <div className="min-w-0 flex-1">

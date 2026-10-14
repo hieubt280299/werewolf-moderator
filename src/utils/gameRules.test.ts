@@ -9,7 +9,9 @@ import {
   formatTimelineEntry,
   generateBalancedDeck,
   groupTimeline,
-  swapRole,
+  dealComplete,
+  emptyDeal,
+  moveCard,
   validateDeck,
 } from './gameCalculations';
 import * as rules from './gameRules';
@@ -127,12 +129,24 @@ describe('day & win conditions', () => {
 });
 
 describe('v0.1.0 mechanics', () => {
-  it('swaps roles when picking one another player already holds', () => {
-    const { players } = game(['werewolf', 'seer', 'villager', 'villager', 'villager']);
-    const next = swapRole(players, 'p2', 'seer');
-    expect(next[2].roleId).toBe('seer');
-    expect(next[1].roleId).toBe('villager');
-    expect(next.map((p) => p.roleId).sort()).toEqual(players.map((p) => p.roleId).sort());
+  it('deals by moving cards between the tray and seats, swapping on occupied seats', () => {
+    const deck: RoleId[] = ['werewolf', 'seer', 'villager', 'villager'];
+    let d = emptyDeal(4, deck);
+    expect(d.tray).toEqual(['villager', 'villager', 'seer', 'werewolf']);
+    d = moveCard(d, { kind: 'tray', roleId: 'seer' }, { kind: 'slot', index: 0 });
+    d = moveCard(d, { kind: 'tray', roleId: 'werewolf' }, { kind: 'slot', index: 1 });
+    // Tray card onto a filled seat: the occupant goes back to the tray.
+    d = moveCard(d, { kind: 'tray', roleId: 'villager' }, { kind: 'slot', index: 0 });
+    expect(d.slots).toEqual(['villager', 'werewolf', null, null]);
+    expect(d.tray).toEqual(['villager', 'seer']);
+    // Seat onto seat swaps; seat back to the tray unassigns.
+    d = moveCard(d, { kind: 'slot', index: 0 }, { kind: 'slot', index: 1 });
+    expect(d.slots.slice(0, 2)).toEqual(['werewolf', 'villager']);
+    d = moveCard(d, { kind: 'slot', index: 1 }, { kind: 'trayZone' });
+    expect(d.slots[1]).toBeNull();
+    // The cards themselves never change.
+    expect([...d.slots.filter(Boolean), ...d.tray].sort()).toEqual([...deck].sort());
+    expect(dealComplete(d)).toBe(false);
   });
 
   it('never counts the accused voting on their own nomination', () => {
@@ -290,5 +304,27 @@ describe('expansion roles', () => {
     }
     const beginner = generateBalancedDeck({ playerCount: 10, pool, experience: 'beginner', random: seeded(5) });
     expect(beginner.includes('witch')).toBe(false); // difficulty 2
+  });
+});
+
+describe('the Couple', () => {
+  it('only forms from lovers on different teams; same-team lovers just win with their team', () => {
+    let s = game(['werewolf', 'cupid', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { cupidTargets: ['p2', 'p3'] }));
+    s = rules.moderatorEliminate(rules.startDay(s), 'p0');
+    expect(s.winner?.team).toBe('village');
+    expect(s.winner?.winnerIds).toContain('p2');
+  });
+
+  it('blocks every other win while a mixed couple lives, and leaves the lovers out of their old teams', () => {
+    // Wolf lover + villager lover + one more of each: parity would normally hand the wolves the game.
+    let s = game(['werewolf', 'werewolf', 'villager', 'villager', 'cupid', 'villager']);
+    s = rules.resolveNight(withActions(s, { cupidTargets: ['p0', 'p2'] }));
+    s = rules.moderatorEliminate(rules.moderatorEliminate(rules.startDay(s), 'p4'), 'p5');
+    expect(s.winner).toBeNull();
+    // Once the couple falls, the wolves win — without the dead wolf lover.
+    s = rules.moderatorEliminate(s, 'p2');
+    expect(s.winner?.team).toBe('werewolf');
+    expect(s.winner?.winnerIds).toEqual(['p1']);
   });
 });

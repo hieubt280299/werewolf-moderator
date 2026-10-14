@@ -3,7 +3,7 @@ import { Bandage, Check, Crown, DoorOpen, Droplet, Flame, Heart, Shield, Skull, 
 import type { Player } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { TONES } from './tones';
+import { toneAccentFill, TONES } from './tones';
 import { Chip, RoleBadge } from './ui';
 
 type Accent = 'village' | 'wolf' | 'ember' | 'vampire' | 'cult';
@@ -42,7 +42,7 @@ export function PlayerToken({ player, selected, disabled, accent = 'village', sh
         disabled && 'opacity-35',
       )}
     >
-      <span className="absolute inset-y-0 left-0 w-1" style={{ background: tone.accent }} aria-hidden />
+      <span className="absolute inset-y-0 left-0 w-1" style={{ background: toneAccentFill(tone) }} aria-hidden />
       {showRole ? (
         <RoleBadge roleId={player.roleId} size={38} />
       ) : (

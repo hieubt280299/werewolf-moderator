@@ -1,11 +1,11 @@
 import clsx from 'clsx';
 import { AlertTriangle, ChevronLeft, ChevronRight, Dices, Moon, Trash2, UserPlus } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import type { ExperienceLevel, Player, SetupDraft } from '../../@types/game';
+import { useMemo } from 'react';
+import type { ExperienceLevel, RoleId, SetupDraft } from '../../@types/game';
 import { useGame } from '../../context/GameContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { dealRoles, MAX_PLAYERS, MIN_PLAYERS, validateDeck } from '../../utils/gameCalculations';
+import { createPlayers, dealComplete, emptyDeal, MAX_PLAYERS, MIN_PLAYERS, validateDeck, type DealState } from '../../utils/gameCalculations';
 import { Button, SectionTitle } from '../shared/ui';
 import { DeckSelection } from './DeckSelection';
 import { RoleDealPicker } from './RoleDealPicker';
@@ -20,8 +20,9 @@ export function SetupScreen() {
   const { state, dispatch } = useGame();
   const { startGame } = useGameEngine();
   const { names, deck, pool, experience, deckId } = state.setup;
-  const [step, setStep] = useState<Step>('players');
-  const [dealt, setDealt] = useState<Player[] | null>(null);
+  // Kept in the saved setup draft (not local state), so navigating away never resets the wizard.
+  const step: Step = state.setup.step ?? 'players';
+  const deal: DealState | null = state.setup.deal ?? null;
 
   const filledNames = names.map((n, i) => n.trim() || t('setup.playerPlaceholder', { n: i + 1 }));
   const playerCount = names.length;
@@ -32,8 +33,8 @@ export function SetupScreen() {
   const updateSetup = (patch: Partial<SetupDraft>) => dispatch({ type: 'UPDATE_SETUP', patch });
 
   const goTo = (next: Step) => {
-    if (next === 'deal') setDealt(dealRoles(filledNames, deck));
-    setStep(next);
+    // The deal board starts with every card in the tray.
+    updateSetup(next === 'deal' ? { step: next, deal: emptyDeal(names.length, deck) } : { step: next });
     window.scrollTo({ top: 0 });
   };
 
@@ -62,7 +63,7 @@ export function SetupScreen() {
         {step === 'deck' && (
           <DeckSelection deck={deck} pool={pool} deckId={deckId} playerCount={playerCount} experience={experience} onChange={updateSetup} />
         )}
-        {step === 'deal' && dealt && <RoleDealPicker players={dealt} onChange={setDealt} onReshuffle={() => setDealt(dealRoles(filledNames, deck))} />}
+        {step === 'deal' && deal && <RoleDealPicker names={filledNames} deck={deck} deal={deal} onChange={(next) => updateSetup({ deal: next })} />}
       </section>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-edge bg-ink/95 pb-safe pt-3 backdrop-blur">
@@ -91,8 +92,13 @@ export function SetupScreen() {
               {t('setup.deal')}
             </Button>
           )}
-          {step === 'deal' && dealt && (
-            <Button variant="wolf" onClick={() => startGame(dealt)} icon={<Moon className="h-4 w-4" />}>
+          {step === 'deal' && deal && (
+            <Button
+              variant="wolf"
+              disabled={!dealComplete(deal)}
+              onClick={() => startGame(createPlayers(filledNames, deal.slots as RoleId[]))}
+              icon={<Moon className="h-4 w-4" />}
+            >
               {t('setup.begin')}
             </Button>
           )}

@@ -31,8 +31,8 @@ export function RoleDetailSheet({ roleId, onClose, count, onAdjust }: RoleDetail
             <Fact icon={<Users className="h-4 w-4" />} label={t('card.team')}>
               <span className={TONES[role.faction].text}>
                 {t(`team.${teamLabel(role.winTeam)}`)}
-                {/* Cupid plays for the Village but creates the third team. */}
-                {roleId === 'cupid' && <span className="text-vampire"> → {t('team.couple')}</span>}
+                {/* Cursed starts with the Village but turns Wolf if attacked. */}
+                {roleId === 'cursed' && <span className="text-wolf-bright"> → {t('team.werewolf')}</span>}
               </span>
             </Fact>
             <Fact icon={<Scale className="h-4 w-4" />} label={t('card.weight')}>
