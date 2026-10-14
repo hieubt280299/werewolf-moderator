@@ -236,7 +236,8 @@ export interface PendingTrigger {
 export interface Nomination {
   id: string;
   accusedId: string;
-  accuserId: string | null;
+  /** Everyone who joined the accusation (may be empty). */
+  accuserIds: string[];
   /** Player ids voting to eliminate. */
   voters: string[];
 }
@@ -281,14 +282,14 @@ export interface WinResult {
 export interface SetupDraft {
   names: string[];
   deck: RoleId[];
-  /** Saved deck the current setup was loaded from, if any. */
-  deckId?: string | null;
-  deckName?: string | null;
-  /** Roles the auto-balancer may draw from. */
+  /** Saved role pool the current setup was loaded from, if any. */
+  poolId?: string | null;
+  poolName?: string | null;
+  /** Roles available to this game (Role Pool step); the Deck step and auto-balance use these. */
   pool: RoleId[];
   experience: ExperienceLevel;
   /** Wizard step and deal board, saved so leaving the screen (or reloading) keeps your place. */
-  step?: 'players' | 'deck' | 'deal';
+  step?: 'players' | 'pool' | 'deck' | 'deal';
   deal?: { slots: (RoleId | null)[]; tray: RoleId[] } | null;
 }
 
@@ -335,12 +336,13 @@ export interface BalanceOptions {
 // Moderator accounts (v0.1.0)
 // ---------------------------------------------------------------------------
 
-export const MAX_DECKS = 10;
+export const MAX_POOLS = 10;
 
-/** A saved role list. Its length is the player count it was built for. */
-export interface Deck {
+/** A saved set of roles to play with (no counts — counts are chosen in the Deck step). */
+export interface RolePool {
   id: string;
   name: string;
+  /** Unique role ids. */
   roles: RoleId[];
   createdAt: string;
   updatedAt: string;
@@ -358,7 +360,7 @@ export interface UserProfile {
   uid: string;
   username: string;
   displayName: string;
-  decks: Deck[];
+  pools: RolePool[];
   stats: LifetimeStats;
   createdAt: string;
 }
@@ -377,7 +379,7 @@ export interface GameRecord {
   startedAt: string;
   finishedAt: string;
   rounds: number;
-  deckName: string | null;
+  poolName: string | null;
   winner: WinTeam;
   players: GameRecordPlayer[];
   /** Seat indexes of the winning players. */

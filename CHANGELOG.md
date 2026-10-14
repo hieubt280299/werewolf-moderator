@@ -9,11 +9,12 @@ Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://
 
 ### Added
 - **Moderator accounts:** username + password sign-up and sign-in. Uses Firebase Auth + Firestore when `VITE_FIREBASE_*` is configured, with a device-local fallback otherwise.
-- **Profile data:** editable display name, up to 10 saved decks, game history, and lifetime stats (games moderated, Werewolf, Village and other wins).
+- **Profile data:** editable display name, up to 10 saved role pools, game history, and lifetime stats (games moderated, Werewolf, Village and other wins).
 - **Main hub:** Start new game, Continue game (only while a game is in progress), Custom decks, History & analytics, Profile & settings.
-- **Deck studio:** build, edit and delete up to 10 role presets.
-- **Deck selection** during setup: load a saved preset or build a role pool on the fly, then save it.
-- **Card preview:** tapping a card in the deck builder or deck selection shows it full-size with the complete description, team, balance weight and night behavior.
+- **Custom role pools:** build, edit and delete up to 10 named role pools (sets of roles, no counts), with Select all / Deselect all.
+- **Setup flow: Players → Role Pool → Deck → Deal.** The Role Pool step loads, selects/deselects and saves pools (new or replacing one). The Deck step sets counts and auto-balances from the pool.
+- **Role grids** are grouped into Village / Wolves / Other and sorted by difficulty, then balance weight.
+- **Card preview:** tapping a card in the pool editor, Role Pool or Deck step shows it full-size with the complete description, team, balance weight and night behavior.
 - **Drag-and-drop dealing:** fixed player seats and a tray of the deck's cards. Drag a card onto a seat (dropping on a filled seat swaps), or tap a card and then a seat. Reshuffle and Clear are available.
 - **History & analytics:** finished games with roster, winners and the full game timeline. Victory split chart.
 - **Profile & settings** opens as a modal over the current screen.
@@ -34,11 +35,21 @@ Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://
 - **Vietnamese role names:** Tiên Tri Chức Năng (Aura Seer), Mục Sư (Priest), Thanh Niên Cứng (Tough Guy), Con Bệnh (Diseased), Pháp Sư Câm (Spellcaster), Say Rượu (Drunk), Yêu Tinh (Leprechaun), Người Lai (Lycan), Sói Đầu Đàn (Big Bad Wolf), Sói Đau Khổ (Dire Wolf), Sói Răng Thỏ (Fang Face), Chán Đời (Tanner).
 - **Dual-language cards:** the English name runs down the edge, as printed, and the localized name is on the plate.
 - **Dawn announcement:** eliminations read only "Player X was eliminated", with no cause, tinted by the victim's side and tagged with their role.
+- **Accusations** can name several accusers (the card shows how many); each gets their own timeline line.
+- **One nomination per day:** a new nomination opens only after the current one is withdrawn, or after an elimination on a Troublemaker day.
+- **Vietnamese voting terms:** nominating is "đưa lên giàn", eliminating by vote is "treo cổ"; other eliminations stay "loại / bị loại".
+- **Hub stats** add an "Other team wins" tile beside Werewolf and Village wins.
 - **Accused voter chip:** dashed and shows only the name. Hover or tap explains the abstain rule.
 - **Default language:** Vietnamese is now the default; English is in settings.
 - **Animations:** Framer Motion replaced by stepped CSS keyframes (transform/opacity only) and `@formkit/auto-animate`. Main bundle 372 kB → 329 kB.
 - Saved games from earlier builds are upgraded on load, so new fields never break them.
 - In-game components moved to `src/components/game/`. `src/components/dashboard/` now holds the hub screens.
+
+- Role pools are stored in the profile's own `pools` field. Saved decks from earlier builds are discarded on first load. `firestore.rules` now caps `pools` at 10, so republish the rules.
+- Villager and Werewolf are always part of a pool and can't be deselected. Village and Wolves sections have their own Select all / Deselect all.
+- Auto-balance keeps Villagers strictly below half the table (e.g. at most 4 of 10) whenever the pool allows. Manual counts are unrestricted.
+- Vietnamese: "role" is "chức năng" and "role pool" is "danh sách chức năng".
+- Disabled ± buttons are clearly dimmed and inert.
 
 ### Fixed
 - The accused can no longer be counted as voting on their own nomination, in both the UI and the rules engine.

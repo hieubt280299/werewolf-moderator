@@ -9,11 +9,11 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read, delete: if isOwner(uid);
-      // Profile: at most 10 saved decks; the username can't be changed after sign-up.
+      // Profile: at most 10 saved role pools; the username can't be changed after sign-up.
       allow create: if isOwner(uid)
-        && request.resource.data.decks.size() <= 10;
+        && request.resource.data.get('pools', []).size() <= 10;
       allow update: if isOwner(uid)
-        && request.resource.data.decks.size() <= 10
+        && request.resource.data.get('pools', []).size() <= 10
         && request.resource.data.username == resource.data.username;
 
       // Finished games and the in-progress game.

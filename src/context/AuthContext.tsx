@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MAX_DECKS, type Deck, type GameRecord, type SessionUser, type UserProfile } from '../@types/game';
+import { MAX_POOLS, type GameRecord, type RolePool, type SessionUser, type UserProfile } from '../@types/game';
 import { getProfileStore, type ProfileStore } from '../services/profileStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
@@ -15,9 +15,9 @@ interface AuthValue {
   signOut: () => Promise<void>;
   changePassword: (current: string, next: string) => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
-  /** Insert or update; rejects a new deck beyond MAX_DECKS. */
-  saveDeck: (deck: Deck) => Promise<void>;
-  deleteDeck: (id: string) => Promise<void>;
+  /** Insert or update; rejects a new pool beyond MAX_POOLS. */
+  savePool: (pool: RolePool) => Promise<void>;
+  deletePool: (id: string) => Promise<void>;
   recordGame: (record: GameRecord) => Promise<void>;
   listGames: () => Promise<GameRecord[]>;
 }
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [store]);
 
   const patchProfile = useCallback(
-    async (patch: Partial<Pick<UserProfile, 'displayName' | 'decks'>>) => {
+    async (patch: Partial<Pick<UserProfile, 'displayName' | 'pools'>>) => {
       const current = profileRef.current;
       if (!current) return;
       setProfile({ ...current, ...patch }); // optimistic
@@ -93,13 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut: () => requireStore().signOut(),
       changePassword: (c, n) => requireStore().changePassword(c, n),
       updateDisplayName: (name) => patchProfile({ displayName: name.trim() }),
-      saveDeck: async (deck) => {
-        const decks = profileRef.current?.decks ?? [];
-        const exists = decks.some((d) => d.id === deck.id);
-        if (!exists && decks.length >= MAX_DECKS) throw new Error(`Deck limit (${MAX_DECKS}) reached`);
-        await patchProfile({ decks: exists ? decks.map((d) => (d.id === deck.id ? deck : d)) : [...decks, deck] });
+      savePool: async (pool) => {
+        const pools = profileRef.current?.pools ?? [];
+        const exists = pools.some((p) => p.id === pool.id);
+        if (!exists && pools.length >= MAX_POOLS) throw new Error(`Pool limit (${MAX_POOLS}) reached`);
+        await patchProfile({ pools: exists ? pools.map((p) => (p.id === pool.id ? pool : p)) : [...pools, pool] });
       },
-      deleteDeck: (id) => patchProfile({ decks: (profileRef.current?.decks ?? []).filter((d) => d.id !== id) }),
+      deletePool: (id) => patchProfile({ pools: (profileRef.current?.pools ?? []).filter((p) => p.id !== id) }),
       recordGame: async (record) => {
         const current = profileRef.current;
         if (!current) return;

@@ -67,7 +67,7 @@ export function VotingPanel() {
             ))}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Button variant="ember" size="lg" onClick={() => setNominating(true)} icon={<Gavel className="h-5 w-5" />}>
+            <Button variant="ember" size="lg" disabled={!engine.canNominate} onClick={() => setNominating(true)} icon={<Gavel className="h-5 w-5" />}>
               {t('day.nominate')}
             </Button>
             <Button size="lg" onClick={engine.closeDay}>
@@ -96,7 +96,6 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
   const engine = useGameEngine();
   const { alive, byId, votesNeeded } = engine;
   const accused = byId.get(nomination.accusedId);
-  const accuser = byId.get(nomination.accuserId ?? '');
   if (!accused) return null;
   // Mayor counts double; forced voters (Idiot / Pacifist) are applied by the rules engine.
   const count = engine.voteCount(nomination.id);
@@ -116,7 +115,11 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
           <div>
             <p className="text-xs uppercase tracking-wide text-bone-dim">{t('day.accused')}</p>
             <p className="font-display text-2xl font-bold uppercase tracking-grimoire text-bone text-shadow-crisp">{accused.name}</p>
-            {accuser && <p className="text-xs text-bone-faint">← {accuser.name}</p>}
+            {nomination.accuserIds.length > 0 && (
+              <p className="text-xs text-bone-faint">
+                {t(nomination.accuserIds.length === 1 ? 'day.accusedByOne' : 'day.accusedBy', { count: nomination.accuserIds.length })}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p className={clsx('font-display text-2xl font-bold', majority ? 'text-wolf-bright' : 'text-bone')}>
@@ -207,18 +210,18 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
   const { t } = useI18n();
   const engine = useGameEngine();
   const [accused, setAccused] = useState<string | null>(null);
-  const [accuser, setAccuser] = useState<string | null>(null);
+  const [accusers, setAccusers] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
       setAccused(null);
-      setAccuser(null);
+      setAccusers([]);
     }
   }, [open]);
 
   const confirm = () => {
     if (!accused) return;
-    engine.nominate(accused, accuser);
+    engine.nominate(accused, accusers.filter((id) => id !== accused));
     onClose();
   };
 
@@ -250,11 +253,11 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
                 <button
                   key={p.id}
                   type="button"
-                  aria-pressed={accuser === p.id}
-                  onClick={() => setAccuser(accuser === p.id ? null : p.id)}
+                  aria-pressed={accusers.includes(p.id)}
+                  onClick={() => setAccusers((cur) => (cur.includes(p.id) ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
                   className={clsx(
                     'min-h-10 rounded-full border px-3 text-sm',
-                    accuser === p.id ? 'border-ember bg-ember/20 text-bone' : 'border-panel-edge bg-panel-2 text-bone-dim',
+                    accusers.includes(p.id) ? 'border-ember bg-ember/20 text-bone' : 'border-panel-edge bg-panel-2 text-bone-dim',
                   )}
                 >
                   {p.name}

@@ -106,8 +106,17 @@ export function createLocalStore(): ProfileStore {
     },
 
     async loadProfile(user) {
-      const stored = readJSON<UserProfile | null>(KEYS.profile(user.uid), null);
-      if (stored) return stored;
+      const stored = readJSON<(UserProfile & { decks?: unknown }) | null>(KEYS.profile(user.uid), null);
+      if (stored) {
+        // Saved decks from before role pools are discarded (one-off cleanup).
+        if ('decks' in stored || !Array.isArray(stored.pools)) {
+          const { decks: _legacy, ...rest } = stored;
+          const cleaned: UserProfile = { ...rest, pools: rest.pools ?? [] };
+          writeJSON(KEYS.profile(user.uid), cleaned);
+          return cleaned;
+        }
+        return stored;
+      }
       const fresh = newProfile(user);
       writeJSON(KEYS.profile(user.uid), fresh);
       return fresh;

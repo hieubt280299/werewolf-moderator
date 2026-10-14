@@ -8,6 +8,7 @@ import {
   alivePlayers,
   auraResult,
   buildNightSteps,
+  canNominate,
   effectiveWolfTargets,
   eligibleTargets,
   eligibleVoters,
@@ -46,6 +47,7 @@ export function useGameEngine() {
       deckBalance: calculateBalance(state.deck),
       votesNeeded: votesNeeded(state),
       pendingTrigger: state.pendingTriggers[0] ?? null,
+      canNominate: canNominate(state),
       projectedWinner: evaluateWinner(state.players),
     };
   }, [state]);
@@ -79,8 +81,8 @@ export function useGameEngine() {
       /** Wolverine's tell, played aloud at dawn. */
       playMetallic: () => playCue('metal'),
       startDay: () => dispatch({ type: 'START_DAY' }),
-      nominate: (accusedId: string, accuserId: string | null) => {
-        dispatch({ type: 'NOMINATE', accusedId, accuserId });
+      nominate: (accusedId: string, accuserIds: string[]) => {
+        dispatch({ type: 'NOMINATE', accusedId, accuserIds });
         playCue('vote');
       },
       setVoters: (nominationId: string, voters: string[]) => dispatch({ type: 'SET_VOTERS', nominationId, voters }),

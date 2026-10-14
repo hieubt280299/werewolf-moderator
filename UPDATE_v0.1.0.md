@@ -42,7 +42,7 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
 - **Unauthenticated Default Screen:** Renders simple Username + Password Login / Sign-up view (using Firebase Auth / Firestore shadow user records).
 - **User Record Data Model:**
   - Moderator display name (editable).
-  - Favorite Custom Decks (up to 10 stored decks).
+  - Custom Role Pools (up to 10 stored pools).
   - Game History Logs (list of previous games containing player/character arrays, victory result, and ISO timestamp).
   - Lifetime Statistics (Total games moderated, total Werewolf wins, total Village wins).
 
@@ -50,20 +50,26 @@ Your goal is to implement new Auth & Dashboard structures, custom Deck managemen
 - **Authenticated Default Screen:** Shows the main Moderator Dashboard hub with navigation to:
   - **Start New Game**
   - **Continue Game** (enabled only if an active game state exists in local cache/Firestore)
-  - **Custom Decks** (Deck builder studio)
+  - **Custom Role Pool** (saved sets of roles to play with)
   - **Game History & Analytics** (Career stats and game logs)
   - **Profile & Settings** (Change password, edit name, language switch). Opens as a **modal** over the current screen, from the header chip or the hub, so an in-progress setup or game keeps its place.
     - The Change password form is hidden by default; a **Change password** button in the bottom action group (above Sign out) reveals it, with Cancel to collapse it again.
 - **Setup wizard progress** (current step and the deal board) is saved with the game, so leaving the screen or reloading never resets it to the Players step.
 - **Back Navigation:** The header back arrow (and the browser / Android back gesture) returns to the *previous* screen, not always the hub — e.g. opening Profile mid-game and pressing back returns to the game.
 
-#### 3. 🃏 Custom Deck Management (Max 10 Decks)
-- Moderators can build, edit, and store up to 10 favorite role decks.
-- Each deck defines a preset role pool (e.g., "Standard 10-Player", "Chaotic Veteran Deck").
-- **Card Preview:** In the Deck Builder and the in-game Deck Selection, tapping a card does NOT add it to the deck. It opens the card in full size with its complete role description (plus team, balance weight and night behaviour) so the moderator can learn what it does. Counts are changed with the ± steppers (also available inside the preview).
+#### 3. 🃏 Custom Role Pools (Max 10 Pools)
+- Vietnamese terms: *Role* = **chức năng**, *Role pool* = **danh sách chức năng**.
+- Moderators can build, edit and store up to 10 **role pools**: named sets of roles to play with, with no counts (e.g. "Beginner night", "Chaotic veterans"). The screen is called **Custom role pool**. It has no balance meter and no ± counters, just an include checkbox per role and **Select all / Deselect all**.
+- **Card Preview:** tapping a card opens it full-size with its complete description (team, balance weight, difficulty, night behaviour). Selection is changed with the checkbox (pools) or the ± steppers (Deck step).
+- **Role grids are grouped** into Village, Wolves and Other, sorted by difficulty and then by balance weight.
 
 #### 4. 🎲 Gameplay Mechanics Updates
-- **Deck Selection Phase:** Include an interactive deck selector before card distribution so moderators can load one of their saved presets or create a custom role pool on the fly.
+- **Setup flow: Players → Role Pool → Deck → Deal.**
+  - **Villager and Werewolf** are always in a pool and can't be deselected. The **Village** and **Wolves** sections each have their own Select all / Deselect all.
+  - **Role Pool step:** tick the roles allowed in this game, or tap one of **My pools** to load it (tap again to deselect). **Select all / Deselect all** toggles every role. **Save pool** asks for a name and whether to save as a new pool or replace an existing one. There is no balance meter or ± counter here.
+  - **Deck step:** set counts for the pooled roles (Villagers and Werewolves are always available as fillers), or **Auto-balance** from the pool. The old "in pool" checkboxes are gone.
+  - **Auto-balance** keeps Villagers strictly below 50% of the players (e.g. at most 4 of 10). Moderators may still add more by hand.
+  - Disabled ± buttons are visibly dimmed and inert, distinct from the active state.
 - **Role Deal (drag & drop):**
   - Player seats are fixed. The moderator drags each role card from the tray of undealt cards onto the seat of the player who received it. Only cards from the setup deck appear in the tray.
   - Dropping a card on a filled seat swaps the cards; dragging a seated card back to the tray unassigns it.

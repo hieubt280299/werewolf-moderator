@@ -102,5 +102,30 @@ export const ROLE_ORDER: RoleId[] = Object.keys(SPECS) as RoleId[];
 
 export const getRole = (id: RoleId): Role => ROLES[id];
 
+/** Always part of a role pool (and always available in the Deck step) — they can't be removed. */
+export const ALWAYS_IN_POOL: readonly RoleId[] = ['villager', 'werewolf'];
+
+/** A pool's roles with Villager and Werewolf guaranteed, in catalogue order. */
+export const withFillers = (roles: readonly RoleId[]): RoleId[] => {
+  const set = new Set<RoleId>([...ALWAYS_IN_POOL, ...roles]);
+  return ROLE_ORDER.filter((id) => set.has(id));
+};
+
+export type RoleSectionId = 'village' | 'wolves' | 'other';
+
+/**
+ * Roles grouped for pickers: Village, Wolves (incl. Minion & Sorceress), then the rare
+ * third parties. Within a section: easiest first, then by balance weight.
+ */
+export const ROLE_SECTIONS: { id: RoleSectionId; roles: RoleId[] }[] = (() => {
+  const sectionOf = (id: RoleId): RoleSectionId =>
+    ROLES[id].faction === 'village' ? 'village' : ROLES[id].faction === 'werewolf' ? 'wolves' : 'other';
+  const order = (a: RoleId, b: RoleId) => ROLES[a].difficulty - ROLES[b].difficulty || ROLES[a].weight - ROLES[b].weight;
+  return (['village', 'wolves', 'other'] as const).map((id) => ({
+    id,
+    roles: ROLE_ORDER.filter((r) => sectionOf(r) === id).sort(order),
+  }));
+})();
+
 /** Plain Werewolf / Villager — what the Aura Seer reports as "ordinary". */
 export const ORDINARY_ROLES: ReadonlySet<RoleId> = new Set<RoleId>(['villager', 'werewolf']);

@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { ChevronRight, History, Layers, Play, Plus, UserCog } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { MAX_DECKS, type RoleId } from '../../@types/game';
+import { MAX_POOLS, type RoleId } from '../../@types/game';
 import { useAuth } from '../../context/AuthContext';
 import { isActiveGame, useGame } from '../../context/GameContext';
 import { useI18n } from '../../i18n/I18nContext';
@@ -37,10 +37,11 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
       </header>
 
       {stats && (
-        <div className="grid animate-step-in grid-cols-3 gap-2.5" style={{ animationDelay: '60ms' }}>
+        <div className="grid animate-step-in grid-cols-2 gap-2.5 sm:grid-cols-4" style={{ animationDelay: '60ms' }}>
           <Stat label={t('history.games')} value={stats.gamesModerated} />
           <Stat label={t('history.wolfWins')} value={stats.werewolfWins} tone="wolf" />
           <Stat label={t('history.villageWins')} value={stats.villageWins} tone="village" />
+          <Stat label={t('history.otherWins')} value={stats.otherWins} tone="other" />
         </div>
       )}
 
@@ -66,16 +67,16 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
         />
         <HubTile
           icon={<Layers className="h-6 w-6" />}
-          title={t('hub.decks')}
-          hint={t('hub.decksHint', { count: profile?.decks.length ?? 0, max: MAX_DECKS })}
+          title={t('hub.pools')}
+          hint={t('hub.poolsHint', { count: profile?.pools.length ?? 0, max: MAX_POOLS })}
           art={['witch', 'hunter', 'bodyguard']}
-          onClick={() => onNavigate('decks')}
+          onClick={() => onNavigate('pools')}
           delay={180}
         />
         <HubTile
           icon={<History className="h-6 w-6" />}
           title={t('hub.history')}
-          hint={t('hub.historyHint', { count: stats?.gamesModerated ?? 0 })}
+          hint={t((stats?.gamesModerated ?? 0) === 1 ? 'hub.historyHintOne' : 'hub.historyHint', { count: stats?.gamesModerated ?? 0 })}
           onClick={() => onNavigate('history')}
           delay={220}
         />
@@ -91,15 +92,22 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: 'wolf' | 'village' }) {
+const STAT_TONE = {
+  wolf: { box: 'border-wolf/30 shadow-inner-wolf', text: 'text-wolf-bright' },
+  village: { box: 'border-village/30 shadow-inner-village', text: 'text-village' },
+  // Couple, Tanner, Lone Wolf, Vampires, Cult and draws.
+  other: { box: 'border-vampire/30 shadow-inner-vampire', text: 'text-vampire' },
+} as const;
+
+function Stat({ label, value, tone }: { label: string; value: number; tone?: keyof typeof STAT_TONE }) {
   return (
     <div
       className={clsx(
         'panel border p-3 text-center',
-        tone === 'wolf' ? 'border-wolf/30 shadow-inner-wolf' : tone === 'village' ? 'border-village/30 shadow-inner-village' : 'border-panel-edge',
+        tone ? STAT_TONE[tone].box : 'border-panel-edge',
       )}
     >
-      <p className={clsx('font-display text-3xl font-bold', tone === 'wolf' ? 'text-wolf-bright' : tone === 'village' ? 'text-village' : 'text-bone')}>
+      <p className={clsx('font-display text-3xl font-bold', tone ? STAT_TONE[tone].text : 'text-bone')}>
         {value}
       </p>
       <p className="mt-0.5 text-[11px] uppercase leading-tight tracking-wide text-bone-dim">{label}</p>

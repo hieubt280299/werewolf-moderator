@@ -5,7 +5,7 @@ import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { RoleCard } from './RoleCard';
 import { TONES } from './tones';
-import { Sheet } from './ui';
+import { Sheet, StepperButton } from './ui';
 
 interface RoleDetailSheetProps {
   roleId: RoleId | null;
@@ -55,16 +55,16 @@ export function RoleDetailSheet({ roleId, onClose, count, onAdjust }: RoleDetail
           </div>
 
           {onAdjust && count !== undefined && (
-            <div className="flex w-full max-w-sm items-center justify-between rounded-xl border border-panel-edge bg-panel-2 px-2">
-              <button type="button" aria-label="−" onClick={() => onAdjust(-1)} disabled={count === 0} className="press p-3 disabled:opacity-30">
+            <div className="flex w-full max-w-sm items-center justify-between rounded-xl border border-panel-edge bg-panel-2 p-1.5">
+              <StepperButton label="−" onClick={() => onAdjust(-1)} disabled={count === 0}>
                 <Minus className="h-5 w-5" />
-              </button>
+              </StepperButton>
               <span className="font-display text-sm uppercase tracking-grimoire text-bone-dim">
                 {t('card.inDeck')}: <span className="text-lg text-bone">{count}</span>
               </span>
-              <button type="button" aria-label="+" onClick={() => onAdjust(1)} disabled={count >= role.maxCopies} className="press p-3 disabled:opacity-30">
+              <StepperButton label="+" onClick={() => onAdjust(1)} disabled={count >= role.maxCopies}>
                 <Plus className="h-5 w-5" />
-              </button>
+              </StepperButton>
             </div>
           )}
         </div>

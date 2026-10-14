@@ -193,3 +193,21 @@ export function TextField({ label, hint, className, ...rest }: InputHTMLAttribut
     </label>
   );
 }
+
+/** Shared ± stepper button: clearly dimmed and inert when it can't be used. */
+export function StepperButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={clsx(
+        'press flex items-center justify-center rounded-md p-2 transition-colors',
+        disabled ? 'cursor-not-allowed text-bone-faint/30' : 'bg-white/10 text-bone hover:bg-white/20',
+      )}
+    >
+      {children}
+    </button>
+  );
+}

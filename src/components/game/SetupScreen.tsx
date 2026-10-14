@@ -8,10 +8,11 @@ import { useI18n } from '../../i18n/I18nContext';
 import { createPlayers, dealComplete, emptyDeal, MAX_PLAYERS, MIN_PLAYERS, validateDeck, type DealState } from '../../utils/gameCalculations';
 import { Button, SectionTitle } from '../shared/ui';
 import { DeckSelection } from './DeckSelection';
+import { PoolSelection } from './PoolSelection';
 import { RoleDealPicker } from './RoleDealPicker';
 
-type Step = 'players' | 'deck' | 'deal';
-const STEPS: Step[] = ['players', 'deck', 'deal'];
+type Step = 'players' | 'pool' | 'deck' | 'deal';
+const STEPS: Step[] = ['players', 'pool', 'deck', 'deal'];
 const LEVELS: ExperienceLevel[] = ['beginner', 'standard', 'veteran'];
 
 /** New-game wizard: seat players → select / build the deck → deal with swap-enabled review. */
@@ -19,7 +20,7 @@ export function SetupScreen() {
   const { t } = useI18n();
   const { state, dispatch } = useGame();
   const { startGame } = useGameEngine();
-  const { names, deck, pool, experience, deckId } = state.setup;
+  const { names, deck, pool, experience, poolId } = state.setup;
   // Kept in the saved setup draft (not local state), so navigating away never resets the wizard.
   const step: Step = state.setup.step ?? 'players';
   const deal: DealState | null = state.setup.deal ?? null;
@@ -40,7 +41,7 @@ export function SetupScreen() {
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-3xl flex-col px-4 pb-28 pt-4">
-      <nav className="mb-5 grid grid-cols-3 gap-2" aria-label={t('setup.title')}>
+      <nav className="mb-5 grid grid-cols-4 gap-2" aria-label={t('setup.title')}>
         {STEPS.map((s, i) => (
           <div key={s} className="flex flex-col gap-1.5">
             <div className={clsx('h-1 rounded-full', i <= stepIndex ? 'bg-village shadow-glow-village' : 'bg-panel-edge')} />
@@ -60,8 +61,9 @@ export function SetupScreen() {
             onExperience={(e) => updateSetup({ experience: e })}
           />
         )}
+        {step === 'pool' && <PoolSelection pool={pool} poolId={poolId} onChange={updateSetup} />}
         {step === 'deck' && (
-          <DeckSelection deck={deck} pool={pool} deckId={deckId} playerCount={playerCount} experience={experience} onChange={updateSetup} />
+          <DeckSelection deck={deck} pool={pool} playerCount={playerCount} experience={experience} onChange={updateSetup} />
         )}
         {step === 'deal' && deal && <RoleDealPicker names={filledNames} deck={deck} deal={deal} onChange={(next) => updateSetup({ deal: next })} />}
       </section>
@@ -83,7 +85,12 @@ export function SetupScreen() {
             )}
           </div>
           {step === 'players' && (
-            <Button variant="village" disabled={!canLeavePlayers} onClick={() => goTo('deck')}>
+            <Button variant="village" disabled={!canLeavePlayers} onClick={() => goTo('pool')}>
+              {t('setup.next')} <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+          {step === 'pool' && (
+            <Button variant="village" onClick={() => goTo('deck')}>
               {t('setup.next')} <ChevronRight className="h-4 w-4" />
             </Button>
           )}

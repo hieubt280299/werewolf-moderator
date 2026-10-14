@@ -87,6 +87,9 @@ export function balanceVerdict(sum: number, target = 0): BalanceVerdict {
   return 'balanced';
 }
 
+/** Auto-balance keeps Villagers strictly below half the table (e.g. at most 4 of 10). */
+export const maxAutoVillagers = (playerCount: number): number => Math.max(0, Math.ceil(playerCount / 2) - 1);
+
 /** Roughly one wolf per 4–5 players, never a majority. */
 export function suggestedWolfCount(playerCount: number): number {
   const raw = Math.max(1, Math.round(playerCount / 4.5));
@@ -174,7 +177,9 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   const prioritized = shuffle(specialPool, random).sort((a, b) =>
     a === 'seer' ? -1 : b === 'seer' ? 1 : 0,
   );
-  seed.push(...prioritized.slice(0, Math.ceil(villageSlots * 0.6)));
+  // Enough specials to keep Villagers under half the table, when the pool allows it.
+  const villagerCap = maxAutoVillagers(n);
+  seed.push(...prioritized.slice(0, Math.max(Math.ceil(villageSlots * 0.6), villageSlots - villagerCap)));
   while (seed.length < n) seed.push('villager');
 
   const score = (deck: RoleId[]): number => {
@@ -182,7 +187,9 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
     // The Seer anchors the village's information game, so dropping it costs extra.
     const missing = specialPool.reduce((n, id) => n + (deck.includes(id) ? 0 : id === 'seer' ? 4 : 1), 0);
     const villagers = deck.filter((id) => id === 'villager').length;
-    return balance * 10 + missing * 0.5 + (villagers === 0 ? 0 : 0.01 * villagers);
+    const overCap = Math.max(0, villagers - villagerCap);
+    // The villager cap outweighs balance; it's only exceeded if the pool is too small.
+    return overCap * 1000 + balance * 10 + missing * 0.5 + (villagers === 0 ? 0 : 0.01 * villagers);
   };
 
   let best = seed;
@@ -374,7 +381,7 @@ export function buildGameRecord(state: GameState): GameRecord | null {
     startedAt: new Date(state.createdAt).toISOString(),
     finishedAt: new Date().toISOString(),
     rounds: state.round,
-    deckName: state.setup.deckName ?? null,
+    poolName: state.setup.poolName ?? null,
     winner: state.winner.team,
     players: state.players.map((p) => ({
       name: p.name,

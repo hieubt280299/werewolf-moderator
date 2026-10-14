@@ -28,7 +28,7 @@ export type GameAction =
   | { type: 'SET_TARGET_LIST'; field: NightTargetListField; targets: string[] }
   | { type: 'RESOLVE_NIGHT' }
   | { type: 'START_DAY' }
-  | { type: 'NOMINATE'; accusedId: string; accuserId: string | null }
+  | { type: 'NOMINATE'; accusedId: string; accuserIds: string[] }
   | { type: 'SET_VOTERS'; nominationId: string; voters: string[] }
   | { type: 'REMOVE_NOMINATION'; nominationId: string }
   | { type: 'EXECUTE'; nominationId: string }
@@ -50,7 +50,7 @@ const UNDOABLE = new Set<GameAction['type']>([
 const HISTORY_LIMIT = 40;
 
 const DEFAULT_POOL: RoleId[] = [
-  'seer', 'bodyguard', 'hunter', 'witch', 'prince', 'diseased', 'lycan', 'cursed', 'wolfCub', 'sorceress', 'spellcaster',
+  'villager', 'werewolf', 'seer', 'bodyguard', 'hunter', 'witch', 'prince', 'diseased', 'lycan', 'cursed', 'wolfCub', 'sorceress', 'spellcaster',
 ];
 
 // ---------------------------------------------------------------------------
@@ -124,6 +124,10 @@ export function normalizeGameState(s: GameState): GameState {
     modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
     lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
     players: s.players.map((p) => ({ ...p, status: { ...EMPTY_STATUS, ...p.status } })),
+    nominations: (s.nominations ?? []).map((n) => {
+      const legacy = n as typeof n & { accuserId?: string | null };
+      return { ...n, accuserIds: n.accuserIds ?? (legacy.accuserId ? [legacy.accuserId] : []) };
+    }),
   };
 }
 
@@ -162,7 +166,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_DAY':
       return rules.startDay(state);
     case 'NOMINATE':
-      return rules.nominate(state, action.accusedId, action.accuserId);
+      return rules.nominate(state, action.accusedId, action.accuserIds);
     case 'SET_VOTERS':
       return rules.setVoters(state, action.nominationId, action.voters);
     case 'REMOVE_NOMINATION':

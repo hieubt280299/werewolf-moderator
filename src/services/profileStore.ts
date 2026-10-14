@@ -1,4 +1,4 @@
-import type { Deck, GameRecord, GameState, LifetimeStats, SessionUser, UserProfile, WinTeam } from '../@types/game';
+import type { GameRecord, GameState, LifetimeStats, RolePool, SessionUser, UserProfile, WinTeam } from '../@types/game';
 
 /**
  * Storage backend for moderator accounts. Two implementations share this contract:
@@ -13,7 +13,7 @@ export interface ProfileStore {
   signOut(): Promise<void>;
   changePassword(current: string, next: string): Promise<void>;
   loadProfile(user: SessionUser): Promise<UserProfile>;
-  saveProfile(uid: string, patch: Partial<Pick<UserProfile, 'displayName' | 'decks'>>): Promise<void>;
+  saveProfile(uid: string, patch: Partial<Pick<UserProfile, 'displayName' | 'pools'>>): Promise<void>;
   /** Upserts the record and keeps lifetime stats consistent if the same game is re-recorded. */
   recordGame(uid: string, record: GameRecord): Promise<LifetimeStats>;
   listGames(uid: string): Promise<GameRecord[]>;
@@ -76,7 +76,7 @@ export function newProfile(user: SessionUser, displayName?: string): UserProfile
     uid: user.uid,
     username: user.username,
     displayName: displayName?.trim() || user.username,
-    decks: [] as Deck[],
+    pools: [] as RolePool[],
     stats: { ...EMPTY_STATS },
     createdAt: new Date().toISOString(),
   };

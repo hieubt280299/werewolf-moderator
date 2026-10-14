@@ -4,9 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 
-const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.decks' | 'hub.history'> = {
+const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.pools' | 'hub.history'> = {
   game: 'hub.newGame',
-  decks: 'hub.decks',
+  pools: 'hub.pools',
   history: 'hub.history',
 };
 

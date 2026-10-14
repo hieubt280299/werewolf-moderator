@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -43,7 +44,7 @@ import {
  *
  * Firebase Auth has no username provider, so each username maps to a synthetic email
  * under a reserved domain (no mail is ever sent). Firestore layout — all private to the owner:
- *   users/{uid}                 profile: username, displayName, decks (≤10), stats
+ *   users/{uid}                 profile: username, displayName, pools (≤10), stats
  *   users/{uid}/games/{gameId}  finished game records
  *   users/{uid}/session/active  the in-progress game (JSON string)
  */
@@ -133,12 +134,17 @@ export function createFirebaseStore(): ProfileStore {
       wrap(async () => {
         const snap = await getDoc(userDoc(user.uid));
         if (snap.exists()) {
-          const data = snap.data() as Partial<UserProfile>;
+          const data = snap.data() as Partial<UserProfile> & { decks?: unknown };
+          // Saved decks from before role pools are discarded (one-off cleanup).
+          if ('decks' in data || !Array.isArray(data.pools)) {
+            await updateDoc(userDoc(user.uid), { decks: deleteField(), pools: data.pools ?? [] });
+          }
+          const { decks: _legacy, ...rest } = data;
           return {
             ...newProfile(user),
-            ...data,
+            ...rest,
             uid: user.uid,
-            decks: data.decks ?? [],
+            pools: data.pools ?? [],
             stats: { ...EMPTY_STATS, ...data.stats },
           } as UserProfile;
         }

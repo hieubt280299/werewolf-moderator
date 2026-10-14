@@ -612,8 +612,16 @@ export const voteCount = (s: GameState, nom: Nomination): number =>
 /** Strict majority of all votes the living can cast (Mayor counts double). */
 export const votesNeeded = (s: GameState): number => Math.floor(eligibleVoters(s).reduce((sum, p) => sum + voteWeight(p), 0) / 2) + 1;
 
-/** First accusation of the day also collects any Vampire victims. */
-export function nominate(state: GameState, accusedId: string, accuserId: string | null): GameState {
+/**
+ * Only one player may be nominated at a time: a new nomination opens once the current one
+ * is withdrawn, or after an elimination on a Troublemaker day (two eliminations allowed).
+ */
+export const canNominate = (s: GameState): boolean =>
+  s.phase === 'day' && s.dayStep !== 'closed' && s.nominations.length === 0 && (s.executionsLeft ?? 1) > 0;
+
+/** First nomination of the day also collects any Vampire victims. */
+export function nominate(state: GameState, accusedId: string, accuserIds: readonly string[] = []): GameState {
+  if (!canNominate(state)) return state;
   const s = clone(state);
   if (!s.modifiers.vampireTriggeredToday) {
     s.modifiers.vampireTriggeredToday = true;
@@ -623,12 +631,15 @@ export function nominate(state: GameState, accusedId: string, accuserId: string 
   }
   const accused = findPlayer(s, accusedId);
   if (accused?.alive && !accused.status.banished) {
-    s.nominations.push({ id: createId('nom'), accusedId, accuserId, voters: normalizeVoters(s, { accusedId }, []) });
-    const accuser = findPlayer(s, accuserId);
-    if (accuser) {
+    const accusers = [...new Set(accuserIds)]
+      .filter((id) => id !== accusedId)
+      .map((id) => findPlayer(s, id))
+      .filter((p): p is Player => !!p?.alive);
+    s.nominations.push({ id: createId('nom'), accusedId, accuserIds: accusers.map((p) => p.id), voters: normalizeVoters(s, { accusedId }, []) });
+    if (accusers.length === 0) pushLog(s, 'log.nominated', { name: accused.name, role: accused.roleId });
+    // One timeline line per accuser, so each keeps their role tag.
+    for (const accuser of accusers) {
       pushLog(s, 'log.nominatedBy', { name: accused.name, role: accused.roleId, actor: accuser.name, actorRole: accuser.roleId });
-    } else {
-      pushLog(s, 'log.nominated', { name: accused.name, role: accused.roleId });
     }
   }
   s.dayStep = 'voting';

@@ -79,7 +79,7 @@ export function HistoryStats() {
                   </div>
                   <p className="text-sm text-bone-dim">
                     {t('history.players', { count: g.players.length })} · {t('history.rounds', { count: g.rounds })}
-                    {g.deckName && ` · ${t('history.deck', { name: g.deckName })}`}
+                    {g.poolName && ` · ${t('history.pool', { name: g.poolName })}`}
                   </p>
                   <div className="flex -space-x-1.5">
                     {g.players.slice(0, 12).map((p) => (

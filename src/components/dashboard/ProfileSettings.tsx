@@ -153,7 +153,7 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
               />
               {pwMsg && !pwMsg.ok && <p className="text-xs text-wolf-bright">{pwMsg.text}</p>}
               <div className="flex gap-2">
-                <Button onClick={closePassword}>{t('decks.cancel')}</Button>
+                <Button onClick={closePassword}>{t('pools.cancel')}</Button>
                 <Button type="submit" variant="village" block icon={<KeyRound className="h-4 w-4" />}>
                   {t('profile.changePassword')}
                 </Button>

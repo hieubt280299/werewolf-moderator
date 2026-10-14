@@ -2,7 +2,7 @@ import { MoonStar } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { DashboardHome } from './components/dashboard/DashboardHome';
-import { DeckBuilder } from './components/dashboard/DeckBuilder';
+import { PoolBuilder } from './components/dashboard/PoolBuilder';
 import { HistoryStats } from './components/dashboard/HistoryStats';
 import { ProfileSettingsSheet } from './components/dashboard/ProfileSettings';
 import { ModeratorDashboard } from './components/game/ModeratorDashboard';
@@ -13,7 +13,7 @@ import { GameProvider, useGame } from './context/GameContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 
-export type View = 'home' | 'game' | 'decks' | 'history';
+export type View = 'home' | 'game' | 'pools' | 'history';
 
 interface NavState {
   view: View;
@@ -74,7 +74,7 @@ function Shell() {
       <main>
         {view === 'home' && <DashboardHome onNavigate={navigate} onOpenSettings={openSettings} />}
         {view === 'game' && (state.phase === 'setup' ? <SetupScreen /> : <ModeratorDashboard />)}
-        {view === 'decks' && <DeckBuilder />}
+        {view === 'pools' && <PoolBuilder />}
         {view === 'history' && <HistoryStats />}
       </main>
       <ProfileSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
