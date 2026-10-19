@@ -1,8 +1,8 @@
-import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { CheckCheck, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { MAX_POOLS, type RolePool } from '../../@types/game';
 import { useAuth } from '../../context/AuthContext';
+import { useListMotion } from '../../hooks/useListMotion';
 import { ALWAYS_IN_POOL, ROLE_ORDER, withFillers } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { createId } from '../../utils/gameCalculations';
@@ -16,7 +16,7 @@ export function PoolBuilder() {
   const pools = profile?.pools ?? [];
   const [draft, setDraft] = useState<RolePool | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [listRef] = useAutoAnimate<HTMLUListElement>({ duration: 220 });
+  const listRef = useListMotion<HTMLUListElement>(220);
 
   const startNew = () => {
     const now = new Date().toISOString();
@@ -89,7 +89,7 @@ export function PoolBuilder() {
     <div className="mx-auto max-w-3xl space-y-5 px-4 pb-16 pt-6">
       <SectionTitle aside={<span className="text-xs text-bone-faint">{pools.length}/{MAX_POOLS}</span>}>{t('pools.title')}</SectionTitle>
       {pools.length === 0 && <p className="rounded-xl border border-dashed border-panel-edge p-6 text-center text-sm text-bone-faint">{t('pools.empty')}</p>}
-      <ul ref={listRef} className="space-y-3">
+      <ul ref={listRef} className="relative space-y-3">
         {pools.map((pool) => (
           <li key={pool.id} className="panel flex animate-step-in items-center gap-3 border border-panel-edge p-3">
             <div className="min-w-0 flex-1 space-y-2">

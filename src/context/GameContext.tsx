@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -48,6 +49,8 @@ const UNDOABLE = new Set<GameAction['type']>([
   'EXECUTE', 'CLOSE_DAY', 'HUNTER_SHOT', 'MOD_ELIMINATE', 'REVIVE', 'REMATCH', 'NEW_GAME',
 ]);
 const HISTORY_LIMIT = 40;
+/** Quiet period before the game is written to localStorage. */
+const PERSIST_DELAY_MS = 250;
 
 const DEFAULT_POOL: RoleId[] = [
   'villager', 'werewolf', 'seer', 'bodyguard', 'hunter', 'witch', 'prince', 'diseased', 'lycan', 'cursed', 'wolfCub', 'sorceress', 'spellcaster',
@@ -248,9 +251,34 @@ export function GameProvider({ uid, children }: { uid: string; children: ReactNo
 
   const { present } = history;
 
+  // Persist off the interaction path: stringifying the whole game on every keystroke, vote or
+  // drop blocked the main thread mid-animation. Bursts are batched, and anything pending is
+  // written when the page is hidden or closed, or the provider unmounts (sign-out).
+  const latest = useRef(present);
+  latest.current = present;
+  const dirty = useRef(false);
+  const flush = useCallback(() => {
+    if (!dirty.current) return;
+    dirty.current = false;
+    writeJSON(storageKey, latest.current);
+  }, [storageKey]);
+
   useEffect(() => {
-    writeJSON(storageKey, present);
-  }, [storageKey, present]);
+    dirty.current = true;
+    const timer = window.setTimeout(flush, PERSIST_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [present, flush]);
+
+  useEffect(() => {
+    const onVisibility = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
+  }, [flush]);
 
   // On sign-in, resume a cloud game if this device has nothing in progress.
   useEffect(() => {

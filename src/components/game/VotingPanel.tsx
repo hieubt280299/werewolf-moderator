@@ -1,8 +1,8 @@
 import clsx from 'clsx';
 import { DoorOpen, Droplet, Gavel, Ghost, Pause, Play, RotateCcw, Swords, Timer, Undo2, VolumeX } from 'lucide-react';
-import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useEffect, useState } from 'react';
 import type { Nomination } from '../../@types/game';
+import { useListMotion } from '../../hooks/useListMotion';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 import { PlayerToken } from '../shared/PlayerToken';
@@ -15,7 +15,7 @@ export function VotingPanel() {
   const engine = useGameEngine();
   const { state, alive, byId } = engine;
   const [nominating, setNominating] = useState(false);
-  const [listRef] = useAutoAnimate<HTMLDivElement>({ duration: 220 });
+  const listRef = useListMotion<HTMLDivElement>(220);
 
   const silenced = alive.filter((p) => p.status.silenced);
   const banished = alive.filter((p) => p.status.banished);
@@ -61,7 +61,7 @@ export function VotingPanel() {
       {isOpen ? (
         <>
           <p className="text-sm text-bone-dim">{t('day.discussion')}</p>
-          <div ref={listRef} className="space-y-4">
+          <div ref={listRef} className="relative space-y-4">
             {nominations.map((nom) => (
               <NominationCard key={nom.id} nomination={nom} />
             ))}
@@ -177,7 +177,7 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
                 aria-pressed={on}
                 onClick={() => toggleVoter(p.id)}
                 className={clsx(
-                  'press min-h-10 rounded-full border px-3 text-sm font-medium transition-colors',
+                  'press min-h-10 rounded-full border px-3 text-sm font-medium',
                   on ? 'border-ember bg-ember/20 text-bone shadow-inner-ember' : 'border-panel-edge bg-panel-2 text-bone-dim',
                 )}
               >

@@ -37,7 +37,7 @@ export function BalanceMeter({ sum, target }: { sum: number; target: number }) {
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 will-change-transform"
-          style={{ transform: `translate3d(${pct(sum)}%,0,0)`, transition: 'transform 300ms steps(5, end)' }}
+          style={{ transform: `translate3d(${pct(sum)}%,0,0)`, transition: 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)' }}
         >
           <div className="absolute -top-1.5 h-6 w-1.5 -translate-x-1/2 rounded-full bg-bone shadow-[0_0_10px_rgba(245,245,247,.8)]" />
         </div>

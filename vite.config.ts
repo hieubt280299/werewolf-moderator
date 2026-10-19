@@ -32,20 +32,15 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
-        // Fonts come from Google: cache them so the app keeps its look offline.
+        // Fonts are bundled, split into unicode-range subsets. Cache the subsets a device actually
+        // uses on first load (hashed file names, so cache-first is safe) rather than precaching all.
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            urlPattern: ({ sameOrigin, url }: { sameOrigin: boolean; url: URL }) => sameOrigin && url.pathname.endsWith('.woff2'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-webfonts',
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheName: 'fonts',
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
         ],

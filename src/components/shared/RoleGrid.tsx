@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Check, CheckCheck, Lock, Minus, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import type { RoleId } from '../../@types/game';
 import { ALWAYS_IN_POOL, ROLES, ROLE_SECTIONS, type RoleSectionId } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
@@ -39,22 +39,27 @@ export function RoleGrid(props: RoleGridProps) {
   const visible = props.roles ? new Set(props.roles) : null;
   const counts = props.mode === 'count' ? countRoles(props.deck) : {};
 
-  const adjust = (id: RoleId, delta: 1 | -1) => {
-    if (props.mode !== 'count') return;
-    const { deck, onDeck } = props;
+  const locked = props.mode === 'select' ? LOCKED : NONE_LOCKED;
+  // Latest props for the stable callbacks below, so memoized cards skip re-rendering when a
+  // sibling changes.
+  const latest = useRef(props);
+  latest.current = props;
+
+  const adjust = useCallback((id: RoleId, delta: 1 | -1) => {
+    const p = latest.current;
+    if (p.mode !== 'count') return;
     if (delta > 0) {
-      if ((counts[id] ?? 0) < ROLES[id].maxCopies) onDeck(sortDeck([...deck, id]));
+      if ((countRoles(p.deck)[id] ?? 0) < ROLES[id].maxCopies) p.onDeck(sortDeck([...p.deck, id]));
     } else {
-      const idx = deck.lastIndexOf(id);
-      if (idx >= 0) onDeck(deck.filter((_, i) => i !== idx));
+      const idx = p.deck.lastIndexOf(id);
+      if (idx >= 0) p.onDeck(p.deck.filter((_, i) => i !== idx));
     }
-  };
-  const locked = new Set<RoleId>(props.mode === 'select' ? ALWAYS_IN_POOL : []);
-  const toggle = (id: RoleId) => {
-    if (props.mode !== 'select' || locked.has(id)) return;
-    const { selected, onSelected } = props;
-    onSelected(selected.includes(id) ? selected.filter((r) => r !== id) : [...selected, id]);
-  };
+  }, []);
+  const toggle = useCallback((id: RoleId) => {
+    const p = latest.current;
+    if (p.mode !== 'select' || LOCKED.has(id)) return;
+    p.onSelected(p.selected.includes(id) ? p.selected.filter((r) => r !== id) : [...p.selected, id]);
+  }, []);
   /** Select or clear a whole section; locked roles always stay. */
   const toggleSection = (roles: RoleId[], allOn: boolean) => {
     if (props.mode !== 'select') return;
@@ -95,62 +100,13 @@ export function RoleGrid(props: RoleGridProps) {
                 )}
               </h3>
               <div className="role-grid">
-                {roles.map((id) => {
-                  const n = counts[id] ?? 0;
-                  const on = props.mode === 'select' ? props.selected.includes(id) : n > 0;
-                  const tone = TONES[ROLES[id].cardTone];
-                  return (
-                    <div key={id} className="flex w-[var(--card-w)] flex-col items-center gap-2">
-                      <RoleCard roleId={id} size="sm" muted={!on} className="!w-full" onClick={() => setPreview(id)}>
-                        {props.mode === 'count' && n > 0 && (
-                          <span
-                            className="absolute left-1.5 top-1.5 flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 font-display text-sm font-bold text-bone shadow-card"
-                            style={{ background: toneAccentFill(tone, '90deg') }}
-                          >
-                            ×{n}
-                          </span>
-                        )}
-                      </RoleCard>
-                      {props.mode === 'count' ? (
-                        <div className="flex w-full items-center justify-between rounded-lg border border-panel-edge bg-panel-2 p-0.5">
-                          <StepperButton label="−" disabled={n === 0} onClick={() => adjust(id, -1)}>
-                            <Minus className="h-4 w-4" />
-                          </StepperButton>
-                          <span className={clsx('font-display text-sm', n > 0 ? 'text-bone' : 'text-bone-faint')}>{n}</span>
-                          <StepperButton label="+" disabled={n >= ROLES[id].maxCopies} onClick={() => adjust(id, 1)}>
-                            <Plus className="h-4 w-4" />
-                          </StepperButton>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          role="checkbox"
-                          aria-checked={on}
-                          aria-disabled={locked.has(id) || undefined}
-                          aria-label={t(`role.${id}.name`)}
-                          onClick={() => toggle(id)}
-                          className={clsx(
-                            'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold uppercase tracking-wide transition-colors',
-                            locked.has(id) ? 'cursor-not-allowed' : 'press',
-                            on ? 'border-village bg-village/15 text-bone shadow-inner-village' : 'border-panel-edge bg-panel-2 text-bone-faint',
-                          )}
-                        >
-                          <span
-                            aria-hidden
-                            className={clsx(
-                              'flex h-4 w-4 items-center justify-center rounded border',
-                              on ? 'border-village bg-village text-ink' : 'border-bone-faint',
-                            )}
-                          >
-                            {on && <Check className="h-3 w-3" strokeWidth={3} />}
-                          </span>
-                          {t('pools.include')}
-                          {locked.has(id) && <Lock className="h-3 w-3 text-bone-dim" />}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {roles.map((id) =>
+                  props.mode === 'count' ? (
+                    <RoleGridItem key={id} roleId={id} mode="count" count={counts[id] ?? 0} onPreview={setPreview} onAdjust={adjust} />
+                  ) : (
+                    <RoleGridItem key={id} roleId={id} mode="select" on={props.selected.includes(id)} locked={locked.has(id)} onPreview={setPreview} onToggle={toggle} />
+                  ),
+                )}
               </div>
             </section>
           );
@@ -160,8 +116,74 @@ export function RoleGrid(props: RoleGridProps) {
         roleId={preview}
         onClose={() => setPreview(null)}
         count={props.mode === 'count' && preview ? (counts[preview] ?? 0) : undefined}
-        onAdjust={props.mode === 'count' ? (delta) => preview && adjust(preview, delta) : undefined}
+        onAdjust={props.mode === 'count' && preview ? (delta) => adjust(preview, delta) : undefined}
       />
     </>
   );
 }
+
+const LOCKED = new Set<RoleId>(ALWAYS_IN_POOL);
+const NONE_LOCKED = new Set<RoleId>();
+
+type RoleGridItemProps = { roleId: RoleId; onPreview: (id: RoleId) => void } & (
+  | { mode: 'count'; count: number; onAdjust: (id: RoleId, delta: 1 | -1) => void }
+  | { mode: 'select'; on: boolean; locked: boolean; onToggle: (id: RoleId) => void }
+);
+
+/** One card plus its stepper or Include toggle. Memoized: re-renders only when its own role changes. */
+const RoleGridItem = memo(function RoleGridItem(props: RoleGridItemProps) {
+  const { t } = useI18n();
+  const { roleId: id, onPreview } = props;
+  const n = props.mode === 'count' ? props.count : 0;
+  const on = props.mode === 'select' ? props.on : n > 0;
+  const tone = TONES[ROLES[id].cardTone];
+  const preview = useCallback(() => onPreview(id), [onPreview, id]);
+  return (
+    <div className="flex w-[var(--card-w)] flex-col items-center gap-2">
+      <RoleCard roleId={id} size="sm" muted={!on} className="!w-full" onClick={preview}>
+        {props.mode === 'count' && n > 0 && (
+          <span
+            className="absolute left-1.5 top-1.5 flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 font-display text-sm font-bold text-bone shadow-card"
+            style={{ background: toneAccentFill(tone, '90deg') }}
+          >
+            ×{n}
+          </span>
+        )}
+      </RoleCard>
+      {props.mode === 'count' ? (
+        <div className="flex w-full items-center justify-between rounded-lg border border-panel-edge bg-panel-2 p-0.5">
+          <StepperButton label="−" disabled={n === 0} onClick={() => props.onAdjust(id, -1)}>
+            <Minus className="h-4 w-4" />
+          </StepperButton>
+          <span className={clsx('font-display text-sm', n > 0 ? 'text-bone' : 'text-bone-faint')}>{n}</span>
+          <StepperButton label="+" disabled={n >= ROLES[id].maxCopies} onClick={() => props.onAdjust(id, 1)}>
+            <Plus className="h-4 w-4" />
+          </StepperButton>
+        </div>
+      ) : (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={on}
+          aria-disabled={props.locked || undefined}
+          aria-label={t(`role.${id}.name`)}
+          onClick={() => props.onToggle(id)}
+          className={clsx(
+            'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold uppercase tracking-wide',
+            props.locked ? 'cursor-not-allowed' : 'press',
+            on ? 'border-village bg-village/15 text-bone shadow-inner-village' : 'border-panel-edge bg-panel-2 text-bone-faint',
+          )}
+        >
+          <span
+            aria-hidden
+            className={clsx('flex h-4 w-4 items-center justify-center rounded border', on ? 'border-village bg-village text-ink' : 'border-bone-faint')}
+          >
+            {on && <Check className="h-3 w-3" strokeWidth={3} />}
+          </span>
+          {t('pools.include')}
+          {props.locked && <Lock className="h-3 w-3 text-bone-dim" />}
+        </button>
+      )}
+    </div>
+  );
+});

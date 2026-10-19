@@ -3,6 +3,31 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - Unreleased
+
+Performance update: smooth animations and lighter screens. In review in [PR #2](https://github.com/hieubt280299/werewolf-moderator/pull/2).
+
+### Changed
+- **Smooth animations:** every animation and transition now uses eased curves at the display's full frame rate, replacing the choppy stepped (frame-by-frame) timing. Sheets slide with an iOS-style curve, cards deal in with a gentle ease, pop-ins have a slight overshoot, and the balance meter glides.
+- **Role portraits are cached images:** each portrait is drawn once as an image and reused everywhere, instead of a live vector drawing per card. The Role Pool screen has about 75% fewer page elements (≈3,070 → ≈815), and the game board about 70% fewer.
+- **Press feedback** animates only the button's scale (GPU-composited), with no permanent layer per button. Buttons and cards no longer each sit on their own graphics layer while idle.
+- **List animations** (player board, nominations, saved pools) use a small built-in FLIP animation instead of `@formkit/auto-animate`, which kept per-item observers and polling timers running in the background.
+- **Fonts are bundled** (Oswald, Be Vietnam Pro via `@fontsource`) instead of loaded from Google Fonts: no render-blocking third-party request. Fonts are cached for offline use on first load.
+- **Faster first load:** the game, setup, pools and history screens (with the drag-and-drop library) load on demand and are prefetched in idle time. Main bundle 456 kB → 320 kB (136 → 99 kB gzipped).
+- **Starting Night 1** no longer stalls the page: about 180–210 ms → 65–90 ms from tap to frame in a headless benchmark, with no long tasks.
+- Saving the game to the device is batched instead of running on every keystroke, vote or card drop. Anything pending is written when the app is hidden or closed.
+- Role grids and the player board only re-render the cards that changed.
+- Full-height screens use `svh` instead of `dvh`, so the page no longer relays out while the mobile address bar slides.
+- `@dnd-kit/core` 6.1 → 6.3.
+
+### Fixed
+- Buttons' colour transitions were silently disabled by the press animation's CSS. Colour changes are now intentionally instant: one tap can restyle dozens of buttons, and fading them all at once caused jank.
+- Card grids stuttered while scrolling, because every card re-rendered as it scrolled into view (`content-visibility`).
+- Sheets open one render sooner.
+
+### Removed
+- `@formkit/auto-animate` dependency.
+
 ## [0.1.0] - Unreleased
 
 Implements [`UPDATE_v0.1.0.md`](UPDATE_v0.1.0.md). In review in [PR #1](https://github.com/hieubt280299/werewolf-moderator/pull/1).

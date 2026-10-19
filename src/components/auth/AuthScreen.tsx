@@ -47,7 +47,7 @@ export function AuthScreen() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[radial-gradient(110%_60%_at_50%_0%,rgba(200,16,46,0.14),transparent_70%)]">
+    <div className="flex min-h-svh flex-col bg-[radial-gradient(110%_60%_at_50%_0%,rgba(200,16,46,0.14),transparent_70%)]">
       <div className="flex justify-end p-4">
         <LanguageToggle />
       </div>
