@@ -29,7 +29,7 @@ export function Button({ variant = 'ghost', icon, block, size = 'md', className,
     <button
       type={type}
       className={clsx(
-        'press inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold uppercase tracking-grimoire text-shadow-crisp transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none',
+        'press inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold uppercase tracking-grimoire text-shadow-crisp disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none',
         size === 'sm' && 'min-h-9 px-3 text-xs',
         size === 'md' && 'min-h-11 px-4 text-sm',
         size === 'lg' && 'min-h-14 px-6 text-base',
@@ -57,15 +57,14 @@ interface SheetProps {
 
 /**
  * Mobile bottom sheet; a centred dialog on wide screens. Pure CSS keyframes
- * (translate3d/opacity), kept mounted just long enough to play the exit frames.
+ * (translate3d/opacity), kept mounted just long enough to play the exit animation.
  */
 export function Sheet({ open, onClose, title, children, tone = 'neutral', closeLabel = 'Close' }: SheetProps) {
   const [mounted, setMounted] = useState(open);
+  // Mount in the same render that opens (not an effect afterwards), so the sheet starts
+  // animating one commit sooner.
+  if (open && !mounted) setMounted(true);
   const closing = mounted && !open;
-
-  useEffect(() => {
-    if (open) setMounted(true);
-  }, [open]);
 
   useEffect(() => {
     if (!open || !onClose) return;
@@ -203,7 +202,7 @@ export function StepperButton({ label, disabled, onClick, children }: { label: s
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        'press flex items-center justify-center rounded-md p-2 transition-colors',
+        'press flex items-center justify-center rounded-md p-2',
         disabled ? 'cursor-not-allowed text-bone-faint/30' : 'bg-white/10 text-bone hover:bg-white/20',
       )}
     >

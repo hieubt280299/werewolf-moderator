@@ -3,7 +3,7 @@ Act as a Principal Full-Stack Engineer specializing in React, TypeScript, and Fi
 ### 🛠️ Tech Stack & Constraints
 
 - **Frontend:** React 18 + TypeScript (Vite)
-- **Styling:** Tailwind CSS + Framer Motion (stepped, frame-by-frame animations) + custom UI styling based on the Visual & UI Design System below.
+- **Styling:** Tailwind CSS + smooth eased CSS animations (transform/opacity only, compositor-friendly; no `steps()` timing) + custom UI styling based on the Visual & UI Design System below.
 - **State Management:** React Context API + Custom Hooks with local persistence / optional Firebase sync.
 - **Audio:** No BGM + optional SFX cues.
 - **Backend/Database/Auth:** Google Firebase (v10+ Modular SDK using Firestore and Auth).

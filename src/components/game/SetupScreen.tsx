@@ -40,7 +40,7 @@ export function SetupScreen() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-3xl flex-col px-4 pb-28 pt-4">
+    <div className="mx-auto flex min-h-[calc(100svh-3.5rem)] max-w-3xl flex-col px-4 pb-28 pt-4">
       <nav className="mb-5 grid grid-cols-4 gap-2" aria-label={t('setup.title')}>
         {STEPS.map((s, i) => (
           <div key={s} className="flex flex-col gap-1.5">
@@ -139,7 +139,7 @@ function PlayersStep({
               onClick={() => onExperience(level)}
               aria-pressed={experience === level}
               className={clsx(
-                'press min-h-[64px] rounded-xl border px-2 py-2 text-center transition-colors',
+                'press min-h-[64px] rounded-xl border px-2 py-2 text-center',
                 experience === level ? 'border-village bg-village/10 shadow-inner-village' : 'border-panel-edge bg-panel-2',
               )}
             >

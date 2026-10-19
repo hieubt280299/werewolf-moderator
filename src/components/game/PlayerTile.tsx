@@ -12,13 +12,14 @@ interface PlayerTileProps {
   player: Player;
   /** Bodyguard target while the night is in progress. */
   shielded?: boolean;
-  onClick: () => void;
+  /** Stable callback (receives the player id), so the memo holds across board updates. */
+  onInspect: (playerId: string) => void;
 }
 
 const RESTING = '0 10px 30px -8px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.08)';
 
 /** Player block for the dashboard grid: faction edge, character badge and illuminated statuses. */
-export const PlayerTile = memo(function PlayerTile({ player, shielded, onClick }: PlayerTileProps) {
+export const PlayerTile = memo(function PlayerTile({ player, shielded, onInspect }: PlayerTileProps) {
   const { t } = useI18n();
   const tone = TONES[ROLES[player.roleId].cardTone];
   const s = player.status;
@@ -36,7 +37,7 @@ export const PlayerTile = memo(function PlayerTile({ player, shielded, onClick }
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => onInspect(player.id)}
       className={clsx(
         'press relative flex min-h-[96px] w-full flex-col gap-1.5 overflow-hidden rounded-2xl border bg-panel-gradient py-3 pl-4 pr-3 text-left',
         player.alive ? 'border-panel-edge' : 'border-panel-edge/50 opacity-50 grayscale',

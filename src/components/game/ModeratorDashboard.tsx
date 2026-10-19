@@ -1,9 +1,9 @@
-import { useAutoAnimate } from '@formkit/auto-animate/react';
 import clsx from 'clsx';
 import { Biohazard, FlaskConical, Moon, PawPrint, ScrollText, Sun, Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Player } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
+import { useListMotion } from '../../hooks/useListMotion';
 import { useI18n } from '../../i18n/I18nContext';
 import { Button, Chip, SectionTitle } from '../shared/ui';
 import { TimelinePanel } from './TimelineView';
@@ -27,7 +27,7 @@ export function ModeratorDashboard() {
   const [nightOpen, setNightOpen] = useState(false);
   const [inspected, setInspected] = useState<string | null>(null);
   const lastNight = useRef<number | null>(null);
-  const [gridRef] = useAutoAnimate<HTMLDivElement>({ duration: 260 });
+  const gridRef = useListMotion<HTMLDivElement>(260);
 
   // Open the wake-up assistant automatically each time a new night begins.
   useEffect(() => {
@@ -40,6 +40,7 @@ export function ModeratorDashboard() {
 
   const closeNight = useCallback(() => setNightOpen(false), []);
   const closeInspect = useCallback(() => setInspected(null), []);
+  const inspect = useCallback((id: string) => setInspected(id), []);
 
   const isNight = state.phase === 'night';
   const isDay = state.phase === 'day' || state.phase === 'dawn';
@@ -49,7 +50,7 @@ export function ModeratorDashboard() {
   return (
     <div
       className={clsx(
-        'min-h-[calc(100dvh-3.5rem)]',
+        'min-h-[calc(100svh-3.5rem)]',
         isNight && 'bg-[radial-gradient(120%_60%_at_50%_0%,rgba(0,130,200,0.12),transparent_70%)]',
       )}
     >
@@ -119,9 +120,9 @@ export function ModeratorDashboard() {
             >
               {t('dash.players')}
             </SectionTitle>
-            <div ref={gridRef} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            <div ref={gridRef} className="relative grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               {sortForGrid(state.players).map((p) => (
-                <PlayerTile key={p.id} player={p} shielded={p.id === shieldedId} onClick={() => setInspected(p.id)} />
+                <PlayerTile key={p.id} player={p} shielded={p.id === shieldedId} onInspect={inspect} />
               ))}
             </div>
 

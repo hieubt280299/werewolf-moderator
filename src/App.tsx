@@ -1,12 +1,8 @@
 import { MoonStar } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { DashboardHome } from './components/dashboard/DashboardHome';
-import { PoolBuilder } from './components/dashboard/PoolBuilder';
-import { HistoryStats } from './components/dashboard/HistoryStats';
 import { ProfileSettingsSheet } from './components/dashboard/ProfileSettings';
-import { ModeratorDashboard } from './components/game/ModeratorDashboard';
-import { SetupScreen } from './components/game/SetupScreen';
 import { AppHeader } from './components/shared/AppHeader';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { GameProvider, useGame } from './context/GameContext';
@@ -14,6 +10,31 @@ import { SettingsProvider } from './context/SettingsContext';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 
 export type View = 'home' | 'game' | 'pools' | 'history';
+
+// Screens past the hub load on demand (the deal board's drag-and-drop library included),
+// keeping the first load small. They are prefetched in idle time after the hub is up.
+const loaders = {
+  setup: () => import('./components/game/SetupScreen'),
+  board: () => import('./components/game/ModeratorDashboard'),
+  pools: () => import('./components/dashboard/PoolBuilder'),
+  history: () => import('./components/dashboard/HistoryStats'),
+};
+const SetupScreen = lazy(() => loaders.setup().then((m) => ({ default: m.SetupScreen })));
+const ModeratorDashboard = lazy(() => loaders.board().then((m) => ({ default: m.ModeratorDashboard })));
+const PoolBuilder = lazy(() => loaders.pools().then((m) => ({ default: m.PoolBuilder })));
+const HistoryStats = lazy(() => loaders.history().then((m) => ({ default: m.HistoryStats })));
+
+function usePrefetchScreens() {
+  useEffect(() => {
+    const prefetch = () => Object.values(loaders).forEach((load) => void load().catch(() => undefined));
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(prefetch, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(prefetch, 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+}
 
 interface NavState {
   view: View;
@@ -35,7 +56,8 @@ function useViewHistory() {
     window.scrollTo({ top: 0 });
     const onPop = (e: PopStateEvent) => {
       const state = e.state as NavState | null;
-      setNav(state?.view ? state : { view: 'home', depth: 0 });
+      // A transition keeps the current screen up while a not-yet-loaded one downloads.
+      startTransition(() => setNav(state?.view ? state : { view: 'home', depth: 0 }));
       window.scrollTo({ top: 0 });
     };
     window.addEventListener('popstate', onPop);
@@ -49,7 +71,7 @@ function useViewHistory() {
     const next: NavState = { view, depth: current.depth + 1 };
     window.history.pushState(next, '');
     navRef.current = next;
-    setNav(next);
+    startTransition(() => setNav(next));
     window.scrollTo({ top: 0 });
   }, []);
 
@@ -67,15 +89,18 @@ function Shell() {
   // Settings is a modal on top of the current screen, not a screen of its own.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
+  usePrefetchScreens();
 
   return (
     <>
       <AppHeader view={view} onBack={back} onOpenSettings={openSettings} />
       <main>
-        {view === 'home' && <DashboardHome onNavigate={navigate} onOpenSettings={openSettings} />}
-        {view === 'game' && (state.phase === 'setup' ? <SetupScreen /> : <ModeratorDashboard />)}
-        {view === 'pools' && <PoolBuilder />}
-        {view === 'history' && <HistoryStats />}
+        <Suspense fallback={<div className="min-h-[calc(100svh-3.5rem)]" />}>
+          {view === 'home' && <DashboardHome onNavigate={navigate} onOpenSettings={openSettings} />}
+          {view === 'game' && (state.phase === 'setup' ? <SetupScreen /> : <ModeratorDashboard />)}
+          {view === 'pools' && <PoolBuilder />}
+          {view === 'history' && <HistoryStats />}
+        </Suspense>
       </main>
       <ProfileSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
@@ -88,7 +113,7 @@ function Gate() {
 
   if (status === 'loading') {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 text-bone-dim">
+      <div className="flex min-h-svh flex-col items-center justify-center gap-3 text-bone-dim">
         <MoonStar className="h-8 w-8 animate-pulse text-wolf" />
         <p className="text-sm">{t('auth.loading')}</p>
       </div>

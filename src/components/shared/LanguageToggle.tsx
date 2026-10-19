@@ -19,7 +19,7 @@ export function LanguageToggle({ wide }: { wide?: boolean }) {
           aria-pressed={language === l.id}
           onClick={() => setLanguage(l.id)}
           className={clsx(
-            'press rounded-lg font-semibold transition-colors',
+            'press rounded-lg font-semibold',
             wide ? 'min-h-11 text-sm' : 'min-h-8 font-display text-xs tracking-grimoire',
             language === l.id ? 'bg-village/20 text-bone shadow-inner-village' : 'text-bone-dim',
           )}

@@ -37,7 +37,7 @@ export function PlayerToken({ player, selected, disabled, accent = 'village', sh
       onClick={onClick}
       aria-pressed={selected}
       className={clsx(
-        'press relative flex min-h-[64px] w-full items-center gap-2.5 overflow-hidden rounded-xl border bg-panel-2 px-2.5 py-2 text-left transition-colors',
+        'press relative flex min-h-[64px] w-full items-center gap-2.5 overflow-hidden rounded-xl border bg-panel-2 px-2.5 py-2 text-left',
         selected ? [ACCENT[accent].ring, ACCENT[accent].glow] : 'border-panel-edge',
         disabled && 'opacity-35',
       )}

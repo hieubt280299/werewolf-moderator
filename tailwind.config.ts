@@ -19,7 +19,8 @@ export default {
         ember: { DEFAULT: '#F26A21', deep: '#B8321A' },
       },
       fontFamily: {
-        display: ['Oswald', 'Dosis', 'Impact', 'sans-serif'],
+        // Self-hosted via @fontsource (see main.tsx).
+        display: ['"Oswald Variable"', 'Oswald', 'Dosis', 'Impact', 'sans-serif'],
         body: ['"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
       },
       letterSpacing: { grimoire: '0.1em' },
@@ -37,8 +38,8 @@ export default {
         'inner-ember': 'inset 0 0 20px rgba(242,106,33,0.45)',
       },
       /**
-       * Frame-by-frame motion: every animation uses steps() timing so it reads like a
-       * flip-book, and only animates transform/opacity so it stays on the GPU compositor.
+       * Motion: eased curves (no steps()) that only animate transform/opacity, so every
+       * frame stays on the GPU compositor and plays at the display's full refresh rate.
        */
       keyframes: {
         'step-in': {
@@ -61,15 +62,16 @@ export default {
       },
       // `backwards` fill: hold the first frame during any delay, but leave no transform/opacity
       // behind afterwards (a lingering transform would trap position:fixed descendants).
+      // Easings: ease-out-quint for entrances, the iOS sheet curve for sheets, ease-out-back for pops.
       animation: {
-        'step-in': 'step-in 320ms steps(4, end) backwards',
-        'fade-in': 'fade-in 200ms steps(3, end) backwards',
-        'fade-out': 'fade-out 200ms steps(3, end) forwards',
-        'sheet-in': 'sheet-in 300ms steps(6, end) backwards',
-        'sheet-out': 'sheet-out 220ms steps(4, end) forwards',
-        deal: 'deal 400ms steps(5, end) backwards',
-        pop: 'pop 300ms steps(4, end) backwards',
-        'grow-x': 'grow-x 600ms steps(6, end) backwards',
+        'step-in': 'step-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
+        'fade-in': 'fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
+        'fade-out': 'fade-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards',
+        'sheet-in': 'sheet-in 420ms cubic-bezier(0.32, 0.72, 0, 1) backwards',
+        'sheet-out': 'sheet-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards',
+        deal: 'deal 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
+        pop: 'pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards',
+        'grow-x': 'grow-x 700ms cubic-bezier(0.65, 0, 0.35, 1) backwards',
       },
       backgroundImage: {
         'panel-gradient': 'linear-gradient(160deg, #12141C 0%, #1A1D26 100%)',

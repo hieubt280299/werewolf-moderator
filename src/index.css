@@ -11,7 +11,8 @@
   }
   body {
     @apply bg-ink font-body text-bone antialiased;
-    min-height: 100dvh;
+    /* svh, not dvh: dvh changes while the mobile URL bar slides, relaying out the page on scroll. */
+    min-height: 100svh;
     overscroll-behavior-y: none;
   }
   h1, h2, h3, h4 {
@@ -40,13 +41,22 @@
   .text-shadow-title {
     text-shadow: 0 2px 0 rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.6);
   }
-  /* Tactile press feedback without JS: compositor-only transform. */
+  /*
+   * Tactile press feedback without JS, transform only so it runs on the compositor. Colour
+   * and state changes stay instant on purpose: one tap (auto-balance, Select all) can restyle
+   * dozens of buttons and cards at once, and fading them all repaints on the main thread.
+   * (Don't combine with `transition-colors`: this transition-property overrides it.)
+   * No permanent will-change: the browser promotes the element only while it animates,
+   * instead of keeping hundreds of idle buttons on their own compositor layers.
+   */
   .press {
-    transition: transform 120ms steps(2, end);
-    will-change: transform;
+    transition-property: transform;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
   .press:active:not(:disabled) {
     transform: scale(0.96);
+    transition-duration: 90ms;
   }
   .pb-safe {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));

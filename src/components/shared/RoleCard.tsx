@@ -96,9 +96,9 @@ export const RoleCard = memo(function RoleCard({
       )}
       style={{
         aspectRatio: '5 / 7',
+        // Size containment: a card's insides never re-lay out when the grid around it reflows.
+        // (No content-visibility: it re-rendered every card scrolling into view, stuttering scrolls.)
         containerType: 'size',
-        // Off-screen cards skip layout & paint entirely — keeps 41-card grids smooth while resizing.
-        contentVisibility: 'auto',
         boxShadow: selected || size === 'lg' ? `${toneGlow(tone)}, 0 10px 30px -8px rgba(0,0,0,.9)` : RESTING_SHADOW,
         ...style,
       }}

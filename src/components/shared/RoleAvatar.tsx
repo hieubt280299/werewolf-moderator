@@ -1,20 +1,21 @@
 import clsx from 'clsx';
-import { memo, useId, type ReactNode } from 'react';
+import { Fragment, isValidElement, memo, type ReactElement, type ReactNode } from 'react';
 import type { RoleId } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { TONES, type Tone } from './tones';
 
 /**
- * Character portraits for every role — inline vector busts in a dark-fantasy card style:
+ * Character portraits for every role — vector busts in a dark-fantasy card style:
  * moonlight from the upper-left, a faction-coloured rim light, and a costume / prop that
  * identifies the role (the Seer's orb, the Witch's hat, the wolves' muzzles…).
  *
- * Pure SVG gradients only (no filters, no bitmaps) so dozens can render cheaply on phones.
+ * Pure SVG gradients only (no filters, no bitmaps). Each portrait is serialized once into an
+ * SVG image (see `portraitUrl`), so dozens of cards cost one cached raster each.
  * Coordinates live in a 100×100 box: head centred at (50,46), shoulders from y≈72.
  */
 
 interface Ctx {
-  /** Instance-scoped gradient id, so many avatars can share one page. */
+  /** Gradient id within the portrait's own image document. */
   id: (name: string) => string;
   /** `url(#…)` for a scoped gradient id. */
   u: (name: string) => string;
@@ -1144,35 +1145,124 @@ const ART: Record<RoleId, Art> = {
 
 // ---------------------------------------------------------------------------
 
-interface RoleAvatarProps {
-  roleId: RoleId;
-  /** `bust` fills a card portrait; `badge` crops head-and-shoulders into a round token. */
-  variant?: 'bust' | 'badge';
-  className?: string;
+// ---------------------------------------------------------------------------
+// Rendering: each portrait becomes a cached SVG image
+// ---------------------------------------------------------------------------
+
+export type Variant = 'bust' | 'badge';
+
+const VIEW: Record<Variant, { viewBox: string; preserveAspectRatio: string }> = {
+  bust: { viewBox: '0 0 100 100', preserveAspectRatio: 'xMidYMax meet' },
+  badge: { viewBox: '18 12 64 64', preserveAspectRatio: 'xMidYMid slice' },
+};
+
+const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+/** SVG attributes that stay camelCase; every other camelCase prop is hyphenated (strokeWidth → stroke-width). */
+const CAMEL_ATTRS = new Set(['viewBox', 'preserveAspectRatio']);
+const attrName = (prop: string) =>
+  prop === 'className' ? 'class' : CAMEL_ATTRS.has(prop) ? prop : prop.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+
+/**
+ * Minimal static serializer for the portrait art: SVG elements, fragments and the plain
+ * helper components above (no hooks, no state), so no react-dom/server is needed.
+ */
+function toMarkup(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return escape(String(node));
+  if (Array.isArray(node)) return node.map(toMarkup).join('');
+  if (!isValidElement(node)) return '';
+  const { type, props } = node as ReactElement<Record<string, unknown> & { children?: ReactNode }>;
+  if (type === Fragment) return toMarkup(props.children);
+  if (typeof type === 'function') return toMarkup((type as (p: typeof props) => ReactNode)(props));
+  if (typeof type !== 'string') return '';
+  let attrs = '';
+  for (const [prop, value] of Object.entries(props)) {
+    if (prop === 'children' || value === null || value === undefined || value === false) continue;
+    attrs += ` ${attrName(prop)}="${escape(String(value))}"`;
+  }
+  return `<${type}${attrs}>${toMarkup(props.children)}</${type}>`;
 }
 
-export const RoleAvatar = memo(function RoleAvatar({ roleId, variant = 'bust', className }: RoleAvatarProps) {
-  const raw = useId().replace(/:/g, '');
+/** The standalone SVG document of a portrait. */
+export function portraitElement(roleId: RoleId, variant: Variant): ReactElement {
   const tone = TONES[ROLES[roleId].cardTone];
-  const id = (name: string) => `${raw}-${name}`;
-  const c: Ctx = { id, u: (name) => `url(#${id(name)})`, tone };
-
+  // Each portrait is its own image document, so gradient ids can't collide.
+  const c: Ctx = { id: (name) => name, u: (name) => `url(#${name})`, tone };
   return (
-    <svg
-      viewBox={variant === 'badge' ? '18 12 64 64' : '0 0 100 100'}
-      preserveAspectRatio={variant === 'badge' ? 'xMidYMid slice' : 'xMidYMax meet'}
-      className={clsx('block', className)}
-      aria-hidden
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" {...VIEW[variant]}>
       <defs>
-        <Radial id={id('skin')} cx={0.4} cy={0.38} r={0.7} stops={[[0, '#e4b899'], [0.55, '#b07c62'], [1, '#553529']]} />
-        <Radial id={id('pale')} cx={0.4} cy={0.38} r={0.7} stops={[[0, '#ebe6ec'], [0.55, '#aaa1ad'], [1, '#4a4250']]} />
-        <Grad id={id('rim')} x2={1} y2={0.3} stops={[[0, tone.accent, 0.95], [0.5, tone.accent, 0]]} />
-        <Grad id={id('shade')} x2={1} y2={0.2} stops={[[0.4, '#000', 0], [1, '#000', 0.5]]} />
-        <Radial id={id('glow')} stops={[[0, tone.accent, 0.85], [1, tone.accent, 0]]} />
-        <Radial id={id('eyeHalo')} stops={[[0, '#ff6a6a', 0.7], [1, '#ff2a3a', 0]]} />
+        <Radial id="skin" cx={0.4} cy={0.38} r={0.7} stops={[[0, '#e4b899'], [0.55, '#b07c62'], [1, '#553529']]} />
+        <Radial id="pale" cx={0.4} cy={0.38} r={0.7} stops={[[0, '#ebe6ec'], [0.55, '#aaa1ad'], [1, '#4a4250']]} />
+        <Grad id="rim" x2={1} y2={0.3} stops={[[0, tone.accent, 0.95], [0.5, tone.accent, 0]]} />
+        <Grad id="shade" x2={1} y2={0.2} stops={[[0.4, '#000', 0], [1, '#000', 0.5]]} />
+        <Radial id="glow" stops={[[0, tone.accent, 0.85], [1, tone.accent, 0]]} />
+        <Radial id="eyeHalo" stops={[[0, '#ff6a6a', 0.7], [1, '#ff2a3a', 0]]} />
       </defs>
       {ART[roleId](c)}
     </svg>
+  );
+}
+
+export const portraitMarkup = (roleId: RoleId, variant: Variant): string => toMarkup(portraitElement(roleId, variant));
+
+const urls = new Map<string, string>();
+/** Decoded images kept alive so every later <img> of a portrait paints from memory. */
+const warm: HTMLImageElement[] = [];
+
+/** Object URL of a portrait, built once per role and variant for the whole session. */
+export function portraitUrl(roleId: RoleId, variant: Variant = 'bust'): string {
+  const key = `${roleId}:${variant}`;
+  let url = urls.get(key);
+  if (!url) {
+    url = URL.createObjectURL(new Blob([portraitMarkup(roleId, variant)], { type: 'image/svg+xml' }));
+    urls.set(key, url);
+  }
+  return url;
+}
+
+/**
+ * Builds and decodes every portrait in idle time, so cards never pop in a frame late the
+ * first time a screen shows them.
+ */
+export function preloadPortraits(): void {
+  const queue = (Object.keys(ART) as RoleId[]).flatMap((id) => [`${id}:bust`, `${id}:badge`]);
+  const idle = (cb: () => void) =>
+    typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(cb, { timeout: 2000 }) : window.setTimeout(cb, 50);
+  const next = () => {
+    const start = performance.now();
+    while (queue.length && performance.now() - start < 8) {
+      const [id, variant] = queue.shift()!.split(':') as [RoleId, Variant];
+      const img = new Image();
+      img.src = portraitUrl(id, variant);
+      void img.decode().catch(() => undefined);
+      warm.push(img);
+    }
+    if (queue.length) idle(next);
+  };
+  idle(next);
+}
+
+interface RoleAvatarProps {
+  roleId: RoleId;
+  /** `bust` fills a card portrait; `badge` crops head-and-shoulders into a round token. */
+  variant?: Variant;
+  className?: string;
+}
+
+/**
+ * A portrait as an <img>: the browser rasterizes each one once and reuses the bitmap, instead
+ * of keeping ~80 live SVG nodes per card and re-rasterizing vectors on every repaint.
+ */
+export const RoleAvatar = memo(function RoleAvatar({ roleId, variant = 'bust', className }: RoleAvatarProps) {
+  return (
+    <img
+      src={portraitUrl(roleId, variant)}
+      alt=""
+      aria-hidden
+      draggable={false}
+      decoding="async"
+      // Not a drag source or tap target of its own: drags and taps belong to the card around it.
+      className={clsx('pointer-events-none block select-none', className)}
+    />
   );
 });
