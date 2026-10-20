@@ -5,7 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [1.0.0] - Unreleased
 
-Implements [`UPDATE_v1.0.0.md`](UPDATE_v1.0.0.md).
+Implements [`UPDATE_v1.0.0.md`](UPDATE_v1.0.0.md). In review in [PR #3](https://github.com/hieubt280299/werewolf-moderator/pull/3).
 
 ### Added
 - **Recovery email:** required at sign-up. Profile & settings has **Change verification email** next to Change password. It asks for the new address and the current password.
