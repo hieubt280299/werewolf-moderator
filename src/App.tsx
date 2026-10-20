@@ -1,11 +1,13 @@
 import { MoonStar } from 'lucide-react';
 import { lazy, startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AuthScreen } from './components/auth/AuthScreen';
+import { EmailActionScreen } from './components/auth/EmailActionScreen';
 import { DashboardHome } from './components/dashboard/DashboardHome';
 import { ProfileSettingsSheet } from './components/dashboard/ProfileSettings';
 import { AppHeader } from './components/shared/AppHeader';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, clearAuthActionLink, readAuthActionLink, useAuth } from './context/AuthContext';
 import { GameProvider, useGame } from './context/GameContext';
+import { HouseRulesProvider } from './context/HouseRulesContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 
@@ -85,6 +87,7 @@ function useViewHistory() {
 
 function Shell() {
   const { state } = useGame();
+  const { profile } = useAuth();
   const { view, navigate, back } = useViewHistory();
   // Settings is a modal on top of the current screen, not a screen of its own.
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -92,7 +95,8 @@ function Shell() {
   usePrefetchScreens();
 
   return (
-    <>
+    // Cards describe roles as the dealt game plays them; before dealing, as the next game will.
+    <HouseRulesProvider rules={state.phase === 'setup' ? profile?.rebalances : state.rules}>
       <AppHeader view={view} onBack={back} onOpenSettings={openSettings} />
       <main>
         <Suspense fallback={<div className="min-h-[calc(100svh-3.5rem)]" />}>
@@ -103,13 +107,19 @@ function Shell() {
         </Suspense>
       </main>
       <ProfileSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </>
+    </HouseRulesProvider>
   );
 }
 
 function Gate() {
   const { t } = useI18n();
   const { status, user } = useAuth();
+  // An emailed account link (password reset, recovery-email confirmation) opened the app.
+  const [link, setLink] = useState(readAuthActionLink);
+  const linkDone = useCallback(() => {
+    clearAuthActionLink();
+    setLink(null);
+  }, []);
 
   if (status === 'loading') {
     return (
@@ -119,6 +129,8 @@ function Gate() {
       </div>
     );
   }
+  if (link?.mode === 'resetPassword') return <AuthScreen resetLink={link.oobCode} onResetDone={linkDone} />;
+  if (link) return <EmailActionScreen oobCode={link.oobCode} onDone={linkDone} />;
   if (status === 'signedOut' || !user) return <AuthScreen />;
   // Keyed by uid so switching accounts gets a fresh, per-user game state.
   return (

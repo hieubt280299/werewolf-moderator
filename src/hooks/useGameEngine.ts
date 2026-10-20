@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { NightActionField, NightStep, NightTargetListField, Player, RoleId } from '../@types/game';
+import { NO_REBALANCES, type NightActionField, type NightStep, type NightTargetListField, type Player, type RebalanceRules, type RoleId } from '../@types/game';
 import { useGame } from '../context/GameContext';
 import { ROLES } from '../data/roles';
 import { playCue } from '../services/sfx';
@@ -30,10 +30,11 @@ import {
 export function useGameEngine() {
   const { state, dispatch, canUndo, syncError } = useGame();
 
-  // The script only depends on who is alive and the modifiers, which are frozen during a night.
+  // The script only depends on who is alive, the modifiers (frozen during a night) and the
+  // game's house rules (frozen at deal time).
   const nightSteps = useMemo<NightStep[]>(
     () => (state.phase === 'night' ? buildNightSteps(state) : []),
-    [state.phase, state.players, state.deck, state.modifiers],
+    [state.phase, state.round, state.players, state.deck, state.modifiers, state.rules],
   );
 
   const derived = useMemo(() => {
@@ -48,14 +49,15 @@ export function useGameEngine() {
       votesNeeded: votesNeeded(state),
       pendingTrigger: state.pendingTriggers[0] ?? null,
       canNominate: canNominate(state),
-      projectedWinner: evaluateWinner(state.players),
+      projectedWinner: evaluateWinner(state.players, null, state.rules),
     };
   }, [state]);
 
   const commands = useMemo(
     () => ({
-      startGame: (players: Player[]) => {
-        dispatch({ type: 'START_GAME', players });
+      /** Deals the game; `rules` (house rules at this moment) are frozen for its whole length. */
+      startGame: (players: Player[], rules: RebalanceRules = NO_REBALANCES) => {
+        dispatch({ type: 'START_GAME', players, rules });
         playCue('sleep');
       },
       startNight: () => {

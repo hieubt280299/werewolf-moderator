@@ -3,6 +3,43 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - Unreleased
+
+Implements [`UPDATE_v1.0.0.md`](UPDATE_v1.0.0.md).
+
+### Added
+- **Recovery email:** required at sign-up. Profile & settings has **Change verification email** next to Change password. It asks for the new address and the current password.
+- **Forgot password?** on the sign-in screen: username → verify → new password (entered twice) → success, then back to sign in. Sending starts a 120-second cooldown before **Re-send** unlocks.
+  - Device-local accounts get a 6-digit verification code, shown on screen because a device can't send email. The code is valid for 10 minutes and allows 5 attempts.
+  - Firebase accounts get Firebase's password-reset link at the recovery email. The app has no server, so it can't set a password from a 6-digit code. If the console's action URL points at the app, the link opens the app's own New Password form.
+- **New role: Hooker (Mỹ Nhân)**, Village, +7, intermediate, with a portrait. Each night she seduces a player, and that player's night power fails. She can seduce each player only once per game.
+  - A seduced Werewolf ruins the pack's kill. The Fruit Brute is immune.
+  - A seduced Seer is told the opposite. So are the Aura Seer, P.I. and Sorceress.
+  - A seduced Witch's potions are spent with no effect.
+  - The night script warns the moderator on every call the seduction cancels.
+- **Recommended rebalances** in Profile & settings: a master toggle ("Enable all rebalanced roles") and one toggle per role. Each game freezes the rules when its cards are dealt, so changing them never affects a game in progress.
+  - **Hunter:** the revenge shot is replaced by a night link. Each night the Hunter links to a player, and if the Hunter dies that night, the linked player dies too, unless the Hunter was seduced.
+  - **Witch:** once the Healing Potion is used, she no longer sees who the Werewolves attacked.
+  - **Big Bad Wolf:** takes its own turn after the pack and picks a second victim seated next to the first. Seducing the Big Bad Wolf saves both victims. Seducing another wolf saves only the first.
+  - **Tanner:** joins the Village. Anyone who targets the Tanner at night dies with them, through any shield, even if the Hooker seduced them. For a wolf attack, the strongest Werewolf (lowest weight) dies.
+  - While a rule is on, the role's card and card preview show the rebalanced description: the dealt game's rules in play, your current settings while setting up.
+- Night calls to tell a bitten **Cursed** they are a Werewolf now, and a **Doppelgänger** which role she took. Each happens once, on the next night.
+
+### Changed
+- **Night order** is called strictly in five blocks, each labelled in the night script:
+  1. Night-1 setup: Cupid, Doppelgänger, Virginia Woolf, Masons.
+  2. Transformations: Cursed, Doppelgänger, Drunk (night 3).
+  3. Protection and distraction: Hooker, Bodyguard, Priest.
+  4. Threats: Vampires → Werewolves (then the Big Bad Wolf's own strike and the Dire Wolf's companion) → Minion / Sorceress.
+  5. Everyone else.
+- **Protection** (Bodyguard, Priest) stops only Werewolf attacks. The Witch's poison now kills a protected player. A broken heart still takes a protected or healed lover.
+
+- **Deck reset:** changing the Role Pool empties the Deck step and the deal board, so no stale cards survive. Choosing the same roles again keeps the deck.
+- **Restriction warnings:** the Bodyguard's description says they can't protect the same player two nights in a row. The night script repeats it, and repeats the Hooker's once-per-player rule. Locked players are shown greyed out with the reason.
+- **Vietnamese:** Sói Đau Khổ reads "Mỗi đêm, thức dậy cùng bầy Sói. Đêm đầu tiên, chọn một người để yêu thầm. Nếu người đó bị loại, bạn cũng bị loại." The Doppelgänger is now **Nhân Bản**.
+- The timeline logs the Hooker's, the Hunter's and the Big Bad Wolf's picks, and records the night's actions in call order.
+- Firebase: each account's email is now its recovery email, and `usernames/{username}` maps usernames to it. Republish [`firestore.rules`](firestore.rules). Accounts made before v1.0.0 keep working; sign in once so the app can register the username.
+
 ## [0.1.1] - Unreleased
 
 Performance update: smooth animations and lighter screens. In review in [PR #2](https://github.com/hieubt280299/werewolf-moderator/pull/2).

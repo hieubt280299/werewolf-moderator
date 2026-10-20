@@ -1,4 +1,7 @@
-import type { GameRecord, GameState, LifetimeStats, RolePool, SessionUser, UserProfile, WinTeam } from '../@types/game';
+import type { AuthErrorCode, RecoveryEmailChange, ResetDelivery, SessionUser } from '../@types/auth';
+import type { GameRecord, GameState, LifetimeStats, RolePool, UserProfile, WinTeam } from '../@types/game';
+
+export type { AuthErrorCode } from '../@types/auth';
 
 /**
  * Storage backend for moderator accounts. Two implementations share this contract:
@@ -8,27 +11,33 @@ import type { GameRecord, GameState, LifetimeStats, RolePool, SessionUser, UserP
 export interface ProfileStore {
   mode: 'firebase' | 'local';
   onAuthChange(callback: (user: SessionUser | null) => void): () => void;
-  signUp(username: string, password: string, displayName: string): Promise<void>;
+  signUp(username: string, password: string, displayName: string, recoveryEmail: string): Promise<void>;
   signIn(username: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   changePassword(current: string, next: string): Promise<void>;
+  /** Sets a new recovery email; requires the current password. */
+  changeRecoveryEmail(currentPassword: string, email: string): Promise<RecoveryEmailChange>;
+  /**
+   * Forgot password, step 1: sends a 6-digit code (local) or a reset link (Firebase) to the
+   * account's recovery email. Local accounts enforce the resend cooldown.
+   */
+  requestPasswordReset(username: string): Promise<ResetDelivery>;
+  /** Step 2 (code delivery only): checks the code and returns a single-use reset ticket. */
+  verifyResetCode(username: string, code: string): Promise<string>;
+  /** Firebase: the email an emailed reset link belongs to; rejects expired or used links. */
+  checkResetLink(oobCode: string): Promise<string>;
+  /** Step 3: sets the new password with a ticket (local) or the link's oobCode (Firebase). */
+  completePasswordReset(ticket: string, newPassword: string): Promise<void>;
+  /** Firebase: applies an emailed account link (confirming a new recovery email). */
+  applyEmailAction(oobCode: string): Promise<void>;
   loadProfile(user: SessionUser): Promise<UserProfile>;
-  saveProfile(uid: string, patch: Partial<Pick<UserProfile, 'displayName' | 'pools'>>): Promise<void>;
+  saveProfile(uid: string, patch: Partial<Pick<UserProfile, 'displayName' | 'pools' | 'rebalances'>>): Promise<void>;
   /** Upserts the record and keeps lifetime stats consistent if the same game is re-recorded. */
   recordGame(uid: string, record: GameRecord): Promise<LifetimeStats>;
   listGames(uid: string): Promise<GameRecord[]>;
   saveActiveGame(uid: string, state: GameState | null): Promise<void>;
   loadActiveGame(uid: string): Promise<GameState | null>;
 }
-
-export type AuthErrorCode =
-  | 'invalidUsername'
-  | 'weakPassword'
-  | 'taken'
-  | 'badCredentials'
-  | 'network'
-  | 'tooMany'
-  | 'generic';
 
 export class AuthError extends Error {
   constructor(
@@ -46,9 +55,29 @@ export function normalizeUsername(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
+export function assertPassword(password: string) {
+  if (password.length < MIN_PASSWORD) throw new AuthError('weakPassword');
+}
+
 export function assertCredentials(username: string, password: string) {
   if (!USERNAME_PATTERN.test(username)) throw new AuthError('invalidUsername');
-  if (password.length < MIN_PASSWORD) throw new AuthError('weakPassword');
+  assertPassword(password);
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const normalizeEmail = (raw: string): string => raw.trim().toLowerCase();
+
+export function assertEmail(email: string) {
+  if (!EMAIL_PATTERN.test(email) || email.length > 254) throw new AuthError('invalidEmail');
+}
+
+/** "jane.doe@gmail.com" → "j•••e@gmail.com", so a reset screen never shows the full address. */
+export function maskEmail(email: string): string {
+  const [name, domain] = email.split('@');
+  if (!domain) return '•••';
+  const shown = name.length <= 2 ? `${name[0] ?? ''}•••` : `${name[0]}•••${name[name.length - 1]}`;
+  return `${shown}@${domain}`;
 }
 
 export const EMPTY_STATS: LifetimeStats = { gamesModerated: 0, werewolfWins: 0, villageWins: 0, otherWins: 0 };
@@ -71,11 +100,12 @@ export function applyStatsDelta(stats: LifetimeStats, delta: Partial<Record<keyo
   return out;
 }
 
-export function newProfile(user: SessionUser, displayName?: string): UserProfile {
+export function newProfile(user: SessionUser, displayName?: string, recoveryEmail: string | null = null): UserProfile {
   return {
     uid: user.uid,
     username: user.username,
     displayName: displayName?.trim() || user.username,
+    recoveryEmail,
     pools: [] as RolePool[],
     stats: { ...EMPTY_STATS },
     createdAt: new Date().toISOString(),

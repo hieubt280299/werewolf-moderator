@@ -1,7 +1,8 @@
 import clsx from 'clsx';
 import { AlertTriangle, ChevronLeft, ChevronRight, Dices, Moon, Trash2, UserPlus } from 'lucide-react';
 import { useMemo } from 'react';
-import type { ExperienceLevel, RoleId, SetupDraft } from '../../@types/game';
+import { NO_REBALANCES, type ExperienceLevel, type RoleId, type SetupDraft } from '../../@types/game';
+import { useAuth } from '../../context/AuthContext';
 import { useGame } from '../../context/GameContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
@@ -20,6 +21,7 @@ export function SetupScreen() {
   const { t } = useI18n();
   const { state, dispatch } = useGame();
   const { startGame } = useGameEngine();
+  const { profile } = useAuth();
   const { names, deck, pool, experience, poolId } = state.setup;
   // Kept in the saved setup draft (not local state), so navigating away never resets the wizard.
   const step: Step = state.setup.step ?? 'players';
@@ -103,7 +105,8 @@ export function SetupScreen() {
             <Button
               variant="wolf"
               disabled={!dealComplete(deal)}
-              onClick={() => startGame(createPlayers(filledNames, deal.slots as RoleId[]))}
+              // The moderator's house rules are frozen into the game at this moment.
+              onClick={() => startGame(createPlayers(filledNames, deal.slots as RoleId[]), { ...NO_REBALANCES, ...profile?.rebalances })}
               icon={<Moon className="h-4 w-4" />}
             >
               {t('setup.begin')}

@@ -33,6 +33,7 @@ export type RoleId =
   | 'sorceress'
   | 'vampire'
   | 'cultLeader'
+  | 'hooker'
   // Expansion roles
   | 'apprenticeSeer'
   | 'auraSeer'
@@ -84,7 +85,17 @@ export type NightActionKind =
   | 'priestBless'
   | 'oldHagBanish'
   | 'troublemakerStir'
-  | 'drunkSober';
+  | 'drunkSober'
+  // v1.0.0
+  | 'hookerSeduce'
+  /** House rule: the Hunter links to a player who dies with them that night. */
+  | 'hunterLink'
+  /** House rule: the Big Bad Wolf's own strike, right after the pack's. */
+  | 'bigBadWolfStrike'
+  /** The Cursed was attacked: wake them to learn they are a Werewolf now. */
+  | 'cursedAwaken'
+  /** The Doppelgänger's target died: wake her to see the role she took. */
+  | 'doppelgangerAwaken';
 
 /** 1 = beginner-friendly, 2 = intermediate, 3 = advanced (also rare third-party teams). */
 export type Difficulty = 1 | 2 | 3;
@@ -100,7 +111,7 @@ export interface Role {
   isWolf: boolean;
   seerAppearance: SeerAppearance;
   nightAction?: NightActionKind;
-  /** Lower wakes earlier. */
+  /** Lower wakes earlier (see NIGHT_ORDER in data/roles). */
   nightOrder?: number;
   /** Only wakes on night 1. */
   firstNightOnly?: boolean;
@@ -124,8 +135,10 @@ export type EliminationCause =
   | 'ghost'
   /** A lover dies of a broken heart. */
   | 'heartbreak'
-  /** Dire Wolf companion / Virginia Woolf link. */
-  | 'linked';
+  /** Dire Wolf companion / Virginia Woolf link / the Hunter's night link (house rule). */
+  | 'linked'
+  /** House rule: targeted the reworked Tanner at night (the Tanner dies too). */
+  | 'tanner';
 
 export interface PlayerStatus {
   /** Bodyguard shield for the current night. */
@@ -189,16 +202,30 @@ export interface NightActions {
   troublemakerActor: string | null;
   /** The real role the Drunk sobers up into on night 3. */
   drunkRole: string | null;
+  /** Seduced by the Hooker: their own night power fails tonight. */
+  hookerTarget: string | null;
+  /** House rule: dies with the Hunter if the Hunter dies tonight. */
+  hunterTarget: string | null;
+  /** House rule: the Big Bad Wolf's second victim, seated next to the pack's target. */
+  bigBadWolfTarget: string | null;
 }
 
 export type NightTargetListField = 'wolfTargets' | 'cupidTargets';
 export type NightActionField = Exclude<keyof NightActions, NightTargetListField>;
+
+/**
+ * The five blocks of the night, called strictly in this order:
+ * 1 night-1 setup → 2 transformations & delayed roles → 3 protection & distraction →
+ * 4 threats (Vampires → Werewolves → Minion / Sorceress) → 5 every other night role.
+ */
+export type NightGroup = 1 | 2 | 3 | 4 | 5;
 
 /** One wake-up call in the night script, derived from the living roles. */
 export interface NightStep {
   id: string;
   roleId: RoleId;
   action: NightActionKind;
+  group: NightGroup;
   /** Player ids who wake for this step. Empty when every holder is dead. */
   actors: string[];
   /** How many targets the step expects (wolves: 0, 1 or 2). */
@@ -225,6 +252,14 @@ export interface NightReport {
   lovers: string[];
   /** Tough Guy took a wolf attack and will die after the next night. */
   wounded: string[];
+}
+
+/** A player to wake on a later night because their role changed (Cursed bitten, Doppelgänger copied). */
+export interface PendingAwakening {
+  playerId: string;
+  kind: 'cursed' | 'doppelganger';
+  /** The night they are woken. */
+  round: number;
 }
 
 export interface PendingTrigger {
@@ -272,7 +307,30 @@ export interface GameModifiers {
   extraExecution: boolean;
   /** Set when the Tanner gets eliminated (they win). */
   tannerWinner: string | null;
+  /** Players the Hooker has already seduced — each only once per game. */
+  hookerVisited: string[];
+  pendingAwakenings: PendingAwakening[];
 }
+
+// ---------------------------------------------------------------------------
+// House rules (v1.0.0)
+// ---------------------------------------------------------------------------
+
+/** Optional "Recommended Rebalances", chosen in Profile & settings. */
+export interface RebalanceRules {
+  /** The Hunter links to a player each night; if the Hunter dies that night, so do they. */
+  hunter: boolean;
+  /** Once the Healing Potion is used, the Witch no longer sees the Werewolves' victim. */
+  witch: boolean;
+  /** The Big Bad Wolf takes its own turn after the pack: a second victim next to the first. */
+  bigBadWolf: boolean;
+  /** The Tanner joins the Village; anyone who targets them at night dies with them. */
+  tanner: boolean;
+}
+
+export type RebalanceId = keyof RebalanceRules;
+export const REBALANCE_IDS: readonly RebalanceId[] = ['hunter', 'witch', 'bigBadWolf', 'tanner'];
+export const NO_REBALANCES: RebalanceRules = { hunter: false, witch: false, bigBadWolf: false, tanner: false };
 
 export interface WinResult {
   team: WinTeam;
@@ -315,6 +373,11 @@ export interface GameState {
   winner: WinResult | null;
   log: GameLogEntry[];
   setup: SetupDraft;
+  /**
+   * House rules frozen when the cards were dealt. Changing them in Settings only affects
+   * games dealt afterwards.
+   */
+  rules: RebalanceRules;
   /** Set once the finished game has been written to the moderator's history. */
   recordedAt?: number | null;
   createdAt: number;
@@ -360,8 +423,14 @@ export interface UserProfile {
   uid: string;
   username: string;
   displayName: string;
+  /** Where password-reset codes / links are sent. Null on accounts made before v1.0.0. */
+  recoveryEmail: string | null;
+  /** Firebase: a new recovery email waiting for its confirmation link to be opened. */
+  pendingRecoveryEmail?: string | null;
   pools: RolePool[];
   stats: LifetimeStats;
+  /** House rules for newly dealt games. */
+  rebalances?: RebalanceRules;
   createdAt: string;
 }
 
@@ -387,7 +456,4 @@ export interface GameRecord {
   log: GameLogEntry[];
 }
 
-export interface SessionUser {
-  uid: string;
-  username: string;
-}
+export type { SessionUser } from './auth';

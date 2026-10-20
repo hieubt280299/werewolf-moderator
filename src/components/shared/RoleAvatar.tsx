@@ -615,6 +615,44 @@ const ART: Record<RoleId, Art> = {
   ),
   // --- Expansion portraits (modelled on the Ultimate Werewolf Deluxe card art) ---
 
+  hooker: (c) => (
+    <>
+      <defs>
+        <Grad id={c.id('hair')} stops={[[0, '#8e2c3e'], [0.6, '#4a0f1c'], [1, '#1e0408']]} />
+        <Grad id={c.id('dress')} stops={[[0, '#d0244a'], [1, '#4a0614']]} />
+        <Radial id={c.id('rose')} cx={0.4} cy={0.35} r={0.7} stops={[[0, '#ff6a86'], [0.6, '#c81e44'], [1, '#5a0618']]} />
+      </defs>
+      {/* Long waves falling behind bare shoulders. */}
+      <path
+        d="M36 40 C29 52 27 66 31 82 C34 88 38 90 41 88 C38 78 39 66 41 52 Z M64 40 C71 52 73 66 69 82 C66 88 62 90 59 88 C62 78 61 66 59 52 Z"
+        fill={c.u('hair')}
+      />
+      <Bust fill={c.u('skin')} c={c} />
+      {/* Off-the-shoulder gown. */}
+      <path d="M10 101 C12 92 18 87 26 86 Q50 92 74 86 C82 87 88 92 90 101 Z" fill={c.u('dress')} />
+      <path d="M26 86 Q50 92 74 86" stroke="#ff8aa0" strokeOpacity={0.6} strokeWidth={0.9} fill="none" />
+      <Neck fill={c.u('skin')} />
+      <path d="M43.4 66.5 Q50 70 56.6 66.5" stroke="#f4eee8" strokeWidth={1.6} strokeDasharray="0.1 2" strokeLinecap="round" fill="none" />
+      <Head c={c} />
+      <Face c={c} lips="#d01836" mouth="smirk" brow="#3a0e14" eye="#3a1a10" />
+      {/* Lashes, blush and a beauty mark. */}
+      <path d="M41.6 44.6 L40.4 43.4 M42.8 43.9 L42.2 42.5 M57.2 43.9 L57.8 42.5 M58.4 44.6 L59.6 43.4" stroke="#1a0608" strokeWidth={0.7} strokeLinecap="round" />
+      <ellipse cx={42.6} cy={51.5} rx={2.6} ry={1.5} fill="#ff6a7a" opacity={0.28} />
+      <ellipse cx={57.4} cy={51.5} rx={2.6} ry={1.5} fill="#ff6a7a" opacity={0.28} />
+      <circle cx={55.6} cy={55.2} r={0.6} fill="#2a0a0c" />
+      <FaceShade c={c} />
+      {/* Side-swept front wave. */}
+      <path d="M37.5 44 C36 31 43 25.5 51 25.5 C59 25.5 65 31 62.6 44 C61.6 37 58 33 53 32.6 C49 34.6 44 37.6 37.5 44 Z" fill={c.u('hair')} />
+      <path d="M44 33.4 C47.4 31 52 30.6 55.4 32" stroke="#c0485a" strokeOpacity={0.6} strokeWidth={0.8} fill="none" />
+      <circle cx={38.4} cy={52.4} r={1.2} fill="#f2d27a" />
+      <circle cx={61.6} cy={52.4} r={1.2} fill="#f2d27a" />
+      {/* A rose tucked in her hair. */}
+      <circle cx={61.5} cy={33} r={4.2} fill={c.u('rose')} />
+      <path d="M59.6 32.4 Q61.5 30.4 63.4 32.6 Q61.6 34.8 59.6 32.4 Z M60.4 34.6 Q62.4 33.6 63.6 35.4" stroke="#5a0618" strokeWidth={0.6} fill="none" />
+      <path d="M64.8 35.6 L68 38.4 L65.6 38.8 Z" fill="#2e6a2a" />
+    </>
+  ),
+
   apprenticeSeer: (c) => (
     <>
       <defs>

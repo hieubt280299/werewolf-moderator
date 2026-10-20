@@ -193,6 +193,50 @@ export function TextField({ label, hint, className, ...rest }: InputHTMLAttribut
   );
 }
 
+interface ToggleProps {
+  checked: boolean;
+  /** Partly on (a master switch over several settings). */
+  mixed?: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  hint?: string;
+  className?: string;
+}
+
+/** A labelled on/off switch row. */
+export function Toggle({ checked, mixed = false, onChange, label, hint, className }: ToggleProps) {
+  return (
+    <label className={clsx('flex cursor-pointer items-start justify-between gap-4', className)}>
+      <span className="min-w-0">
+        <span className="block font-display text-sm uppercase tracking-grimoire text-bone">{label}</span>
+        {hint && <span className="block text-xs text-bone-dim">{hint}</span>}
+      </span>
+      <input
+        type="checkbox"
+        className="peer sr-only"
+        checked={checked}
+        ref={(el) => {
+          if (el) el.indeterminate = mixed && !checked;
+        }}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span
+        aria-hidden
+        className={clsx(
+          'relative mt-1 h-7 w-12 shrink-0 rounded-full border transition-colors peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-village',
+          checked ? 'border-village bg-village/30 shadow-inner-village' : mixed ? 'border-village/50 bg-panel-2' : 'border-panel-edge bg-panel-2',
+        )}
+      >
+        <span
+          className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-bone transition-transform"
+          // Partly on reads as off (only the track is tinted); the row's hint gives the count.
+          style={{ transform: checked ? 'translate3d(20px,0,0)' : 'translate3d(0,0,0)' }}
+        />
+      </span>
+    </label>
+  );
+}
+
 /** Shared ± stepper button: clearly dimmed and inert when it can't be used. */
 export function StepperButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
   return (

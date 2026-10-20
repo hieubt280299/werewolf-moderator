@@ -1,10 +1,26 @@
 rules_version = '2';
 
-// Werewolf Gamemaster — every document lives under users/{uid} and is private to its owner.
+// Werewolf Gamemaster — every document under users/{uid} is private to its owner.
+// usernames/{username} maps a username to its account's sign-in email (the recovery email).
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Read by id only (sign-in and Forgot Password look it up before anyone is signed in);
+    // never listed. Only the account it points to can create or change it.
+    match /usernames/{username} {
+      function validEntry() {
+        return request.resource.data.keys().hasOnly(['uid', 'email', 'pendingEmail'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.email is string;
+      }
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null && validEntry();
+      allow update: if request.auth != null && resource.data.uid == request.auth.uid && validEntry();
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
     match /users/{uid} {

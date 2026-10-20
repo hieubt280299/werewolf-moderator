@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { GameState, Player, RoleId } from '../@types/game';
-import { createInitialState } from '../context/GameContext';
+import { NO_REBALANCES, type GameState, type Player, type RebalanceRules, type RoleId } from '../@types/game';
+import { createInitialState, gameReducer, normalizeGameState } from '../context/GameContext';
+import { roleDescKey } from '../context/HouseRulesContext';
+import { dictionaries } from '../i18n/translations';
 import { ROLE_SECTIONS, ROLES, withFillers } from '../data/roles';
 import { applyStatsDelta, EMPTY_STATS, statsDelta } from '../services/profileStore';
 import {
@@ -23,7 +25,7 @@ const seeded = (seed: number) => () => {
   return seed / 2 ** 32;
 };
 
-function game(roles: RoleId[]): GameState {
+function game(roles: RoleId[], house: Partial<RebalanceRules> = {}): GameState {
   const players: Player[] = roles.map((roleId, seat) => ({
     id: `p${seat}`,
     name: `P${seat}`,
@@ -33,7 +35,7 @@ function game(roles: RoleId[]): GameState {
     alive: true,
     status: { ...EMPTY_STATUS },
   }));
-  return rules.startNight({ ...createInitialState(), players, deck: roles });
+  return rules.startNight({ ...createInitialState(), players, deck: roles, rules: { ...NO_REBALANCES, ...house } });
 }
 
 const withActions = (s: GameState, a: Partial<GameState['nightActions']>): GameState => ({
@@ -350,6 +352,201 @@ describe('one nomination per day', () => {
     s = rules.nominate(s, 'p1', []);
     expect(s.nominations.map((n) => n.accusedId)).toEqual(['p1']);
   });
+});
+
+describe('v1.0.0 night order', () => {
+  it('calls setup → transformations → Hooker / Bodyguard → Vampires → wolves → Minion / Sorceress → the rest', () => {
+    const s = game(['cupid', 'witch', 'seer', 'sorceress', 'minion', 'werewolf', 'vampire', 'bodyguard', 'hooker', 'villager']);
+    const steps = rules.buildNightSteps(s);
+    expect(steps.map((x) => x.action)).toEqual([
+      'cupidLink',
+      'hookerSeduce',
+      'bodyguardProtect',
+      'vampireBite',
+      'wolfKill',
+      'minionMeet',
+      'sorceressInspect',
+      'seerInspect',
+      'witchPotion',
+    ]);
+    expect(steps.map((x) => x.group)).toEqual([1, 3, 3, 4, 4, 4, 4, 5, 5]);
+  });
+
+  it('wakes the bitten Cursed and the Doppelgänger who took a role on the next night only', () => {
+    let s = game(['werewolf', 'cursed', 'doppelganger', 'seer', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { wolfTargets: ['p1'], doppelgangerTarget: 'p3' }));
+    s = rules.moderatorEliminate(rules.startDay(s), 'p3');
+    expect(s.players[2].roleId).toBe('seer');
+    s = rules.startNight(s);
+    const steps = rules.buildNightSteps(s);
+    expect(steps.slice(0, 2).map((x) => [x.action, x.actors])).toEqual([
+      ['cursedAwaken', ['p1']],
+      ['doppelgangerAwaken', ['p2']],
+    ]);
+    expect(steps[0].group).toBe(2);
+    s = rules.startNight(rules.startDay(rules.resolveNight(s)));
+    expect(rules.buildNightSteps(s).some((x) => x.action === 'cursedAwaken' || x.action === 'doppelgangerAwaken')).toBe(false);
+  });
+});
+
+describe('the Hooker', () => {
+  it('is a +7 Village role of intermediate difficulty', () => {
+    expect(ROLES.hooker).toMatchObject({ faction: 'village', weight: 7, difficulty: 2, nightAction: 'hookerSeduce' });
+  });
+
+  it('cancels a seduced Bodyguard’s protection', () => {
+    const s = game(['werewolf', 'hooker', 'bodyguard', 'villager', 'villager', 'villager']);
+    const after = rules.resolveNight(withActions(s, { hookerTarget: 'p2', bodyguardTarget: 'p3', wolfTargets: ['p3'] }));
+    expect(alive(after, 'p3')).toBe(false);
+  });
+
+  it('saves the wolves’ victim when a Werewolf is seduced — but not when it is the Fruit Brute', () => {
+    const s = game(['werewolf', 'fruitBrute', 'hooker', 'villager', 'villager', 'villager', 'villager']);
+    expect(alive(rules.resolveNight(withActions(s, { hookerTarget: 'p0', wolfTargets: ['p3'] })), 'p3')).toBe(true);
+    expect(alive(rules.resolveNight(withActions(s, { hookerTarget: 'p1', wolfTargets: ['p3'] })), 'p3')).toBe(false);
+  });
+
+  it('gives a seduced Seer the opposite answer', () => {
+    const s = withActions(game(['werewolf', 'hooker', 'seer', 'villager', 'villager']), { hookerTarget: 'p2' });
+    expect(rules.inspectionResult(s, 'seerInspect', 'p3')).toBe(true); // a Villager shows as a Werewolf
+    expect(rules.inspectionResult(s, 'seerInspect', 'p0')).toBe(false);
+  });
+
+  it('wastes a seduced Witch’s potions', () => {
+    const s = game(['werewolf', 'hooker', 'witch', 'villager', 'villager', 'villager']);
+    const after = rules.resolveNight(withActions(s, { hookerTarget: 'p2', wolfTargets: ['p3'], witchSaveTarget: 'p3', witchKillTarget: 'p4' }));
+    expect(alive(after, 'p3')).toBe(false);
+    expect(alive(after, 'p4')).toBe(true);
+    expect(after.modifiers.witchHealUsed && after.modifiers.witchKillUsed).toBe(true);
+  });
+
+  it('can seduce each player only once per game', () => {
+    let s = game(['werewolf', 'hooker', 'seer', 'villager', 'villager', 'villager']);
+    s = rules.startNight(rules.startDay(rules.resolveNight(withActions(s, { hookerTarget: 'p2' }))));
+    const step = rules.buildNightSteps(s).find((x) => x.action === 'hookerSeduce')!;
+    expect(rules.eligibleTargets(s, step).map((p) => p.id)).toEqual(['p0', 'p3', 'p4', 'p5']);
+  });
+});
+
+describe('protection', () => {
+  it('lets the Witch’s poison through the Bodyguard’s shield', () => {
+    const s = game(['werewolf', 'bodyguard', 'witch', 'villager', 'villager', 'villager']);
+    expect(alive(rules.resolveNight(withActions(s, { bodyguardTarget: 'p3', witchKillTarget: 'p3' })), 'p3')).toBe(false);
+  });
+
+  it('breaks a protected lover’s heart when the other lover dies', () => {
+    let s = game(['werewolf', 'cupid', 'bodyguard', 'witch', 'villager', 'villager', 'villager']);
+    s = rules.startNight(rules.startDay(rules.resolveNight(withActions(s, { cupidTargets: ['p4', 'p5'] }))));
+    s = rules.resolveNight(withActions(s, { wolfTargets: ['p4'], bodyguardTarget: 'p4', witchKillTarget: 'p5' }));
+    expect(s.players[4].eliminated?.cause).toBe('heartbreak');
+    expect(alive(s, 'p5')).toBe(false);
+  });
+});
+
+describe('recommended rebalances', () => {
+  it('only adds the house-rule steps when the game was dealt with them', () => {
+    const deck: RoleId[] = ['bigBadWolf', 'werewolf', 'hunter', 'villager', 'villager', 'villager', 'villager', 'villager'];
+    expect(rules.buildNightSteps(game(deck)).map((x) => x.action)).toEqual(['wolfKill']);
+    expect(rules.buildNightSteps(game(deck, { hunter: true, bigBadWolf: true })).map((x) => x.action)).toEqual([
+      'wolfKill',
+      'bigBadWolfStrike',
+      'hunterLink',
+    ]);
+  });
+
+  it('Hunter: the night link replaces the revenge shot, and a seduced Hunter’s link fails', () => {
+    const deck: RoleId[] = ['werewolf', 'hunter', 'hooker', 'villager', 'villager', 'villager'];
+    const s = game(deck, { hunter: true });
+    const linked = rules.resolveNight(withActions(s, { hunterTarget: 'p3', wolfTargets: ['p1'] }));
+    expect(linked.players[3].eliminated?.cause).toBe('linked');
+    expect(linked.pendingTriggers).toEqual([]);
+    const seduced = rules.resolveNight(withActions(s, { hunterTarget: 'p3', wolfTargets: ['p1'], hookerTarget: 'p1' }));
+    expect(alive(seduced, 'p3')).toBe(true);
+    expect(seduced.pendingTriggers).toEqual([]);
+    // Dying by day under the house rule takes no one.
+    const voted = rules.startDay(rules.resolveNight(s));
+    expect(rules.executeNomination(rules.nominate(voted, 'p1', []), rules.nominate(voted, 'p1', []).nominations[0].id).pendingTriggers).toEqual([]);
+    // Standard rules keep the shot.
+    expect(rules.resolveNight(withActions(game(deck), { wolfTargets: ['p1'] })).pendingTriggers).toHaveLength(1);
+  });
+
+  it('Witch: stops seeing the victim once the heal is used', () => {
+    let s = game(['werewolf', 'witch', 'villager', 'villager', 'villager', 'villager'], { witch: true });
+    expect(rules.witchSeesVictims(s)).toBe(true);
+    s = rules.startNight(rules.startDay(rules.resolveNight(withActions(s, { wolfTargets: ['p2'], witchSaveTarget: 'p2' }))));
+    expect(rules.witchSeesVictims(s)).toBe(false);
+    expect(rules.witchSeesVictims({ ...s, rules: NO_REBALANCES })).toBe(true);
+  });
+
+  it('Big Bad Wolf: strikes a neighbour of the first victim on its own turn', () => {
+    const s = withActions(game(['bigBadWolf', 'werewolf', 'hooker', 'villager', 'villager', 'villager', 'villager', 'villager'], { bigBadWolf: true }), {
+      wolfTargets: ['p4'],
+    });
+    const pack = rules.buildNightSteps(s).find((x) => x.action === 'wolfKill')!;
+    expect(pack.targetCount).toBe(1);
+    const strike = rules.buildNightSteps(s).find((x) => x.action === 'bigBadWolfStrike')!;
+    expect(rules.eligibleTargets(s, strike).map((p) => p.id).sort()).toEqual(['p3', 'p5']);
+    const both = rules.resolveNight(withActions(s, { bigBadWolfTarget: 'p5' }));
+    expect([alive(both, 'p4'), alive(both, 'p5')]).toEqual([false, false]);
+    // Seducing the Big Bad Wolf saves both; seducing another wolf saves only the first.
+    const bbwSeduced = rules.resolveNight(withActions(s, { bigBadWolfTarget: 'p5', hookerTarget: 'p0' }));
+    expect([alive(bbwSeduced, 'p4'), alive(bbwSeduced, 'p5')]).toEqual([true, true]);
+    const packSeduced = rules.resolveNight(withActions(s, { bigBadWolfTarget: 'p5', hookerTarget: 'p1' }));
+    expect([alive(packSeduced, 'p4'), alive(packSeduced, 'p5')]).toEqual([true, false]);
+  });
+
+  it('Tanner: joins the Village and drags down whoever targets them at night', () => {
+    const deck: RoleId[] = ['werewolf', 'wolfCub', 'tanner', 'seer', 'bodyguard', 'villager', 'villager', 'villager'];
+    // The strongest wolf (Wolf Cub, −8) dies with the Tanner, through the Bodyguard's shield.
+    const attacked = rules.resolveNight(withActions(game(deck, { tanner: true }), { wolfTargets: ['p2'], bodyguardTarget: 'p2' }));
+    expect(['p0', 'p1', 'p2', 'p4'].map((id) => alive(attacked, id))).toEqual([true, false, false, false]);
+    expect(attacked.players[1].eliminated?.cause).toBe('tanner');
+    const inspected = rules.resolveNight(withActions(game(deck, { tanner: true }), { seerTarget: 'p2' }));
+    expect([alive(inspected, 'p2'), alive(inspected, 'p3')]).toEqual([false, false]);
+    // A seduced power still reaches the Tanner: the seduced Bodyguard dies with them.
+    const seduced = rules.resolveNight(
+      withActions(game([...deck.slice(0, 7), 'hooker'], { tanner: true }), { hookerTarget: 'p4', bodyguardTarget: 'p2' }),
+    );
+    expect(['p2', 'p4', 'p7'].map((id) => alive(seduced, id))).toEqual([false, false, true]);
+    // Eliminated by vote, the reworked Tanner simply dies: no Tanner win.
+    let voted = rules.startDay(rules.resolveNight(game(deck, { tanner: true })));
+    voted = rules.executeNomination(rules.nominate(voted, 'p2', []), rules.nominate(voted, 'p2', []).nominations[0].id);
+    expect(voted.winner).toBeNull();
+    expect(rules.evaluateWinner(voted.players.map((p) => (p.id === 'p0' || p.id === 'p1' ? { ...p, alive: false } : p)), null, { tanner: true })?.winnerIds).toContain('p2');
+  });
+});
+
+describe('house-rule snapshot & setup', () => {
+  it('freezes the house rules when the cards are dealt', () => {
+    const players = game(['werewolf', 'seer', 'villager', 'villager', 'villager']).players;
+    const dealt = gameReducer(createInitialState(), { type: 'START_GAME', players, rules: { ...NO_REBALANCES, witch: true } });
+    expect(dealt.rules).toEqual({ ...NO_REBALANCES, witch: true });
+    // Games saved before house rules existed load with the standard rules.
+    expect(normalizeGameState({ ...dealt, rules: undefined } as unknown as GameState).rules).toEqual(NO_REBALANCES);
+  });
+
+  it('describes a rebalanced role with its rebalanced card text', () => {
+    const on = { ...NO_REBALANCES, hunter: true, tanner: true };
+    expect(roleDescKey('hunter', on)).toBe('role.hunter.descRebalanced');
+    expect(roleDescKey('tanner', on)).toBe('role.tanner.descRebalanced');
+    expect(roleDescKey('witch', on)).toBe('role.witch.desc');
+    expect(roleDescKey('seer', on)).toBe('role.seer.desc');
+    for (const lang of ['en', 'vi'] as const) {
+      for (const id of ['hunter', 'witch', 'bigBadWolf', 'tanner'] as const) {
+        expect(dictionaries[lang][roleDescKey(id, { ...NO_REBALANCES, [id]: true })]).toBeTruthy();
+      }
+    }
+  });
+
+  it('empties the Deck step when the Role Pool changes', () => {
+    let s = gameReducer(createInitialState(), { type: 'UPDATE_SETUP', patch: { pool: ['villager', 'werewolf', 'seer'], deck: ['seer', 'werewolf', 'villager'] } });
+    s = gameReducer(s, { type: 'UPDATE_SETUP', patch: { pool: ['werewolf', 'seer', 'villager'] } });
+    expect(s.setup.deck).toHaveLength(3); // same roles, another order: kept
+    s = gameReducer(s, { type: 'UPDATE_SETUP', patch: { pool: ['villager', 'werewolf', 'witch'] } });
+    expect(s.setup.deck).toEqual([]);
+    expect(s.setup.deal).toBeNull();
+  });
+
 });
 
 describe('role pools', () => {

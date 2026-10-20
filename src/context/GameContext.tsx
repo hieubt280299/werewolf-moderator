@@ -10,7 +10,17 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react';
-import type { GameModifiers, GameState, NightActionField, NightTargetListField, Player, RoleId, SetupDraft } from '../@types/game';
+import {
+  NO_REBALANCES,
+  type GameModifiers,
+  type GameState,
+  type NightActionField,
+  type NightTargetListField,
+  type Player,
+  type RebalanceRules,
+  type RoleId,
+  type SetupDraft,
+} from '../@types/game';
 import { buildGameRecord, createId, EMPTY_STATUS } from '../utils/gameCalculations';
 import * as rules from '../utils/gameRules';
 import { readJSON, STORAGE_KEYS, writeJSON } from '../utils/storage';
@@ -22,7 +32,8 @@ import { useAuth } from './AuthContext';
 
 export type GameAction =
   | { type: 'UPDATE_SETUP'; patch: Partial<SetupDraft> }
-  | { type: 'START_GAME'; players: Player[] }
+  /** `rules` are the moderator's house rules at deal time, frozen for this game. */
+  | { type: 'START_GAME'; players: Player[]; rules: RebalanceRules }
   | { type: 'START_NIGHT' }
   | { type: 'SET_NIGHT_STEP'; index: number }
   | { type: 'SET_NIGHT_ACTION'; field: NightActionField; value: string | null }
@@ -75,6 +86,8 @@ const DEFAULT_MODIFIERS: GameModifiers = {
   troublemakerUsed: false,
   extraExecution: false,
   tannerWinner: null,
+  hookerVisited: [],
+  pendingAwakenings: [],
 };
 
 export function createInitialState(setup?: Partial<SetupDraft>): GameState {
@@ -89,7 +102,7 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
     deck: [],
     nightStepIndex: 0,
     nightActions: rules.emptyNightActions(),
-    modifiers: { ...DEFAULT_MODIFIERS },
+    modifiers: { ...DEFAULT_MODIFIERS, hookerVisited: [], pendingAwakenings: [] },
     lastReport: null,
     nominations: [],
     executedToday: null,
@@ -104,6 +117,7 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
       experience: 'standard',
       ...setup,
     },
+    rules: { ...NO_REBALANCES },
     createdAt: now,
     updatedAt: now,
   };
@@ -123,6 +137,8 @@ export function normalizeGameState(s: GameState): GameState {
   return {
     ...s,
     executionsLeft: s.executionsLeft ?? 1,
+    // Games dealt before house rules existed play by the standard rules.
+    rules: { ...NO_REBALANCES, ...s.rules },
     nightActions: { ...rules.emptyNightActions(), ...s.nightActions },
     modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
     lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
@@ -134,13 +150,35 @@ export function normalizeGameState(s: GameState): GameState {
   };
 }
 
-function gameReducer(state: GameState, action: GameAction): GameState {
+const samePool = (a: readonly RoleId[], b: readonly RoleId[]) => a.length === b.length && a.every((id) => b.includes(id));
+
+/**
+ * Night picks that depend on the wolves' victim go stale when it changes: the Witch's heal
+ * must still be aimed at someone really being attacked.
+ */
+function withNightActions(state: GameState, patch: Partial<GameState['nightActions']>): GameState {
+  const next = { ...state, nightActions: { ...state.nightActions, ...patch } };
+  const save = next.nightActions.witchSaveTarget;
+  if (save && !rules.effectiveWolfTargets(next).includes(save)) next.nightActions.witchSaveTarget = null;
+  return next;
+}
+
+export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case 'UPDATE_SETUP':
-      return { ...state, setup: { ...state.setup, ...action.patch } };
+    case 'UPDATE_SETUP': {
+      const setup = { ...state.setup, ...action.patch };
+      // Changing the Role Pool resets the Deck step, so no stale cards from the old pool
+      // survive into the deal (unless the same update sets the deck itself).
+      if (action.patch.pool && !action.patch.deck && !samePool(action.patch.pool, state.setup.pool)) {
+        setup.deck = [];
+        setup.deal = null;
+      }
+      return { ...state, setup };
+    }
     case 'START_GAME': {
       const started: GameState = {
         ...createInitialState(state.setup),
+        rules: { ...NO_REBALANCES, ...action.rules },
         players: action.players,
         deck: action.players.map((p) => p.originalRoleId),
         log: [{ id: createId('log'), round: 0, phase: 'setup', key: 'log.gameStarted', params: { count: action.players.length } }],
@@ -152,18 +190,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_NIGHT_STEP':
       return { ...state, nightStepIndex: Math.max(0, action.index) };
     case 'SET_NIGHT_ACTION':
-      return { ...state, nightActions: { ...state.nightActions, [action.field]: action.value } };
-    case 'SET_TARGET_LIST': {
-      if (action.field === 'cupidTargets') {
-        return { ...state, nightActions: { ...state.nightActions, cupidTargets: action.targets } };
-      }
-      // Retargeting the wolves invalidates the Leprechaun's redirect and a Witch heal
-      // aimed at the old victim.
-      const next = { ...state, nightActions: { ...state.nightActions, wolfTargets: action.targets, leprechaunTarget: null } };
-      const save = next.nightActions.witchSaveTarget;
-      next.nightActions.witchSaveTarget = save && rules.effectiveWolfTargets(next).includes(save) ? save : null;
-      return next;
-    }
+      return withNightActions(state, { [action.field]: action.value });
+    case 'SET_TARGET_LIST':
+      if (action.field === 'cupidTargets') return withNightActions(state, { cupidTargets: action.targets });
+      // Retargeting the wolves invalidates the Leprechaun's redirect and the Big Bad Wolf's
+      // strike, which both depend on the first victim's seat.
+      return withNightActions(state, { wolfTargets: action.targets, leprechaunTarget: null, bigBadWolfTarget: null });
     case 'RESOLVE_NIGHT':
       return rules.resolveNight(state);
     case 'START_DAY':
