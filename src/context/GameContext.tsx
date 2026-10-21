@@ -154,12 +154,12 @@ const samePool = (a: readonly RoleId[], b: readonly RoleId[]) => a.length === b.
 
 /**
  * Night picks that depend on the wolves' victim go stale when it changes: the Witch's heal
- * must still be aimed at someone really being attacked.
+ * must still be aimed at someone the pack is really attacking.
  */
 function withNightActions(state: GameState, patch: Partial<GameState['nightActions']>): GameState {
   const next = { ...state, nightActions: { ...state.nightActions, ...patch } };
   const save = next.nightActions.witchSaveTarget;
-  if (save && !rules.effectiveWolfTargets(next).includes(save)) next.nightActions.witchSaveTarget = null;
+  if (save && !rules.witchVictims(next).includes(save)) next.nightActions.witchSaveTarget = null;
   return next;
 }
 

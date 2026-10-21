@@ -12,6 +12,7 @@ import {
   type RoleId,
   type SeerAppearance,
   type WinResult,
+  type WinTeam,
 } from '../@types/game';
 import { NIGHT_ORDER, nightGroup, ORDINARY_ROLES, ROLES, roleWinTeam } from '../data/roles';
 import { createId } from './gameCalculations';
@@ -67,7 +68,7 @@ export const findPlayer = (s: GameState, id: string | null | undefined): Player 
   id ? s.players.find((p) => p.id === id) : undefined;
 
 /** The house rules this game was dealt with. */
-export const rulesOf = (s: Pick<GameState, 'rules'>): RebalanceRules => s.rules ?? NO_REBALANCES;
+export const rulesOf = (s: { rules?: RebalanceRules | null }): RebalanceRules => s.rules ?? NO_REBALANCES;
 
 const clone = (s: GameState): GameState => structuredClone(s);
 
@@ -292,6 +293,16 @@ export function wolfAttacks(s: GameState, { attempted = false } = {}): WolfAttac
 /** The players the wolves will really attack tonight. */
 export const effectiveWolfTargets = (s: GameState): string[] => wolfAttacks(s).map((x) => x.targetId);
 
+/**
+ * Who the Witch is shown — and may heal: only the pack's victims. The Big Bad Wolf's own
+ * strike (house rule) stays hidden from her.
+ */
+export const witchVictims = (s: GameState): string[] => wolfAttacks(s).filter((x) => x.by === 'pack').map((x) => x.targetId);
+
+/** The Priest's blessing tonight: it stops every killing power aimed at that player. */
+export const blessedPlayer = (s: GameState): string | null =>
+  s.nightActions.priestTarget && !actionSeduced(s, 'priestBless') ? s.nightActions.priestTarget : null;
+
 /** House rule: once the Healing Potion is used, the Witch no longer learns the wolves' victim. */
 export const witchSeesVictims = (s: GameState): boolean => !(rulesOf(s).witch && s.modifiers.witchHealUsed);
 
@@ -314,10 +325,11 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
       return prey;
     }
     case 'bigBadWolfStrike': {
-      // House rule: a second victim seated directly next to the pack's (first) target.
+      // House rule: a second victim seated directly next to the pack's (first) target —
+      // anyone but the Big Bad Wolf himself, even another wolf.
       const primary = a.wolfTargets[0];
       if (!primary) return [];
-      return neighbors(s.players, primary).filter((p) => !isWolfPlayer(p) && !a.wolfTargets.includes(p.id));
+      return neighbors(s.players, primary).filter((p) => !actors.has(p.id) && !a.wolfTargets.includes(p.id));
     }
     case 'hookerSeduce':
       // Each player can be seduced only once per game.
@@ -347,7 +359,7 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
     case 'witchPotion':
       if (witchMode === 'save') {
         if (s.modifiers.witchHealUsed) return [];
-        const victims = effectiveWolfTargets(s);
+        const victims = witchVictims(s);
         return alive.filter((p) => victims.includes(p.id));
       }
       return s.modifiers.witchKillUsed ? [] : others;
@@ -460,67 +472,132 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
   if (p.roleId === 'virginiaWoolf' && s.modifiers.virginiaTarget) {
     killPlayer(s, s.modifiers.virginiaTarget, 'linked', when, sink);
   }
-  // House rule: a Hunter dying at night takes their linked player — unless seduced tonight.
+  // House rule: a Hunter dying at night takes their aimed-at player — unless seduced tonight,
+  // or the Priest blessed that player.
   const link = s.nightActions.hunterTarget;
-  if (p.roleId === 'hunter' && rules.hunter && s.phase === 'night' && link && s.nightActions.hookerTarget !== p.id) {
+  if (p.roleId === 'hunter' && rules.hunter && s.phase === 'night' && link && s.nightActions.hookerTarget !== p.id && link !== blessedPlayer(s)) {
     killPlayer(s, link, 'linked', when, sink);
   }
   return true;
 }
 
-export function evaluateWinner(
-  players: readonly Player[],
-  tannerWinner: string | null = null,
-  rules?: Partial<RebalanceRules> | null,
-): WinResult | null {
+/** What the win check reads from a game; tests and previews may pass just the players. */
+export type WinCheck = Pick<GameState, 'players'> & Partial<Pick<GameState, 'modifiers' | 'rules'>>;
+
+/**
+ * Whether a team can still change the outcome without a vote: a power that kills, or one
+ * that moves players between teams. Day votes are not counted — every team has those.
+ */
+export function teamPowers(members: readonly Player[], g: WinCheck): { kill: boolean; change: boolean } {
+  const m = g.modifiers;
+  const rules = rulesOf(g);
+  const kill = members.some((p) => {
+    switch (p.roleId) {
+      // A wolf pack's kill; a lone Fruit Brute can't take one.
+      case 'fruitBrute':
+        return false;
+      case 'witch':
+        return !m?.witchKillUsed;
+      case 'hunter':
+      case 'vampire':
+        return true;
+      // The reworked Tanner takes down whoever targets them.
+      case 'tanner':
+        return rules.tanner;
+      default:
+        return isWolfPlayer(p);
+    }
+  });
+  // The Cult Leader recruits; the Drunk (before night 3) and a Doppelgänger with a target may
+  // still turn into a role from another team.
+  const change = members.some((p) => p.roleId === 'cultLeader' || p.roleId === 'drunk' || (p.roleId === 'doppelganger' && !!m?.doppelgangerTarget));
+  return { kill, change };
+}
+
+/**
+ * The game ends when:
+ * - the Tanner (standard rules) has been eliminated, or the Cult Leader has recruited every
+ *   living player — they win at once;
+ * - only one team is left — it wins;
+ * - exactly two teams are left, one of them the Village:
+ *   - the Village has no kill power left and is strictly outnumbered — the other team wins;
+ *   - neither team can kill or change anyone's team, and they are equal in number — a draw.
+ *
+ * Otherwise play goes on. Teams are counted among the living: lovers of a mixed Couple count
+ * as the Couple, the Lone Wolf counts with the Werewolves (it still only wins as the last
+ * player alive), only the Cult Leader counts as the Cult (recruits keep their team), and a
+ * Tanner under the standard rules doesn't hold the game open.
+ */
+export function evaluateWinner(g: WinCheck): WinResult | null {
+  const { players } = g;
+  const rules = rulesOf(g);
+  const tannerWinner = g.modifiers?.tannerWinner ?? null;
   const alive = alivePlayers(players);
   const team = (p: Player) => roleWinTeam(p.roleId, rules);
+  const draw: WinResult = { team: 'draw', winnerIds: [] };
 
   // The Couple exists only when Cupid links players from two different teams. Those lovers
-  // leave their original teams: they win together as the last team standing, or not at all.
+  // leave their original teams and win (or lose) together.
   const lovers = players.filter((p) => p.status.lover);
   const mixedCouple = lovers.length === 2 && team(lovers[0]) !== team(lovers[1]);
   const coupleIds = new Set(mixedCouple ? lovers.map((p) => p.id) : []);
   const onTeam = (name: string) => players.filter((p) => team(p) === name && !coupleIds.has(p.id)).map((p) => p.id);
 
   if (tannerWinner) return { team: 'tanner', winnerIds: [tannerWinner] };
-  if (alive.length === 0) return { team: 'draw', winnerIds: [] };
-
-  // Lovers die together, so a living mixed couple means both are alive: no other team can
-  // win until the couple falls, and the couple wins once everyone else is gone.
-  if (mixedCouple && lovers.every((p) => p.alive)) {
-    return alive.length === 2 ? { team: 'couple', winnerIds: lovers.map((p) => p.id) } : null;
-  }
+  if (alive.length === 0) return draw;
 
   const leader = alive.find((p) => p.roleId === 'cultLeader');
   if (leader && alive.every((p) => p.id === leader.id || p.status.inCult)) {
     return { team: 'cult', winnerIds: [leader.id] };
   }
-
   if (alive.length === 1 && alive[0].roleId === 'loneWolf') {
     return { team: 'loneWolf', winnerIds: [alive[0].id] };
   }
 
-  const wolves = alive.filter(isWolfPlayer);
-  const pack = wolves.filter((p) => p.roleId !== 'loneWolf');
-  const vampires = alive.filter((p) => p.roleId === 'vampire');
+  const sideOf = (p: Player): WinTeam | null => {
+    if (coupleIds.has(p.id)) return 'couple';
+    const t = team(p);
+    return t === 'loneWolf' ? 'werewolf' : t === 'tanner' ? null : t;
+  };
+  const teams = new Map<WinTeam, Player[]>();
+  for (const p of alive) {
+    const side = sideOf(p);
+    if (side) teams.set(side, [...(teams.get(side) ?? []), p]);
+  }
 
-  if (wolves.length === 0 && vampires.length === 0) {
-    return { team: 'village', winnerIds: onTeam('village') };
+  const win = (winner: WinTeam, members: readonly Player[]): WinResult | null => {
+    if (winner === 'couple') return { team: 'couple', winnerIds: lovers.map((p) => p.id) };
+    if (winner === 'cult') return { team: 'cult', winnerIds: members.map((p) => p.id) };
+    // A Lone Wolf left without the pack keeps hunting: it only wins as the last one alive.
+    if (winner === 'werewolf' && members.some((p) => p.roleId === 'loneWolf') && !members.some((p) => isWolfPlayer(p) && p.roleId !== 'loneWolf')) {
+      return null;
+    }
+    return { team: winner, winnerIds: onTeam(winner) };
+  };
+
+  // Only a standard-rules Tanner is left standing: nobody achieved anything.
+  if (teams.size === 0) return draw;
+  if (teams.size === 1) {
+    const [[only, members]] = [...teams];
+    return win(only, members);
   }
-  if (vampires.length === 0 && pack.length > 0 && wolves.length >= alive.length - wolves.length) {
-    return { team: 'werewolf', winnerIds: onTeam('werewolf') };
-  }
-  if (wolves.length === 0 && vampires.length >= alive.length - vampires.length) {
-    return { team: 'vampire', winnerIds: onTeam('vampire') };
-  }
+  if (teams.size > 2 || !teams.has('village')) return null;
+
+  const village = teams.get('village')!;
+  const [other, others] = [...teams].find(([t]) => t !== 'village')!;
+  const v = teamPowers(village, g);
+  const o = teamPowers(others, g);
+  // The Village can't kill any more and is outvoted: it has lost.
+  if (!v.kill && village.length < others.length) return win(other, others);
+  // Nobody can kill or turn anyone, and every vote ties: a draw.
+  if (!v.kill && !v.change && !o.kill && !o.change && village.length === others.length) return draw;
   return null;
 }
 
 /** Runs the win check once no death rattles are waiting. */
 function finalize(s: GameState): GameState {
   if (s.phase === 'gameOver' || s.phase === 'setup' || s.pendingTriggers.length > 0) return s;
-  const winner = evaluateWinner(s.players, s.modifiers.tannerWinner, rulesOf(s));
+  const winner = evaluateWinner(s);
   if (winner) {
     s.winner = winner;
     s.phase = 'gameOver';
@@ -576,12 +653,9 @@ export function resolveNight(state: GameState): GameState {
   m.wolvesSkipNextNight = false;
   m.wolvesDoubleKill = false;
 
-  // Bodyguard and Priest only stop Werewolf attacks.
-  const shielded = new Set(
-    [cancelled.has('bodyguardProtect') ? null : a.bodyguardTarget, cancelled.has('priestBless') ? null : a.priestTarget].filter(
-      (x): x is string => !!x,
-    ),
-  );
+  // The Bodyguard only stops Werewolf attacks; the Priest's blessing stops every killing power.
+  const blessed = blessedPlayer(s);
+  const shielded = new Set([cancelled.has('bodyguardProtect') ? null : a.bodyguardTarget, blessed].filter((x): x is string => !!x));
   // A seduced Witch's potions are spent with no effect.
   const witchWorks = !cancelled.has('witchPotion');
   const witchSave = witchWorks ? a.witchSaveTarget : null;
@@ -656,10 +730,11 @@ export function resolveNight(state: GameState): GameState {
     report.metallic = ringDistance(s.players, wolverine.id, firstVictim) <= closest;
   }
 
-  for (const { targetId } of attacks) {
+  for (const { targetId, by } of attacks) {
     const p = findPlayer(s, targetId);
     if (!p?.alive || willDie(targetId)) continue;
-    if (shielded.has(targetId) || targetId === witchSave) {
+    // The Witch only heals the pack's victim; the Big Bad Wolf's own strike is hidden from her.
+    if (shielded.has(targetId) || (by === 'pack' && targetId === witchSave)) {
       report.saved.push(targetId);
       continue;
     }
@@ -685,8 +760,12 @@ export function resolveNight(state: GameState): GameState {
     }
   }
 
-  // Poison goes straight past the Bodyguard's and Priest's protection.
-  if (witchKill) doom(witchKill, 'witch');
+  // Poison goes straight past the Bodyguard, but not the Priest's blessing.
+  if (witchKill && witchKill === blessed) {
+    if (!report.saved.includes(witchKill)) report.saved.push(witchKill);
+  } else if (witchKill) {
+    doom(witchKill, 'witch');
+  }
   // Powers spent tonight stay spent, even if a seduction made them fizzle.
   if (a.witchSaveTarget) m.witchHealUsed = true;
   if (a.witchKillTarget) m.witchKillUsed = true;

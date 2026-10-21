@@ -391,6 +391,8 @@ export interface BalanceOptions {
   experience: ExperienceLevel;
   /** Override the wolf-killer count; defaults to ~1 per 4–5 players. */
   wolfCount?: number;
+  /** House rules (the reworked Tanner is a Villager, so no extra team). */
+  rules?: Partial<RebalanceRules> | null;
   /** Deterministic RNG for tests. */
   random?: () => number;
 }

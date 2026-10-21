@@ -1,9 +1,10 @@
 import clsx from 'clsx';
 import { Eraser, Shuffle } from 'lucide-react';
 import type { ExperienceLevel, RoleId, SetupDraft } from '../../@types/game';
+import { useHouseRules } from '../../context/HouseRulesContext';
 import { ALWAYS_IN_POOL } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { calculateBalance, EXPERIENCE_TARGET, generateBalancedDeck } from '../../utils/gameCalculations';
+import { calculateBalance, EXPERIENCE_TARGET, extraTeams, generateBalancedDeck } from '../../utils/gameCalculations';
 import { BalanceMeter } from '../shared/BalanceMeter';
 import { RoleGrid } from '../shared/RoleGrid';
 import { Button } from '../shared/ui';
@@ -23,7 +24,9 @@ interface DeckSelectionProps {
  */
 export function DeckSelection({ deck, pool, playerCount, experience, onChange }: DeckSelectionProps) {
   const { t } = useI18n();
+  const houseRules = useHouseRules();
   const available = [...new Set<RoleId>([...ALWAYS_IN_POOL, ...pool])];
+  const extra = extraTeams(deck, houseRules)[0];
 
   return (
     <div className="space-y-5">
@@ -40,7 +43,7 @@ export function DeckSelection({ deck, pool, playerCount, experience, onChange }:
           <Button
             size="sm"
             variant="village"
-            onClick={() => onChange({ deck: generateBalancedDeck({ playerCount, pool, experience }) })}
+            onClick={() => onChange({ deck: generateBalancedDeck({ playerCount, pool, experience, rules: houseRules }) })}
             icon={<Shuffle className="h-4 w-4" />}
           >
             {t('setup.autoBalance')}
@@ -48,6 +51,8 @@ export function DeckSelection({ deck, pool, playerCount, experience, onChange }:
         </div>
       </div>
       <p className="text-xs text-bone-faint">{t('setup.deckHint')}</p>
+      {/* At most three teams: once a third team is in, roles of other extra teams are locked. */}
+      <p className="text-xs text-bone-faint">{extra ? t('setup.thirdTeam', { team: t(`team.${extra}`) }) : t('setup.teamLimit')}</p>
       <RoleGrid mode="count" deck={deck} onDeck={(next) => onChange({ deck: next })} roles={available} />
     </div>
   );

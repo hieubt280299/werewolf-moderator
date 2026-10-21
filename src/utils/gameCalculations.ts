@@ -6,7 +6,9 @@ import type {
   GameState,
   Player,
   PlayerStatus,
+  RebalanceRules,
   RoleId,
+  WinTeam,
 } from '../@types/game';
 import { ROLES, ROLE_ORDER } from '../data/roles';
 
@@ -112,8 +114,44 @@ export interface DeckIssue {
   params?: Record<string, string | number>;
 }
 
+// ---------------------------------------------------------------------------
+// Team limit: Village, Werewolves and at most one extra team
+// ---------------------------------------------------------------------------
+
+/**
+ * The extra team a role brings besides Village and Werewolves: Cupid may form The Couple,
+ * and Vampires, the Cult Leader and the standard-rules Tanner are teams of their own. The
+ * Lone Wolf counts with the Werewolves; the reworked Tanner is a Villager.
+ */
+export function extraTeamOf(id: RoleId, rules?: Partial<RebalanceRules> | null): WinTeam | null {
+  switch (id) {
+    case 'cupid':
+      return 'couple';
+    case 'vampire':
+      return 'vampire';
+    case 'cultLeader':
+      return 'cult';
+    case 'tanner':
+      return rules?.tanner ? null : 'tanner';
+    default:
+      return null;
+  }
+}
+
+/** The extra teams a deck could bring into play. A game allows at most one. */
+export const extraTeams = (deck: readonly RoleId[], rules?: Partial<RebalanceRules> | null): WinTeam[] => [
+  ...new Set(deck.map((id) => extraTeamOf(id, rules)).filter((t): t is WinTeam => !!t)),
+];
+
+/** True when adding this role would bring a second extra team (a fourth team) into the deck. */
+export function addsTeam(deck: readonly RoleId[], id: RoleId, rules?: Partial<RebalanceRules> | null): boolean {
+  const team = extraTeamOf(id, rules);
+  const current = extraTeams(deck, rules);
+  return !!team && current.length > 0 && !current.includes(team);
+}
+
 /** Structural problems that would make a deck unplayable. */
-export function validateDeck(deck: readonly RoleId[], playerCount: number): DeckIssue[] {
+export function validateDeck(deck: readonly RoleId[], playerCount: number, rules?: Partial<RebalanceRules> | null): DeckIssue[] {
   const issues: DeckIssue[] = [];
   const counts = countRoles(deck);
   if (deck.length !== playerCount) {
@@ -126,6 +164,7 @@ export function validateDeck(deck: readonly RoleId[], playerCount: number): Deck
   if (counts.loneWolf && wolves < 2) issues.push({ key: 'issue.loneWolfAlone' });
   if (counts.mason === 1) issues.push({ key: 'issue.masonAlone' });
   if (counts.apprenticeSeer && !counts.seer) issues.push({ key: 'issue.apprenticeNoSeer' });
+  if (extraTeams(deck, rules).length > 1) issues.push({ key: 'issue.tooManyTeams' });
   for (const [id, n] of Object.entries(counts) as [RoleId, number][]) {
     if (n > ROLES[id].maxCopies) issues.push({ key: 'issue.tooManyCopies', params: { role: id } });
   }
@@ -136,7 +175,7 @@ export function validateDeck(deck: readonly RoleId[], playerCount: number): Deck
 // Auto-balancer
 // ---------------------------------------------------------------------------
 
-function isValidDraft(deck: RoleId[], wolfCount: number): boolean {
+function isValidDraft(deck: RoleId[], wolfCount: number, rules?: Partial<RebalanceRules> | null): boolean {
   const counts = countRoles(deck);
   for (const [id, n] of Object.entries(counts) as [RoleId, number][]) {
     if (n > ROLES[id].maxCopies) return false;
@@ -147,6 +186,7 @@ function isValidDraft(deck: RoleId[], wolfCount: number): boolean {
   if (counts.loneWolf && wolves.length < 2) return false;
   if (counts.mason === 1) return false; // Masons come in groups
   if (counts.apprenticeSeer && !counts.seer) return false;
+  if (extraTeams(deck, rules).length > 1) return false; // at most three teams
   return true;
 }
 
@@ -174,9 +214,13 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   // Seed: plain wolves + the most informative specials, padded with villagers.
   const seed: RoleId[] = Array.from({ length: wolfCount }, () => 'werewolf' as RoleId);
   const villageSlots = n - wolfCount;
-  const prioritized = shuffle(specialPool, random).sort((a, b) =>
-    a === 'seer' ? -1 : b === 'seer' ? 1 : 0,
-  );
+  const shuffled = shuffle(specialPool, random).sort((a, b) => (a === 'seer' ? -1 : b === 'seer' ? 1 : 0));
+  // Only one extra team (Couple, Vampires, Cult or Tanner) may join Village and Werewolves.
+  const extra = shuffled.map((id) => extraTeamOf(id, options.rules)).find((t) => !!t);
+  const prioritized = shuffled.filter((id) => {
+    const team = extraTeamOf(id, options.rules);
+    return !team || team === extra;
+  });
   // Enough specials to keep Villagers under half the table, when the pool allows it.
   const villagerCap = maxAutoVillagers(n);
   seed.push(...prioritized.slice(0, Math.max(Math.ceil(villageSlots * 0.6), villageSlots - villagerCap)));
@@ -205,7 +249,7 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
     } else {
       candidate[slot] = pickOne([...specialPool, 'villager'] as RoleId[], random);
     }
-    if (!isValidDraft(candidate, wolfCount)) continue;
+    if (!isValidDraft(candidate, wolfCount, options.rules)) continue;
     const s = score(candidate);
     // Accept improvements, and sideways moves half the time to escape plateaus.
     if (s < currentScore || (s === currentScore && random() < 0.5)) {

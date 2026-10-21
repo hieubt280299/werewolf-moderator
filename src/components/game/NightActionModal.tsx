@@ -6,6 +6,7 @@ import { ROLES, ROLE_ORDER } from '../../data/roles';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useNightSequence } from '../../hooks/useNightSequence';
 import { useI18n } from '../../i18n/I18nContext';
+import { extraTeamOf, extraTeams } from '../../utils/gameCalculations';
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
 import { Button, Sheet } from '../shared/ui';
@@ -463,8 +464,13 @@ function TroublemakerToggle({ step }: { step: NightStep }) {
 function DrunkRolePicker() {
   const { t } = useI18n();
   const engine = useGameEngine();
-  const chosen = engine.state.nightActions.drunkRole;
-  const options = ROLE_ORDER.filter((id) => id !== 'drunk');
+  const { drunkRole: chosen } = engine.state.nightActions;
+  // The set-aside card can't bring a fourth team into the game.
+  const teams = extraTeams(engine.state.deck, engine.state.rules);
+  const options = ROLE_ORDER.filter((id) => {
+    const team = extraTeamOf(id, engine.state.rules);
+    return id !== 'drunk' && (!team || teams.length === 0 || teams.includes(team));
+  });
   return (
     <div>
       <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">{t('night.drunkPick')}</p>

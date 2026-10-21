@@ -353,7 +353,7 @@ const en = {
   'role.pi.desc': "One night per game, choose a player. You'll be told if that player or one of their neighbors is a Werewolf.",
   'role.pi.script': "P.I., open your eyes. Do you want to investigate tonight? If so, point to a player.",
   'role.priest.name': "Priest",
-  'role.priest.desc': "Once per game, choose a player at night. That player cannot be eliminated that night.",
+  'role.priest.desc': "Once per game, choose a player at night. That player cannot be eliminated by any killing ability that night.",
   'role.priest.script': "Priest, open your eyes. Do you want to bless someone tonight? If so, point to them.",
   'role.mason.name': "Mason",
   'role.mason.desc': "The first night, wake up to see who the other Mason is.",
@@ -562,7 +562,10 @@ const en = {
   'night.doppelgangerShow': "Show them their new role",
   'night.bigBadWolfNext': "The pack's victim. Tap a neighbor for the Big Bad Wolf's second victim.",
   'night.bodyguardRule': "Can't protect the same player two nights in a row. Only stops Werewolf attacks.",
-  'night.witchBlind': "House rule: the Healing Potion is used, so the Witch no longer learns who was attacked.",
+  'night.witchBlind': "The Healing Potion is used, so the Witch no longer learns who was attacked.",
+  'issue.tooManyTeams': "A game has at most 3 teams: Village, Werewolves and one of The Couple (Cupid), Vampires, Cult or Tanner.",
+  'setup.teamLimit': "At most 3 teams: Village, Werewolves and one more — The Couple (Cupid), Vampires, Cult or Tanner.",
+  'setup.thirdTeam': "Third team: {team}. Roles of the other extra teams are locked.",
 
   // v1.0.0 — house rules ---------------------------------------------------
   'rebalance.title': "Recommended rebalances",
@@ -980,7 +983,7 @@ const vi: Dictionary = {
   'role.pi.desc': "Một đêm duy nhất trong ván, chọn một người chơi. Bạn sẽ biết người đó hoặc một người ngồi cạnh họ có phải Ma Sói không.",
   'role.pi.script': "Thám Tử, hãy mở mắt. Bạn có muốn điều tra đêm nay không? Nếu có, hãy chỉ vào một người.",
   'role.priest.name': "Mục Sư",
-  'role.priest.desc': "Trong đêm, chọn một người chơi. Người đó không bị giết trong đêm đó. Chỉ được dùng một lần duy nhất trong cả ván.",
+  'role.priest.desc': "Trong đêm, chọn một người chơi. Người đó không thể bị loại bởi bất kỳ chức năng giết nào trong đêm đó. Chỉ được dùng một lần duy nhất trong cả ván.",
   'role.priest.script': "Mục Sư, hãy mở mắt. Bạn có muốn ban phước cho ai đêm nay không? Nếu có, hãy chỉ vào người đó.",
   'role.mason.name': "Hội Tam Điểm",
   'role.mason.desc': "Đêm đầu tiên, thức dậy để biết ai là thành viên Hội Tam Điểm còn lại.",
@@ -1189,7 +1192,10 @@ const vi: Dictionary = {
   'night.doppelgangerShow': "Cho họ xem chức năng mới",
   'night.bigBadWolfNext': "Nạn nhân của bầy Sói. Chạm vào người ngồi cạnh để chọn nạn nhân thứ hai của Sói Đầu Đàn.",
   'night.bodyguardRule': "Không được bảo vệ cùng một người hai đêm liên tiếp. Chỉ chặn được đòn của Ma Sói.",
-  'night.witchBlind': "Luật nhà: đã dùng bình cứu, nên Phù Thủy không còn biết ai bị tấn công.",
+  'night.witchBlind': "Đã dùng bình cứu, nên Phù Thủy không còn biết ai bị tấn công.",
+  'issue.tooManyTeams': "Một ván có tối đa 3 phe: Dân Làng, Ma Sói và một trong các phe Cặp Đôi (Thần Tình Yêu), Ma Cà Rồng, Giáo Phái hoặc Chán Đời.",
+  'setup.teamLimit': "Tối đa 3 phe: Dân Làng, Ma Sói và thêm một phe — Cặp Đôi (Thần Tình Yêu), Ma Cà Rồng, Giáo Phái hoặc Chán Đời.",
+  'setup.thirdTeam': "Phe thứ ba: {team}. Chức năng của các phe thêm khác bị khóa.",
 
   // v1.0.0 — luật nhà
   'rebalance.title': "Cân bằng đề xuất",

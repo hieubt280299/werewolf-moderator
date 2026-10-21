@@ -6,7 +6,9 @@ import { dictionaries } from '../i18n/translations';
 import { ROLE_SECTIONS, ROLES, withFillers } from '../data/roles';
 import { applyStatsDelta, EMPTY_STATS, statsDelta } from '../services/profileStore';
 import {
+  addsTeam,
   calculateBalance,
+  extraTeams,
   EMPTY_STATUS,
   EXPERIENCE_TARGET,
   formatTimelineEntry,
@@ -118,8 +120,10 @@ describe('day & win conditions', () => {
     expect(alive(s, 'p2')).toBe(false);
   });
 
-  it('declares a werewolf win at parity', () => {
-    const s = rules.resolveNight(withActions(game(['werewolf', 'villager', 'villager']), { wolfTargets: ['p1'] }));
+  it('declares a werewolf win once a Village with no kill left is outnumbered — not at parity', () => {
+    let s = rules.resolveNight(withActions(game(['werewolf', 'werewolf', 'villager', 'villager', 'villager']), { wolfTargets: ['p2'] }));
+    expect(s.winner).toBeNull(); // 2 against 2: play on
+    s = rules.resolveNight(withActions(rules.startNight(rules.startDay(s)), { wolfTargets: ['p3'] }));
     expect(s.phase).toBe('gameOver');
     expect(s.winner?.team).toBe('werewolf');
   });
@@ -127,8 +131,8 @@ describe('day & win conditions', () => {
   it('only lets the Lone Wolf win as the last survivor', () => {
     const base = game(['loneWolf', 'werewolf', 'villager']);
     const players = base.players.map((p) => (p.id === 'p1' ? { ...p, alive: false } : p));
-    expect(rules.evaluateWinner(players)).toBeNull();
-    expect(rules.evaluateWinner(players.map((p) => (p.id === 'p2' ? { ...p, alive: false } : p)))?.team).toBe('loneWolf');
+    expect(rules.evaluateWinner({ players })).toBeNull();
+    expect(rules.evaluateWinner({ players: players.map((p) => (p.id === 'p2' ? { ...p, alive: false } : p)) })?.team).toBe('loneWolf');
   });
 });
 
@@ -326,8 +330,11 @@ describe('the Couple', () => {
     s = rules.resolveNight(withActions(s, { cupidTargets: ['p0', 'p2'] }));
     s = rules.moderatorEliminate(rules.moderatorEliminate(rules.startDay(s), 'p4'), 'p5');
     expect(s.winner).toBeNull();
-    // Once the couple falls, the wolves win — without the dead wolf lover.
+    // Once the couple falls (one wolf against one villager, play goes on) and the villager is
+    // gone, the wolves win — without the dead wolf lover.
     s = rules.moderatorEliminate(s, 'p2');
+    expect(s.winner).toBeNull();
+    s = rules.moderatorEliminate(s, 'p3');
     expect(s.winner?.team).toBe('werewolf');
     expect(s.winner?.winnerIds).toEqual(['p1']);
   });
@@ -512,7 +519,110 @@ describe('recommended rebalances', () => {
     let voted = rules.startDay(rules.resolveNight(game(deck, { tanner: true })));
     voted = rules.executeNomination(rules.nominate(voted, 'p2', []), rules.nominate(voted, 'p2', []).nominations[0].id);
     expect(voted.winner).toBeNull();
-    expect(rules.evaluateWinner(voted.players.map((p) => (p.id === 'p0' || p.id === 'p1' ? { ...p, alive: false } : p)), null, { tanner: true })?.winnerIds).toContain('p2');
+    const wolvesGone = voted.players.map((p) => (p.id === 'p0' || p.id === 'p1' ? { ...p, alive: false } : p));
+    expect(rules.evaluateWinner({ players: wolvesGone, rules: { ...NO_REBALANCES, tanner: true } })?.winnerIds).toContain('p2');
+  });
+});
+
+describe('v1.0.1 win conditions', () => {
+  /** A game where only the listed seats are still alive. */
+  const leaving = (roles: RoleId[], living: number[], patch: Partial<GameState> = {}): GameState => {
+    const s = game(roles);
+    return { ...s, ...patch, players: s.players.map((p) => ({ ...p, alive: living.includes(p.seat) })) };
+  };
+  const winner = (s: GameState) => rules.evaluateWinner(s);
+
+  it('ends when only one team is left', () => {
+    expect(winner(leaving(['werewolf', 'minion', 'villager', 'villager', 'villager'], [0, 1]))?.team).toBe('werewolf');
+    expect(winner(leaving(['werewolf', 'seer', 'villager', 'villager', 'villager'], [1, 2]))?.team).toBe('village');
+  });
+
+  it('plays on with three teams, or two without the Village', () => {
+    expect(winner(leaving(['werewolf', 'vampire', 'villager', 'villager', 'villager'], [0, 1, 2]))).toBeNull();
+    expect(winner(leaving(['werewolf', 'vampire', 'villager', 'villager', 'villager'], [0, 1]))).toBeNull();
+  });
+
+  it('Village vs one team: outnumbered with no kill loses, a kill power keeps it alive, a frozen tie is a draw', () => {
+    // A Fruit Brute can't kill either: 1 against 1 is a draw, 1 against 2 a loss.
+    expect(winner(leaving(['fruitBrute', 'villager', 'villager', 'werewolf', 'villager'], [0, 1]))).toEqual({ team: 'draw', winnerIds: [] });
+    expect(winner(leaving(['fruitBrute', 'werewolf', 'villager', 'villager', 'villager'], [0, 1, 2]))?.team).toBe('werewolf');
+    // The Witch still holds her poison: the Village plays on, even outnumbered.
+    expect(winner(leaving(['werewolf', 'werewolf', 'witch', 'villager', 'villager'], [0, 1, 2]))).toBeNull();
+    expect(winner(leaving(['fruitBrute', 'witch', 'villager', 'werewolf', 'villager'], [0, 1]))).toBeNull();
+    // Used up, she doesn't count.
+    const spent = leaving(['werewolf', 'werewolf', 'witch', 'villager', 'villager'], [0, 1, 2]);
+    expect(winner({ ...spent, modifiers: { ...spent.modifiers, witchKillUsed: true } })?.team).toBe('werewolf');
+  });
+
+  it('keeps a Lone Wolf without its pack hunting until it is the last one alive', () => {
+    expect(winner(leaving(['loneWolf', 'minion', 'villager', 'werewolf', 'villager'], [0, 1, 2]))).toBeNull();
+  });
+
+  it('lets the Couple win against a smaller Village, and never lets a standard Tanner hold the game open', () => {
+    let s = game(['werewolf', 'cupid', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { cupidTargets: ['p0', 'p2'] }));
+    expect(winner({ ...s, players: s.players.map((p) => ({ ...p, alive: ['p0', 'p2', 'p3'].includes(p.id) })) })?.team).toBe('couple');
+    expect(winner(leaving(['werewolf', 'tanner', 'villager', 'villager', 'villager'], [1, 2]))?.team).toBe('village');
+  });
+
+  it('counts only the Cult Leader as the Cult, whose recruiting keeps the game going', () => {
+    expect(winner(leaving(['werewolf', 'cultLeader', 'villager', 'villager', 'villager'], [1, 2]))).toBeNull();
+  });
+});
+
+describe('v1.0.1 Big Bad Wolf & Priest', () => {
+  const house = { bigBadWolf: true };
+  const deck: RoleId[] = ['bigBadWolf', 'werewolf', 'witch', 'villager', 'villager', 'villager', 'villager', 'villager'];
+
+  it('hides the Big Bad Wolf’s strike from the Witch, and her heal can’t stop it', () => {
+    const s = withActions(game(deck, house), { wolfTargets: ['p4'], bigBadWolfTarget: 'p5' });
+    expect(rules.witchVictims(s)).toEqual(['p4']);
+    const witch = rules.buildNightSteps(s).find((x) => x.action === 'witchPotion')!;
+    expect(rules.eligibleTargets(s, witch, 'save').map((p) => p.id)).toEqual(['p4']);
+    const after = rules.resolveNight(withActions(s, { witchSaveTarget: 'p5' }));
+    expect(alive(after, 'p5')).toBe(false);
+  });
+
+  it('lets the Big Bad Wolf strike anyone next to the victim but himself — even a wolf', () => {
+    const s = withActions(game(deck, house), { wolfTargets: ['p2'] });
+    const strike = rules.buildNightSteps(s).find((x) => x.action === 'bigBadWolfStrike')!;
+    expect(rules.eligibleTargets(s, strike).map((p) => p.id).sort()).toEqual(['p1', 'p3']);
+    const nextToHim = withActions(game(deck, house), { wolfTargets: ['p7'] });
+    expect(rules.eligibleTargets(nextToHim, strike).map((p) => p.id)).toEqual(['p6']);
+  });
+
+  it('lets the Priest’s blessing stop the Witch’s poison and the Hunter’s aim, but not the Bodyguard’s', () => {
+    const s = game(['werewolf', 'priest', 'witch', 'bodyguard', 'villager', 'villager', 'villager'], {});
+    expect(alive(rules.resolveNight(withActions(s, { priestTarget: 'p4', witchKillTarget: 'p4' })), 'p4')).toBe(true);
+    expect(alive(rules.resolveNight(withActions(s, { bodyguardTarget: 'p4', witchKillTarget: 'p4' })), 'p4')).toBe(false);
+    const hunt = game(['werewolf', 'priest', 'hunter', 'villager', 'villager', 'villager'], { hunter: true });
+    const after = rules.resolveNight(withActions(hunt, { priestTarget: 'p3', hunterTarget: 'p3', wolfTargets: ['p2'] }));
+    expect([alive(after, 'p2'), alive(after, 'p3')]).toEqual([false, true]);
+  });
+});
+
+describe('v1.0.1 team limit', () => {
+  it('allows Village, Werewolves and one extra team', () => {
+    const base: RoleId[] = ['werewolf', 'werewolf', 'seer', 'villager', 'villager', 'villager'];
+    const issues = (extra: RoleId[], house = {}) => validateDeck([...base, ...extra], base.length + extra.length, house).map((i) => i.key);
+    expect(issues(['cupid'])).not.toContain('issue.tooManyTeams');
+    expect(issues(['vampire', 'vampire'])).not.toContain('issue.tooManyTeams');
+    expect(issues(['cupid', 'vampire'])).toContain('issue.tooManyTeams');
+    expect(issues(['tanner', 'cultLeader'])).toContain('issue.tooManyTeams');
+    // The Lone Wolf sides with the Werewolves; the reworked Tanner is a Villager.
+    expect(issues(['loneWolf', 'cupid'])).not.toContain('issue.tooManyTeams');
+    expect(issues(['tanner', 'cultLeader'], { tanner: true })).not.toContain('issue.tooManyTeams');
+  });
+
+  it('locks roles that would bring a fourth team, and auto-balance never deals one', () => {
+    expect(addsTeam(['cupid'], 'vampire')).toBe(true);
+    expect(addsTeam(['vampire'], 'vampire')).toBe(false);
+    expect(addsTeam([], 'vampire')).toBe(false);
+    const pool: RoleId[] = ['seer', 'cupid', 'vampire', 'cultLeader', 'tanner', 'witch', 'bodyguard', 'hunter'];
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const deck = generateBalancedDeck({ playerCount: 10, pool, experience: 'veteran', random: seeded(seed) });
+      expect(extraTeams(deck).length).toBeLessThanOrEqual(1);
+    }
   });
 });
 

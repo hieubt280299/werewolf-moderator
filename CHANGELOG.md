@@ -3,6 +3,27 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - Unreleased
+
+### Changed
+- **Win conditions**, checked among the living players:
+  - Only one team left: it wins.
+  - Three or more teams, or two teams without the Village: play goes on.
+  - The Village against one other team:
+    - The Village has no kill power left and is strictly outnumbered: the other team wins.
+    - Neither team can kill or change anyone's team, and they are equal in number: a draw.
+    - Anything else: play goes on.
+  - Kill powers: the Werewolves (not a lone Fruit Brute), Vampires, the Hunter, the Witch's unused poison and the reworked Tanner. Team-changing powers: the Cult Leader, the Drunk before night 3, and a Doppelgänger with a target. Day votes don't count.
+  - Parity alone no longer hands the Werewolves the game. They win once they outnumber a Village that can't kill.
+  - The Tanner (standard rules) and a Cult Leader who has recruited everyone still win at once. A standard Tanner never holds the game open, and only the Cult Leader counts as the Cult: recruits keep their team.
+  - The Lone Wolf counts with the Werewolves, but still only wins as the last player alive.
+- **At most 3 teams:** Village, Werewolves and one of The Couple (Cupid), Vampires, Cult or Tanner (standard rules). The Lone Wolf counts with the Werewolves, and the reworked Tanner is a Villager.
+  - The Deck step locks + on roles that would bring a fourth team and blocks dealing such a deck.
+  - Auto-balance never builds one, and the Drunk's real role can't bring one in.
+- **Big Bad Wolf (house rule):** the Witch is shown, and can heal, only the pack's victim, never the Big Bad Wolf's own strike. His strike may hit anyone next to the pack's victim except himself, even another wolf.
+- **Priest:** "That player cannot be eliminated by any killing ability that night." The blessing now also stops the Witch's poison and the Hunter's aim (house rule). The Bodyguard still only stops Werewolf attacks. A broken heart and the reworked Tanner still go through every protection.
+- The Witch's note no longer starts with "House rule:".
+
 ## [1.0.0] - Unreleased
 
 Implements [`UPDATE_v1.0.0.md`](UPDATE_v1.0.0.md). In review in [PR #3](https://github.com/hieubt280299/werewolf-moderator/pull/3).
