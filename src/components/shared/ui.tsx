@@ -206,7 +206,9 @@ interface ToggleProps {
 /** A labelled on/off switch row. */
 export function Toggle({ checked, mixed = false, onChange, label, hint, className }: ToggleProps) {
   return (
-    <label className={clsx('flex cursor-pointer items-start justify-between gap-4', className)}>
+    // `relative` keeps the visually hidden checkbox inside the label: otherwise it attaches to
+    // the sheet's outer box, and focusing it on tap scrolls the whole sheet off its content.
+    <label className={clsx('relative flex cursor-pointer items-start justify-between gap-4', className)}>
       <span className="min-w-0">
         <span className="block font-display text-sm uppercase tracking-grimoire text-bone">{label}</span>
         {hint && <span className="block text-xs text-bone-dim">{hint}</span>}

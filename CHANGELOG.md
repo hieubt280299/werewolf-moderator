@@ -18,7 +18,7 @@ Implements [`UPDATE_v1.0.0.md`](UPDATE_v1.0.0.md). In review in [PR #3](https://
   - A seduced Witch's potions are spent with no effect.
   - The night script warns the moderator on every call the seduction cancels.
 - **Recommended rebalances** in Profile & settings: a master toggle ("Enable all rebalanced roles") and one toggle per role. Each game freezes the rules when its cards are dealt, so changing them never affects a game in progress.
-  - **Hunter:** the revenge shot is replaced by a night link. Each night the Hunter links to a player, and if the Hunter dies that night, the linked player dies too, unless the Hunter was seduced.
+  - **Hunter:** no longer shoots a player upon dying. Instead, each night the Hunter aims at a player, and if the Hunter dies that night, that player dies too, unless the Hunter was seduced.
   - **Witch:** once the Healing Potion is used, she no longer sees who the Werewolves attacked.
   - **Big Bad Wolf:** takes its own turn after the pack and picks a second victim seated next to the first. Seducing the Big Bad Wolf saves both victims. Seducing another wolf saves only the first.
   - **Tanner:** joins the Village. Anyone who targets the Tanner at night dies with them, through any shield, even if the Hooker seduced them. For a wolf attack, the strongest Werewolf (lowest weight) dies.
