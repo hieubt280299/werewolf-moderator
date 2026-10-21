@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { Skull } from 'lucide-react';
 import { memo, type CSSProperties, type ReactNode } from 'react';
 import type { RoleId } from '../../@types/game';
+import { roleDescKey, useHouseRules } from '../../context/HouseRulesContext';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { dictionaries } from '../../i18n/translations';
@@ -58,6 +59,7 @@ export const RoleCard = memo(function RoleCard({
   ariaLabel,
 }: RoleCardProps) {
   const { t } = useI18n();
+  const houseRules = useHouseRules();
   const role = ROLES[roleId];
   const tone = TONES[role.cardTone];
   const englishName = dictionaries.en[`role.${roleId}.name`];
@@ -162,7 +164,7 @@ export const RoleCard = memo(function RoleCard({
         </span>
         {withText && (
           <p className="mt-[1cqh] line-clamp-3 font-body font-medium text-bone/90 text-shadow-crisp" style={{ fontSize: '4.6cqw', lineHeight: 1.22 }}>
-            {t(`role.${roleId}.desc`)}
+            {t(roleDescKey(roleId, houseRules))}
           </p>
         )}
         {showWeight && (

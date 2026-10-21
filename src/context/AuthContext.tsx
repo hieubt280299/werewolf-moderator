@@ -1,6 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MAX_POOLS, type GameRecord, type RolePool, type SessionUser, type UserProfile } from '../@types/game';
-import { getProfileStore, type ProfileStore } from '../services/profileStore';
+import {
+  RESET_RESEND_SECONDS,
+  type AuthActionLink,
+  type RecoveryEmailChange,
+  type RecoveryStage,
+  type ResetDelivery,
+  type SessionUser,
+} from '../@types/auth';
+import { MAX_POOLS, NO_REBALANCES, type GameRecord, type RebalanceRules, type RolePool, type UserProfile } from '../@types/game';
+import { AuthError, getProfileStore, type ProfileStore } from '../services/profileStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
 
@@ -11,10 +19,23 @@ interface AuthValue {
   profile: UserProfile | null;
   store: ProfileStore | null;
   signIn: (username: string, password: string) => Promise<void>;
-  signUp: (username: string, password: string, displayName: string) => Promise<void>;
+  /** The recovery email is required: it's where password resets are sent. */
+  signUp: (username: string, password: string, displayName: string, recoveryEmail: string) => Promise<void>;
   signOut: () => Promise<void>;
   changePassword: (current: string, next: string) => Promise<void>;
+  /** Needs the current password. With Firebase the new address is pending until confirmed. */
+  changeRecoveryEmail: (currentPassword: string, email: string) => Promise<RecoveryEmailChange>;
+  /** Forgot password: send a 6-digit code (device accounts) or a reset link (Firebase). */
+  requestPasswordReset: (username: string) => Promise<ResetDelivery>;
+  /** Returns a single-use ticket for `completePasswordReset`. */
+  verifyResetCode: (username: string, code: string) => Promise<string>;
+  /** The email an emailed reset link belongs to (rejects expired / used links). */
+  checkResetLink: (oobCode: string) => Promise<string>;
+  completePasswordReset: (ticket: string, newPassword: string) => Promise<void>;
+  applyEmailAction: (oobCode: string) => Promise<void>;
   updateDisplayName: (name: string) => Promise<void>;
+  /** House rules for games dealt from now on (a game in progress keeps its own). */
+  updateRebalances: (rules: RebalanceRules) => Promise<void>;
   /** Insert or update; rejects a new pool beyond MAX_POOLS. */
   savePool: (pool: RolePool) => Promise<void>;
   deletePool: (id: string) => Promise<void>;
@@ -47,7 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         try {
           const loaded = await s.loadProfile(next);
-          setUser(next);
+          // Firebase accounts sign in by email, so the username comes from the profile.
+          setUser({ ...next, username: loaded.username || next.username });
           setProfile(loaded);
           setStatus('signedIn');
         } catch {
@@ -67,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [store]);
 
   const patchProfile = useCallback(
-    async (patch: Partial<Pick<UserProfile, 'displayName' | 'pools'>>) => {
+    async (patch: Partial<Pick<UserProfile, 'displayName' | 'pools' | 'rebalances'>>) => {
       const current = profileRef.current;
       if (!current) return;
       setProfile({ ...current, ...patch }); // optimistic
@@ -89,10 +111,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       store,
       signIn: (u, p) => requireStore().signIn(u, p),
-      signUp: (u, p, name) => requireStore().signUp(u, p, name),
+      signUp: (u, p, name, email) => requireStore().signUp(u, p, name, email),
       signOut: () => requireStore().signOut(),
       changePassword: (c, n) => requireStore().changePassword(c, n),
+      changeRecoveryEmail: async (current, email) => {
+        const change = await requireStore().changeRecoveryEmail(current, email);
+        setProfile((p) =>
+          p ? (change.pending ? { ...p, pendingRecoveryEmail: change.email } : { ...p, recoveryEmail: change.email, pendingRecoveryEmail: null }) : p,
+        );
+        return change;
+      },
+      requestPasswordReset: (u) => requireStore().requestPasswordReset(u),
+      verifyResetCode: (u, code) => requireStore().verifyResetCode(u, code),
+      checkResetLink: (code) => requireStore().checkResetLink(code),
+      completePasswordReset: (ticket, next) => requireStore().completePasswordReset(ticket, next),
+      applyEmailAction: (code) => requireStore().applyEmailAction(code),
       updateDisplayName: (name) => patchProfile({ displayName: name.trim() }),
+      updateRebalances: (rules) => patchProfile({ rebalances: { ...NO_REBALANCES, ...rules } }),
       savePool: async (pool) => {
         const pools = profileRef.current?.pools ?? [];
         const exists = pools.some((p) => p.id === pool.id);
@@ -118,4 +153,131 @@ export function useAuth(): AuthValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
   return ctx;
+}
+
+// ---------------------------------------------------------------------------
+// Forgot password
+// ---------------------------------------------------------------------------
+
+/**
+ * The Forgot Password flow as a small state machine:
+ *   request → (code | linkSent) → newPassword → done
+ *
+ * Sending starts a RESET_RESEND_SECONDS cooldown before the code (or link) can be re-sent.
+ * Device accounts verify a 6-digit code; Firebase accounts follow the emailed link, which
+ * reopens the app with `oobCode` and starts this flow at `newPassword`.
+ */
+export function usePasswordRecovery(oobCode?: string | null) {
+  const auth = useAuth();
+  const [stage, setStage] = useState<RecoveryStage>(oobCode ? 'newPassword' : 'request');
+  const [username, setUsername] = useState('');
+  const [delivery, setDelivery] = useState<ResetDelivery | null>(null);
+  const [ticket, setTicket] = useState<string | null>(oobCode ?? null);
+  /** Whose password an emailed link resets, once the link checks out. */
+  const [linkEmail, setLinkEmail] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [cooldownUntil]);
+  const secondsLeft = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
+
+  // An emailed link is checked before its form is shown.
+  const { checkResetLink } = auth;
+  useEffect(() => {
+    if (!oobCode) return;
+    let live = true;
+    checkResetLink(oobCode)
+      .then((email) => live && setLinkEmail(email))
+      .catch((err: unknown) => {
+        if (!live) return;
+        setError(err);
+        setTicket(null);
+        setStage('request');
+      });
+    return () => {
+      live = false;
+    };
+  }, [oobCode, checkResetLink]);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = (name: string) =>
+    run(async () => {
+      const sent = await auth.requestPasswordReset(name);
+      const at = Date.now();
+      setUsername(name);
+      setDelivery(sent);
+      setCooldownUntil(at + RESET_RESEND_SECONDS * 1000);
+      setNow(at);
+      setStage(sent.method === 'code' ? 'code' : 'linkSent');
+    });
+
+  return {
+    stage,
+    username,
+    delivery,
+    linkEmail,
+    secondsLeft,
+    busy,
+    error,
+    send,
+    /** Disabled (a no-op) until the cooldown runs out. */
+    resend: () => (secondsLeft > 0 || !username ? Promise.resolve() : send(username)),
+    verify: (code: string) =>
+      run(async () => {
+        setTicket(await auth.verifyResetCode(username, code));
+        setStage('newPassword');
+      }),
+    submitNewPassword: (password: string, confirm: string) =>
+      run(async () => {
+        if (password !== confirm) throw new AuthError('mismatch');
+        if (!ticket) throw new AuthError('codeExpired');
+        await auth.completePasswordReset(ticket, password);
+        setTicket(null);
+        setStage('done');
+      }),
+    /** Back to the username step (e.g. to try another username). */
+    restart: () => {
+      setStage('request');
+      setDelivery(null);
+      setTicket(null);
+      setError(null);
+      setCooldownUntil(0);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Emailed account links
+// ---------------------------------------------------------------------------
+
+const ACTION_MODES: readonly AuthActionLink['mode'][] = ['resetPassword', 'verifyAndChangeEmail', 'verifyEmail', 'recoverEmail'];
+
+/** A Firebase account link the app was opened with (`?mode=…&oobCode=…`), if any. */
+export function readAuthActionLink(): AuthActionLink | null {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode') as AuthActionLink['mode'] | null;
+  const oobCode = params.get('oobCode');
+  return mode && oobCode && ACTION_MODES.includes(mode) ? { mode, oobCode } : null;
+}
+
+/** Drops the link's one-time code from the address bar once it has been handled. */
+export function clearAuthActionLink() {
+  window.history.replaceState(window.history.state, '', window.location.pathname);
 }

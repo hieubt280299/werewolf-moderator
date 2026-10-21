@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from 'react';
 import type { NightReport } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { ROLES } from '../../data/roles';
+import { roleFaction } from '../../data/roles';
 import { TONES } from '../shared/tones';
 import { Chip, RoleBadge } from '../shared/ui';
 
@@ -14,7 +14,7 @@ import { Chip, RoleBadge } from '../shared/ui';
  */
 export function DawnReport({ report }: { report: NightReport }) {
   const { t } = useI18n();
-  const { byId, playMetallic } = useGameEngine();
+  const { byId, playMetallic, state } = useGameEngine();
 
   // The Wolverine's tell is heard by everyone — play it once when the report opens.
   useEffect(() => {
@@ -48,7 +48,8 @@ export function DawnReport({ report }: { report: NightReport }) {
           {report.deaths.map((d) => {
             const player = byId.get(d.playerId);
             if (!player) return null;
-            const faction = ROLES[player.roleId].faction;
+            // Tinted by the side the victim played for (the reworked Tanner is a Villager).
+            const faction = roleFaction(player.roleId, state.rules);
             const tone = TONES[faction];
             return (
               <li

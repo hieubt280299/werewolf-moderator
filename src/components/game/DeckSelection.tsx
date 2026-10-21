@@ -18,12 +18,12 @@ interface DeckSelectionProps {
 
 /**
  * Deck step: how many of each pooled role to deal, set by hand or auto-balanced from the
- * Role Pool. Roles already in the deck stay visible even if the pool changed, so they can
- * be removed.
+ * Role Pool. Changing the pool empties the deck (see UPDATE_SETUP), so only pooled roles
+ * are ever shown here.
  */
 export function DeckSelection({ deck, pool, playerCount, experience, onChange }: DeckSelectionProps) {
   const { t } = useI18n();
-  const available = [...new Set<RoleId>([...ALWAYS_IN_POOL, ...pool, ...deck])];
+  const available = [...new Set<RoleId>([...ALWAYS_IN_POOL, ...pool])];
 
   return (
     <div className="space-y-5">

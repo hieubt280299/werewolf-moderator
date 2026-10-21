@@ -1,7 +1,8 @@
 import { Gauge, Minus, Moon, MoonStar, Plus, Scale, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Difficulty, RoleId, WinTeam } from '../../@types/game';
-import { ROLES } from '../../data/roles';
+import { roleDescKey, useHouseRules } from '../../context/HouseRulesContext';
+import { roleFaction, roleWinTeam, ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { RoleCard } from './RoleCard';
 import { TONES } from './tones';
@@ -18,19 +19,22 @@ interface RoleDetailSheetProps {
 /** Full-size card with the complete rules text, so moderators can learn what a role does. */
 export function RoleDetailSheet({ roleId, onClose, count, onAdjust }: RoleDetailSheetProps) {
   const { t } = useI18n();
+  const houseRules = useHouseRules();
   const role = roleId ? ROLES[roleId] : null;
+  // House rules: the Hunter gains a night action, the Tanner joins the Village.
+  const wakes = !!role?.nightAction || (roleId === 'hunter' && houseRules.hunter);
 
   return (
     <Sheet open={!!roleId} onClose={onClose} title={roleId ? t(`role.${roleId}.name`) : ''} closeLabel={t('settings.close')}>
       {role && roleId && (
         <div className="flex flex-col items-center gap-4 pb-6">
           <RoleCard roleId={roleId} size="lg" showText={false} className="animate-pop" />
-          <p className="max-w-sm text-center text-base leading-relaxed text-bone text-shadow-crisp">{t(`role.${roleId}.desc`)}</p>
+          <p className="max-w-sm text-center text-base leading-relaxed text-bone text-shadow-crisp">{t(roleDescKey(roleId, houseRules))}</p>
 
           <div className="grid w-full max-w-sm grid-cols-2 gap-2 text-sm">
             <Fact icon={<Users className="h-4 w-4" />} label={t('card.team')}>
-              <span className={TONES[role.faction].text}>
-                {t(`team.${teamLabel(role.winTeam)}`)}
+              <span className={TONES[roleFaction(roleId, houseRules)].text}>
+                {t(`team.${teamLabel(roleWinTeam(roleId, houseRules))}`)}
                 {/* Cursed starts with the Village but turns Wolf if attacked. */}
                 {roleId === 'cursed' && <span className="text-wolf-bright"> → {t('team.werewolf')}</span>}
               </span>
@@ -43,12 +47,12 @@ export function RoleDetailSheet({ roleId, onClose, count, onAdjust }: RoleDetail
             <Fact icon={<Gauge className="h-4 w-4" />} label={t('card.difficulty')} wide>
               <DifficultyPips level={role.difficulty} label={t(`card.difficulty.${role.difficulty}`)} />
             </Fact>
-            <Fact icon={role.nightAction ? <MoonStar className="h-4 w-4" /> : <Moon className="h-4 w-4" />} label="" wide>
+            <Fact icon={wakes ? <MoonStar className="h-4 w-4" /> : <Moon className="h-4 w-4" />} label="" wide>
               {role.isWolf || role.nightAction === 'wolfKill'
                 ? t('card.wolfPack')
                 : role.firstNightOnly
                   ? t('card.firstNight')
-                  : role.nightAction
+                  : wakes
                     ? t('card.nightAction')
                     : t('card.noNight')}
             </Fact>

@@ -1,9 +1,10 @@
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Flame, Ghost, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Flame, Ghost, HeartCrack, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NightActionField, NightActionKind, NightStep, NightTargetListField, Player, RoleId } from '../../@types/game';
 import { ROLES, ROLE_ORDER } from '../../data/roles';
 import { useGameEngine } from '../../hooks/useGameEngine';
+import { useNightSequence } from '../../hooks/useNightSequence';
 import { useI18n } from '../../i18n/I18nContext';
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
@@ -24,6 +25,9 @@ const SINGLE_FIELD: Partial<Record<NightActionKind, NightActionField>> = {
   piInspect: 'piTarget',
   priestBless: 'priestTarget',
   oldHagBanish: 'oldHagTarget',
+  hookerSeduce: 'hookerTarget',
+  hunterLink: 'hunterTarget',
+  bigBadWolfStrike: 'bigBadWolfTarget',
 };
 
 /** Steps that pick several players at once. */
@@ -33,10 +37,12 @@ const LIST_FIELD: Partial<Record<NightActionKind, NightTargetListField>> = {
 };
 
 /** Powers the role may decline (the moderator just moves on). */
-const OPTIONAL = new Set<NightActionKind>(['piInspect', 'priestBless', 'leprechaunRedirect', 'troublemakerStir']);
+const OPTIONAL = new Set<NightActionKind>(['piInspect', 'priestBless', 'leprechaunRedirect', 'troublemakerStir', 'hookerSeduce']);
 
 const ACCENT: Partial<Record<NightActionKind, 'village' | 'wolf' | 'vampire' | 'cult'>> = {
   wolfKill: 'wolf',
+  bigBadWolfStrike: 'wolf',
+  hookerSeduce: 'vampire',
   sorceressInspect: 'wolf',
   vampireBite: 'vampire',
   cultRecruit: 'cult',
@@ -48,15 +54,12 @@ const ACCENT: Partial<Record<NightActionKind, 'village' | 'wolf' | 'vampire' | '
 /** Step-by-step wake-up assistant. Low-contrast cyan UI so it doesn't light faces in a dark room. */
 export function NightActionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
-  const engine = useGameEngine();
-  const { state, nightSteps } = engine;
-  const total = nightSteps.length;
-  const index = Math.min(state.nightStepIndex, Math.max(0, total - 1));
-  const step = nightSteps[index];
-  const isLast = index >= total - 1;
+  const night = useNightSequence();
+  const { steps: nightSteps, step, index, total, isLast } = night;
+  const { state } = useGameEngine();
 
   const finish = () => {
-    engine.resolveNight();
+    night.finish();
     onClose();
   };
 
@@ -68,10 +71,12 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
             <button
               key={s.id}
               type="button"
-              onClick={() => engine.goToNightStep(i)}
+              onClick={() => night.goTo(i)}
               aria-label={t(`role.${s.roleId}.name`)}
               className={clsx(
                 'h-1.5 flex-1 rounded-full transition-colors',
+                // A wider gap marks where each block of the night begins.
+                i > 0 && night.opensGroup(i) && 'ml-1.5',
                 i < index && 'bg-village/50',
                 i === index && 'bg-village shadow-glow-village',
                 i > index && 'bg-panel-edge',
@@ -99,7 +104,7 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
           </p>
         )}
         <div className="flex gap-3">
-          <Button disabled={index === 0} onClick={() => engine.goToNightStep(index - 1)} icon={<ChevronLeft className="h-4 w-4" />}>
+          <Button disabled={night.isFirst} onClick={night.back} icon={<ChevronLeft className="h-4 w-4" />}>
             {t('night.back')}
           </Button>
           {isLast ? (
@@ -107,7 +112,7 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
               {t('night.finish')}
             </Button>
           ) : (
-            <Button variant="village" block onClick={() => engine.goToNightStep(index + 1)}>
+            <Button variant="village" block onClick={night.next}>
               {t('night.next')} <ChevronRight className="h-4 w-4" />
             </Button>
           )}
@@ -119,16 +124,41 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
 
 // ---------------------------------------------------------------------------
 
+/** What a seduced role's moderator note says, by night power. */
+const SEDUCED_NOTE: Partial<Record<NightActionKind, 'Pack' | 'BigBadWolf' | 'Inspect' | 'Witch' | 'Hunter'>> = {
+  wolfKill: 'Pack',
+  bigBadWolfStrike: 'BigBadWolf',
+  seerInspect: 'Inspect',
+  auraInspect: 'Inspect',
+  piInspect: 'Inspect',
+  sorceressInspect: 'Inspect',
+  witchPotion: 'Witch',
+  hunterLink: 'Hunter',
+};
+
+/** Scripts for calls that aren't a role's own night power. */
+const STEP_SCRIPT: Partial<Record<NightActionKind, 'night.script.cursed' | 'night.script.doppelganger' | 'night.script.bigBadWolf' | 'night.script.hunter'>> = {
+  cursedAwaken: 'night.script.cursed',
+  doppelgangerAwaken: 'night.script.doppelganger',
+  bigBadWolfStrike: 'night.script.bigBadWolf',
+  hunterLink: 'night.script.hunter',
+};
+
 function StepView({ step }: { step: NightStep }) {
   const { t } = useI18n();
   const engine = useGameEngine();
+  const night = useNightSequence();
   const { state, byId } = engine;
   const roleName = t(`role.${step.roleId}.name`);
   const actors = step.actors.map((id) => byId.get(id)).filter((p): p is Player => !!p);
-  const script = t(`role.${step.roleId}.script`);
+  const scriptKey = STEP_SCRIPT[step.action];
+  const script = scriptKey ? t(scriptKey) : t(`role.${step.roleId}.script`);
+  const seduced = step.ghost ? null : night.seducedActor(step);
+  const seducedNote = SEDUCED_NOTE[step.action] ?? 'Generic';
 
   return (
     <div className="space-y-4">
+      <p className="font-display text-[11px] uppercase tracking-grimoire text-village/70">{t(`night.group.${step.group}`)}</p>
       <div className="flex gap-4">
         <RoleCard roleId={step.roleId} size="sm" dead={step.ghost} showWeight={false} />
         <div className="min-w-0 flex-1 space-y-2">
@@ -149,6 +179,13 @@ function StepView({ step }: { step: NightStep }) {
       {step.note === 'bigBadWolf' && !step.ghost && <Notice tone="wolf">{t('night.bigBadWolf')}</Notice>}
       {step.note === 'fruitBrute' && <Notice tone="ember">{t('night.fruitBrute')}</Notice>}
       {step.note === 'used' && <Notice>{t('night.used')}</Notice>}
+      {seduced && (
+        <Notice tone="wolf" icon={<HeartCrack className="h-4 w-4" />}>
+          {t(`night.seduced${seducedNote}`, { name: seduced.name })}
+        </Notice>
+      )}
+      {step.action === 'hookerSeduce' && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.hookerOnce')}</p>}
+      {step.action === 'bodyguardProtect' && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.bodyguardRule')}</p>}
       {OPTIONAL.has(step.action) && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.optional')}</p>}
 
       {/* Results sit above the picker so the sticky footer never hides them. */}
@@ -158,7 +195,7 @@ function StepView({ step }: { step: NightStep }) {
       )}
       {step.action === 'auraInspect' && state.nightActions.auraSeerTarget && <AuraResult playerId={state.nightActions.auraSeerTarget} />}
       {step.action === 'piInspect' && state.nightActions.piTarget && <PiResult playerId={state.nightActions.piTarget} />}
-      {step.action === 'leprechaunRedirect' && step.targetCount > 0 && <WolfTargetSummary />}
+      {(step.action === 'leprechaunRedirect' || step.action === 'bigBadWolfStrike') && step.targetCount > 0 && <WolfTargetSummary step={step} />}
 
       {step.kind === 'info' && !step.ghost && <InfoPanel step={step} />}
       {step.kind === 'toggle' && step.targetCount > 0 && <TroublemakerToggle step={step} />}
@@ -180,10 +217,12 @@ function TargetPicker({ step }: { step: NightStep }) {
     : field
       ? [state.nightActions[field]].filter((x): x is string => !!x)
       : [];
+  // Shown but locked, so the restriction is visible: the Bodyguard's last protégé, and
+  // everyone the Hooker has already seduced.
   const lastProtected = step.action === 'bodyguardProtect' ? state.modifiers.bodyguardLastTarget : null;
-  const candidates = lastProtected
-    ? [...targets, ...state.players.filter((p) => p.id === lastProtected && p.alive)]
-    : targets;
+  const visited = step.action === 'hookerSeduce' ? state.modifiers.hookerVisited : [];
+  const locked = new Set([lastProtected, ...visited].filter((x): x is string => !!x));
+  const candidates = [...targets, ...state.players.filter((p) => locked.has(p.id) && p.alive && !step.actors.includes(p.id))];
 
   const toggle = (id: string) => {
     if (listField) {
@@ -216,8 +255,8 @@ function TargetPicker({ step }: { step: NightStep }) {
                 player={p}
                 accent={ACCENT[step.action] ?? 'village'}
                 selected={selected.includes(p.id)}
-                disabled={p.id === lastProtected}
-                note={p.id === lastProtected ? t('night.lastProtected') : undefined}
+                disabled={locked.has(p.id)}
+                note={p.id === lastProtected ? t('night.lastProtected') : visited.includes(p.id) ? t('night.alreadySeduced') : undefined}
                 onClick={() => toggle(p.id)}
               />
             ))}
@@ -235,6 +274,7 @@ function WitchPanel({ step }: { step: NightStep }) {
   const victims = engine.wolfVictims().map((id) => byId.get(id)).filter((p): p is Player => !!p);
   const killTargets = engine.targetsFor(step, 'kill');
   const { witchHealUsed, witchKillUsed } = state.modifiers;
+  const { witchSeesVictims } = useNightSequence();
 
   return (
     <div className="space-y-4">
@@ -243,7 +283,9 @@ function WitchPanel({ step }: { step: NightStep }) {
           <FlaskConical className="h-3.5 w-3.5 text-village" /> {t('night.witchVictims')} · {t('night.witchSave')}
           {witchHealUsed && <span className="text-bone-faint">({t('night.witchUsed')})</span>}
         </p>
-        {victims.length === 0 ? (
+        {!witchSeesVictims ? (
+          <Notice icon={<EyeOff className="h-4 w-4" />}>{t('night.witchBlind')}</Notice>
+        ) : victims.length === 0 ? (
           <p className="text-sm text-bone-faint">{t('night.witchNoVictim')}</p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
@@ -286,10 +328,12 @@ function WitchPanel({ step }: { step: NightStep }) {
 
 function SeerResult({ playerId }: { playerId: string }) {
   const { t } = useI18n();
-  const { byId, seerResult } = useGameEngine();
+  const { byId } = useGameEngine();
+  const { inspection } = useNightSequence();
   const p = byId.get(playerId);
   if (!p) return null;
-  const wolf = seerResult(p) === 'werewolf';
+  // Already inverted if the Seer was seduced tonight.
+  const wolf = !!inspection('seerInspect', playerId);
   return (
     <ResultBanner wolf={wolf} key={playerId}>
       <span className="text-sm text-bone-dim">{t('night.seerResult', { name: p.name })}</span>
@@ -304,10 +348,11 @@ function SeerResult({ playerId }: { playerId: string }) {
 
 function SorceressResult({ playerId }: { playerId: string }) {
   const { t } = useI18n();
-  const { byId, sorceressResult } = useGameEngine();
+  const { byId } = useGameEngine();
+  const { inspection } = useNightSequence();
   const p = byId.get(playerId);
   if (!p) return null;
-  const hit = sorceressResult(p);
+  const hit = !!inspection('sorceressInspect', playerId);
   return (
     <ResultBanner wolf={hit} key={playerId}>
       <span className={clsx('font-display text-2xl font-bold uppercase tracking-grimoire', hit ? 'text-wolf-bright' : 'text-bone')}>
@@ -348,7 +393,24 @@ function Notice({ children, icon, tone = 'village' }: { children: ReactNode; ico
 
 function InfoPanel({ step }: { step: NightStep }) {
   const { t } = useI18n();
-  const { alive } = useGameEngine();
+  const { alive, byId } = useGameEngine();
+  if (step.action === 'cursedAwaken' || step.action === 'doppelgangerAwaken') {
+    // Woken to learn the role they changed into: show it to them.
+    const woken = step.actors.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+    return (
+      <div className="space-y-3">
+        <p className="text-xs uppercase tracking-wide text-bone-dim">{t(step.action === 'cursedAwaken' ? 'night.cursedShow' : 'night.doppelgangerShow')}</p>
+        {woken.map((p) => (
+          <div key={p.id} className="flex items-center gap-3">
+            <RoleCard roleId={p.roleId} size="sm" showWeight={false} />
+            <div className="min-w-0 flex-1">
+              <PlayerToken player={p} accent={ROLES[p.roleId].isWolf ? 'wolf' : 'village'} selected />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   // Masons meet each other; the Minion is shown the wolves.
   const minion = step.action === 'minionMeet';
   const shown = minion ? alive.filter((p) => ROLES[p.roleId].isWolf) : alive.filter((p) => step.actors.includes(p.id));
@@ -364,7 +426,8 @@ function InfoPanel({ step }: { step: NightStep }) {
   );
 }
 
-function WolfTargetSummary() {
+/** The pack's (first) victim, for the calls that act around it: Leprechaun, Big Bad Wolf. */
+function WolfTargetSummary({ step }: { step: NightStep }) {
   const { t } = useI18n();
   const { state, byId } = useGameEngine();
   const target = byId.get(state.nightActions.wolfTargets[0] ?? '');
@@ -372,7 +435,7 @@ function WolfTargetSummary() {
   return (
     <div className="space-y-2">
       <PlayerToken player={target} accent="wolf" selected />
-      <p className="text-xs text-bone-faint">{t('night.leprechaunKeep')}</p>
+      <p className="text-xs text-bone-faint">{t(step.action === 'bigBadWolfStrike' ? 'night.bigBadWolfNext' : 'night.leprechaunKeep')}</p>
     </div>
   );
 }
@@ -424,10 +487,11 @@ function DrunkRolePicker() {
 
 function AuraResult({ playerId }: { playerId: string }) {
   const { t } = useI18n();
-  const { byId, auraResult } = useGameEngine();
+  const { byId } = useGameEngine();
+  const { inspection } = useNightSequence();
   const p = byId.get(playerId);
   if (!p) return null;
-  const special = auraResult(p);
+  const special = !!inspection('auraInspect', playerId);
   return (
     <ResultBanner wolf={special} key={playerId}>
       <span className={clsx('font-display text-xl font-bold uppercase tracking-grimoire', special ? 'text-wolf-bright' : 'text-village')}>
@@ -439,10 +503,11 @@ function AuraResult({ playerId }: { playerId: string }) {
 
 function PiResult({ playerId }: { playerId: string }) {
   const { t } = useI18n();
-  const { byId, piResult } = useGameEngine();
+  const { byId } = useGameEngine();
+  const { inspection } = useNightSequence();
   const p = byId.get(playerId);
   if (!p) return null;
-  const found = piResult(playerId);
+  const found = !!inspection('piInspect', playerId);
   return (
     <ResultBanner wolf={found} key={playerId}>
       <span className={clsx('font-display text-xl font-bold uppercase tracking-grimoire', found ? 'text-wolf-bright' : 'text-village')}>
