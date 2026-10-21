@@ -7,6 +7,7 @@ import { ROLE_SECTIONS, ROLES, withFillers } from '../data/roles';
 import { applyStatsDelta, EMPTY_STATS, statsDelta } from '../services/profileStore';
 import {
   addsTeam,
+  timelineParts,
   calculateBalance,
   extraTeams,
   EMPTY_STATUS,
@@ -174,8 +175,10 @@ describe('v0.1.0 mechanics', () => {
       key + (params ? ' ' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join(' ') : '');
     const groups = groupTimeline(s.log, tx);
     expect(groups.map((g) => g.label)).toEqual(['phase.nightN round=1', 'phase.dayN round=1', 'phase.gameOver']);
-    const vote = s.log.find((e) => e.key === 'log.eliminated.vote')!;
+    // One line for the vote, carrying its accuser.
+    const vote = s.log.find((e) => e.key === 'log.eliminated.voteAccused')!;
     expect(formatTimelineEntry(vote, tx)).toContain('name=P0 role=role.werewolf.name');
+    expect(vote.people).toEqual([{ name: 'P1', role: 'seer' }]);
   });
 
   it('keeps lifetime stats right when a game is re-recorded with a new winner', () => {
@@ -345,7 +348,25 @@ describe('accusations', () => {
     let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager'])));
     s = rules.nominate(s, 'p0', ['p1', 'p2', 'p2', 'p0']);
     expect(s.nominations[0].accuserIds).toEqual(['p1', 'p2']);
-    expect(s.log.filter((e) => e.key === 'log.nominatedBy').map((e) => e.params?.actor)).toEqual(['P1', 'P2']);
+    // No line per accuser: the accusation is logged once it ends.
+    expect(s.log.some((e) => e.key.startsWith('log.nominated'))).toBe(false);
+    const executed = rules.executeNomination(s, s.nominations[0].id).log.find((e) => e.key === 'log.eliminated.voteAccused')!;
+    expect(executed.params?.accusers).toBe(2);
+    expect(executed.people).toEqual([
+      { name: 'P1', role: 'seer' },
+      { name: 'P2', role: 'villager' },
+    ]);
+  });
+
+  it('logs withdrawn and dropped accusations once, and plain wording without accusers', () => {
+    let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'])));
+    s = rules.nominate(s, 'p2', ['p1']);
+    s = rules.removeNomination(s, s.nominations[0].id);
+    expect(s.log.at(-1)).toMatchObject({ key: 'log.accusationWithdrawnAccused', people: [{ name: 'P1', role: 'seer' }] });
+    s = rules.nominate(s, 'p3', []);
+    s = rules.closeDayWithoutExecution(s);
+    expect(s.log.slice(-2).map((e) => e.key)).toEqual(['log.accusationWithdrawn', 'log.noExecution']);
+    expect(s.log.at(-2)?.people).toBeUndefined();
   });
 });
 
@@ -646,6 +667,39 @@ describe('house-rule snapshot & setup', () => {
         expect(dictionaries[lang][roleDescKey(id, { ...NO_REBALANCES, [id]: true })]).toBeTruthy();
       }
     }
+  });
+
+  it('keeps the table’s names and experience for the next new game', () => {
+    let s = gameReducer(createInitialState(), { type: 'UPDATE_SETUP', patch: { names: ['An', '', 'Binh', 'Chi', 'Dung'], experience: 'veteran' } });
+    s = gameReducer(s, { type: 'START_GAME', players: game(['werewolf', 'villager', 'villager', 'villager', 'villager']).players, rules: NO_REBALANCES });
+    const next = gameReducer(s, { type: 'NEW_GAME' });
+    expect(next.phase).toBe('setup');
+    expect(next.setup.names).toEqual(['An', '', 'Binh', 'Chi', 'Dung']);
+    expect(next.setup.experience).toBe('veteran');
+    expect(next.setup.deck).toEqual([]);
+  });
+
+  it('splits timeline lines around role and team names, so they can be coloured', () => {
+    const dict: Record<string, string> = {
+      'log.nominatedBy': '{actor} ({actorRole}) accused {name} ({role})',
+      'log.gameOver': 'Game over — {team}',
+      'role.seer.name': 'Seer',
+      'role.werewolf.name': 'Werewolf',
+      'team.village': 'Village',
+    };
+    const tx = (key: string) => dict[key] ?? key;
+    const entry = { id: 'l', round: 1, phase: 'day' as const, key: 'log.nominatedBy', params: { actor: 'An', actorRole: 'seer', name: 'Binh', role: 'werewolf' } };
+    expect(timelineParts(entry, tx)).toEqual([
+      { text: 'An (' },
+      { text: 'Seer', role: 'seer' },
+      { text: ') accused Binh (' },
+      { text: 'Werewolf', role: 'werewolf' },
+      { text: ')' },
+    ]);
+    expect(timelineParts({ ...entry, key: 'log.gameOver', params: { team: 'village' } }, tx)).toEqual([
+      { text: 'Game over — ' },
+      { text: 'Village', team: 'village' },
+    ]);
   });
 
   it('empties the Deck step when the Role Pool changes', () => {

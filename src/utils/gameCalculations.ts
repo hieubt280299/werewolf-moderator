@@ -392,7 +392,52 @@ export function formatTimelineEntry(entry: GameLogEntry, tx: Translate): string 
     if (typeof params[key] === 'string') params[key] = tx(`role.${params[key]}.name`);
   }
   if (typeof params.team === 'string') params.team = tx(`team.${params.team}`);
+  if (typeof params.accusers === 'number') params.accusers = accusersLabel(params.accusers, tx);
   return tx(entry.key, params);
+}
+
+/** "4 people" / "1 person" — who accused a nominee. */
+const accusersLabel = (count: number, tx: Translate) => (count === 1 ? tx('log.accusersOne') : tx('log.accusers', { count }));
+
+/**
+ * A piece of a timeline line: plain text, a role / team name to tint in its team colour, or
+ * a count of people listed on demand (an accusation's accusers).
+ */
+export interface TimelinePart {
+  text: string;
+  role?: RoleId;
+  team?: WinTeam;
+  people?: GameLogEntry['people'];
+}
+
+const ROLE_PARAMS = new Set(['role', 'role2', 'actorRole']);
+
+/** A log entry split around its role and team names, so they can be coloured. */
+export function timelineParts(entry: GameLogEntry, tx: Translate): TimelinePart[] {
+  const params = entry.params ?? {};
+  // Without params the translation keeps its {placeholders}; odd chunks are their names.
+  return tx(entry.key)
+    .split(/\{(\w+)\}/)
+    .map((chunk, i): TimelinePart => {
+      if (i % 2 === 0) return { text: chunk };
+      const value = params[chunk];
+      if (value === undefined) return { text: `{${chunk}}` };
+      if (ROLE_PARAMS.has(chunk) && typeof value === 'string' && value in ROLES) {
+        return { text: tx(`role.${value}.name`), role: value as RoleId };
+      }
+      if (chunk === 'team' && typeof value === 'string') return { text: tx(`team.${value}`), team: value as WinTeam };
+      if (chunk === 'accusers' && typeof value === 'number') return { text: accusersLabel(value, tx), people: entry.people ?? [] };
+      return { text: String(value) };
+    })
+    .reduce<TimelinePart[]>((parts, part) => {
+      // Plain text runs merge into one piece; only role and team names stand apart.
+      const last = parts[parts.length - 1];
+      if (!part.text) return parts;
+      const plain = (p: TimelinePart) => !p.role && !p.team && !p.people;
+      if (last && plain(last) && plain(part)) last.text += part.text;
+      else parts.push(part);
+      return parts;
+    }, []);
 }
 
 export interface TimelineGroup {

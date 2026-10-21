@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [1.0.1] - Unreleased
 
+### Added
+- **New game keeps the table:** starting a new game keeps the player names (as typed) and the table experience from the last game, so the moderator doesn't retype the whole table.
+- **Coloured timeline:** role names in the timeline are tinted in their team's colour (Village blue, Wolf red, Vampire violet, Cult green, Tanner brown), and so is the winning team in the game-over line.
+- **One line per accusation:** the timeline no longer writes a line per accuser. The accusation is logged once it ends, e.g. "D (Spellcaster) was executed by vote (accused by 4 people)". Hovering or tapping "4 people" lists the accusers and their roles. A Prince surviving the vote, a withdrawn accusation and one dropped when the day ends without an elimination get the same treatment.
+
 ### Changed
 - **Win conditions**, checked among the living players:
   - Only one team left: it wins.

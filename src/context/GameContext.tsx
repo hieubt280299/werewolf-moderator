@@ -220,7 +220,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Same players and deck, but the wizard starts over at the Players step.
       return createInitialState({ ...state.setup, names: state.players.map((p) => p.name), step: 'players', deal: null });
     case 'NEW_GAME':
-      return createInitialState({ experience: state.setup.experience, pool: state.setup.pool });
+      // The same table usually plays again: keep the names as typed, the experience and the pool.
+      return createInitialState({ names: state.setup.names, experience: state.setup.experience, pool: state.setup.pool });
     case 'HYDRATE':
       return normalizeGameState(action.state);
     case 'MARK_RECORDED':

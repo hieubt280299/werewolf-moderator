@@ -284,6 +284,8 @@ export interface GameLogEntry {
   /** i18n key, rendered at display time so the log follows the language toggle. */
   key: string;
   params?: Record<string, string | number>;
+  /** Players behind the event, e.g. everyone who accused a nominee (shown on demand). */
+  people?: { name: string; role: RoleId }[];
 }
 
 export interface GameModifiers {
