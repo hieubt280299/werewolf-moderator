@@ -18,22 +18,25 @@ import type {
 
 /**
  * Night call order (lower wakes first), in five strict blocks:
- *   1–9   night 1 only, setup: Cupid, Doppelgänger, Virginia Woolf, Masons
- *   10–19 transformations & delayed roles: Cursed (when bitten), Doppelgänger (when her
- *         target died), Drunk (night 3)
+ *   1–9   night 1 only, setup: Cupid (then the Lovers meet), Doppelgänger, Virginia Woolf,
+ *         Masons, Dire Wolf's companion
+ *   10–19 transformations & delayed roles: Doppelgänger (when her target died), Drunk
+ *         (night 3). A bitten Cursed has no call: they wake silently with the pack.
  *   20–29 protection & distraction: Hooker, Bodyguard, Priest
- *   30–39 threats: Vampires → Werewolves (then the Big Bad Wolf's own strike and the Dire
- *         Wolf's companion) → Minion / Sorceress
+ *   30–39 threats: Vampires → Werewolves (then the Big Bad Wolf's own strike) → Minion /
+ *         Sorceress
  *   40+   every other night role: Leprechaun, Seer, Aura Seer, P.I., Hunter (house rule),
  *         Witch, Old Hag, Spellcaster, Troublemaker, Cult Leader
  */
 export const NIGHT_ORDER: Record<NightActionKind, number> = {
   cupidLink: 1,
-  doppelgangerCopy: 2,
-  virginiaFear: 3,
-  masonMeet: 4,
+  loversMeet: 2,
+  doppelgangerCopy: 3,
+  virginiaFear: 4,
+  masonMeet: 5,
+  // Picking a companion is setup, so the Dire Wolf wakes alone here, before the pack.
+  direWolfCompanion: 6,
 
-  cursedAwaken: 10,
   doppelgangerAwaken: 11,
   drunkSober: 12,
 
@@ -44,7 +47,6 @@ export const NIGHT_ORDER: Record<NightActionKind, number> = {
   vampireBite: 30,
   wolfKill: 31,
   bigBadWolfStrike: 32,
-  direWolfCompanion: 33,
   minionMeet: 34,
   sorceressInspect: 35,
 

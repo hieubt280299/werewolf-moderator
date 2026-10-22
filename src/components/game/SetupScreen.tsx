@@ -3,6 +3,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Dices, Moon, Trash2, UserPlus
 import { useMemo } from 'react';
 import { NO_REBALANCES, type ExperienceLevel, type RoleId, type SetupDraft } from '../../@types/game';
 import { useAuth } from '../../context/AuthContext';
+import { useHouseRules } from '../../context/HouseRulesContext';
 import { useGame } from '../../context/GameContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
@@ -22,6 +23,7 @@ export function SetupScreen() {
   const { state, dispatch } = useGame();
   const { startGame } = useGameEngine();
   const { profile } = useAuth();
+  const houseRules = useHouseRules();
   const { names, deck, pool, experience, poolId } = state.setup;
   // Kept in the saved setup draft (not local state), so navigating away never resets the wizard.
   const step: Step = state.setup.step ?? 'players';
@@ -29,7 +31,7 @@ export function SetupScreen() {
 
   const filledNames = names.map((n, i) => n.trim() || t('setup.playerPlaceholder', { n: i + 1 }));
   const playerCount = names.length;
-  const issues = useMemo(() => validateDeck(deck, playerCount), [deck, playerCount]);
+  const issues = useMemo(() => validateDeck(deck, playerCount, houseRules), [deck, playerCount, houseRules]);
   const canLeavePlayers = playerCount >= MIN_PLAYERS;
   const stepIndex = STEPS.indexOf(step);
 

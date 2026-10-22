@@ -14,10 +14,12 @@ interface RoleDetailSheetProps {
   /** When given, shows a deck-count stepper so the role can be added/removed from here. */
   count?: number;
   onAdjust?: (delta: 1 | -1) => void;
+  /** Adding a copy would bring a fourth team into the deck. */
+  addBlocked?: boolean;
 }
 
 /** Full-size card with the complete rules text, so moderators can learn what a role does. */
-export function RoleDetailSheet({ roleId, onClose, count, onAdjust }: RoleDetailSheetProps) {
+export function RoleDetailSheet({ roleId, onClose, count, onAdjust, addBlocked = false }: RoleDetailSheetProps) {
   const { t } = useI18n();
   const houseRules = useHouseRules();
   const role = roleId ? ROLES[roleId] : null;
@@ -66,7 +68,7 @@ export function RoleDetailSheet({ roleId, onClose, count, onAdjust }: RoleDetail
               <span className="font-display text-sm uppercase tracking-grimoire text-bone-dim">
                 {t('card.inDeck')}: <span className="text-lg text-bone">{count}</span>
               </span>
-              <StepperButton label="+" onClick={() => onAdjust(1)} disabled={count >= role.maxCopies}>
+              <StepperButton label="+" onClick={() => onAdjust(1)} disabled={count >= role.maxCopies || addBlocked}>
                 <Plus className="h-5 w-5" />
               </StepperButton>
             </div>

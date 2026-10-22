@@ -92,8 +92,8 @@ export type NightActionKind =
   | 'hunterLink'
   /** House rule: the Big Bad Wolf's own strike, right after the pack's. */
   | 'bigBadWolfStrike'
-  /** The Cursed was attacked: wake them to learn they are a Werewolf now. */
-  | 'cursedAwaken'
+  /** Night 1, right after Cupid: the Lovers wake and are shown each other's role. */
+  | 'loversMeet'
   /** The Doppelgänger's target died: wake her to see the role she took. */
   | 'doppelgangerAwaken';
 
@@ -234,6 +234,8 @@ export interface NightStep {
   ghost: boolean;
   /** How the moderator records the step. */
   kind: 'targets' | 'info' | 'role' | 'toggle';
+  /** Wolves' turn: bitten Cursed who wake with the pack for the first time tonight. */
+  joining?: string[];
   /** Why this step is suppressed or special, if it is. */
   note?: 'wolvesSkip' | 'wolvesDouble' | 'noPotions' | 'bigBadWolf' | 'fruitBrute' | 'used';
 }
@@ -254,7 +256,10 @@ export interface NightReport {
   wounded: string[];
 }
 
-/** A player to wake on a later night because their role changed (Cursed bitten, Doppelgänger copied). */
+/**
+ * A player whose role changed, to be told on a later night: a Doppelgänger is woken to see
+ * her new role; a bitten Cursed is woken silently with the pack (a note in the wolves' turn).
+ */
 export interface PendingAwakening {
   playerId: string;
   kind: 'cursed' | 'doppelganger';
@@ -284,6 +289,8 @@ export interface GameLogEntry {
   /** i18n key, rendered at display time so the log follows the language toggle. */
   key: string;
   params?: Record<string, string | number>;
+  /** Players behind the event, e.g. everyone who accused a nominee (shown on demand). */
+  people?: { name: string; role: RoleId }[];
 }
 
 export interface GameModifiers {
@@ -391,6 +398,8 @@ export interface BalanceOptions {
   experience: ExperienceLevel;
   /** Override the wolf-killer count; defaults to ~1 per 4–5 players. */
   wolfCount?: number;
+  /** House rules (the reworked Tanner is a Villager, so no extra team). */
+  rules?: Partial<RebalanceRules> | null;
   /** Deterministic RNG for tests. */
   random?: () => number;
 }

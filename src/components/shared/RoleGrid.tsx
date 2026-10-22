@@ -2,9 +2,10 @@ import clsx from 'clsx';
 import { Check, CheckCheck, Lock, Minus, Plus, X } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import type { RoleId } from '../../@types/game';
+import { useHouseRules } from '../../context/HouseRulesContext';
 import { ALWAYS_IN_POOL, ROLES, ROLE_SECTIONS, type RoleSectionId } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { countRoles, sortDeck } from '../../utils/gameCalculations';
+import { addsTeam, countRoles, sortDeck } from '../../utils/gameCalculations';
 import { RoleCard } from './RoleCard';
 import { RoleDetailSheet } from './RoleDetailSheet';
 import { toneAccentFill, TONES } from './tones';
@@ -38,25 +39,28 @@ export function RoleGrid(props: RoleGridProps) {
   const [preview, setPreview] = useState<RoleId | null>(null);
   const visible = props.roles ? new Set(props.roles) : null;
   const counts = props.mode === 'count' ? countRoles(props.deck) : {};
+  const houseRules = useHouseRules();
+  // A game has at most three teams: + is locked on roles that would bring a fourth.
+  const blocked = (id: RoleId) => props.mode === 'count' && addsTeam(props.deck, id, houseRules);
 
   const locked = props.mode === 'select' ? LOCKED : NONE_LOCKED;
   // Latest props for the stable callbacks below, so memoized cards skip re-rendering when a
   // sibling changes.
-  const latest = useRef(props);
-  latest.current = props;
+  const latest = useRef({ props, houseRules });
+  latest.current = { props, houseRules };
 
   const adjust = useCallback((id: RoleId, delta: 1 | -1) => {
-    const p = latest.current;
+    const { props: p, houseRules: rules } = latest.current;
     if (p.mode !== 'count') return;
     if (delta > 0) {
-      if ((countRoles(p.deck)[id] ?? 0) < ROLES[id].maxCopies) p.onDeck(sortDeck([...p.deck, id]));
+      if ((countRoles(p.deck)[id] ?? 0) < ROLES[id].maxCopies && !addsTeam(p.deck, id, rules)) p.onDeck(sortDeck([...p.deck, id]));
     } else {
       const idx = p.deck.lastIndexOf(id);
       if (idx >= 0) p.onDeck(p.deck.filter((_, i) => i !== idx));
     }
   }, []);
   const toggle = useCallback((id: RoleId) => {
-    const p = latest.current;
+    const p = latest.current.props;
     if (p.mode !== 'select' || LOCKED.has(id)) return;
     p.onSelected(p.selected.includes(id) ? p.selected.filter((r) => r !== id) : [...p.selected, id]);
   }, []);
@@ -102,7 +106,7 @@ export function RoleGrid(props: RoleGridProps) {
               <div className="role-grid">
                 {roles.map((id) =>
                   props.mode === 'count' ? (
-                    <RoleGridItem key={id} roleId={id} mode="count" count={counts[id] ?? 0} onPreview={setPreview} onAdjust={adjust} />
+                    <RoleGridItem key={id} roleId={id} mode="count" count={counts[id] ?? 0} blocked={blocked(id)} onPreview={setPreview} onAdjust={adjust} />
                   ) : (
                     <RoleGridItem key={id} roleId={id} mode="select" on={props.selected.includes(id)} locked={locked.has(id)} onPreview={setPreview} onToggle={toggle} />
                   ),
@@ -117,6 +121,7 @@ export function RoleGrid(props: RoleGridProps) {
         onClose={() => setPreview(null)}
         count={props.mode === 'count' && preview ? (counts[preview] ?? 0) : undefined}
         onAdjust={props.mode === 'count' && preview ? (delta) => adjust(preview, delta) : undefined}
+        addBlocked={!!preview && blocked(preview)}
       />
     </>
   );
@@ -126,7 +131,7 @@ const LOCKED = new Set<RoleId>(ALWAYS_IN_POOL);
 const NONE_LOCKED = new Set<RoleId>();
 
 type RoleGridItemProps = { roleId: RoleId; onPreview: (id: RoleId) => void } & (
-  | { mode: 'count'; count: number; onAdjust: (id: RoleId, delta: 1 | -1) => void }
+  | { mode: 'count'; count: number; blocked: boolean; onAdjust: (id: RoleId, delta: 1 | -1) => void }
   | { mode: 'select'; on: boolean; locked: boolean; onToggle: (id: RoleId) => void }
 );
 
@@ -156,7 +161,7 @@ const RoleGridItem = memo(function RoleGridItem(props: RoleGridItemProps) {
             <Minus className="h-4 w-4" />
           </StepperButton>
           <span className={clsx('font-display text-sm', n > 0 ? 'text-bone' : 'text-bone-faint')}>{n}</span>
-          <StepperButton label="+" disabled={n >= ROLES[id].maxCopies} onClick={() => props.onAdjust(id, 1)}>
+          <StepperButton label="+" disabled={n >= ROLES[id].maxCopies || props.blocked} onClick={() => props.onAdjust(id, 1)}>
             <Plus className="h-4 w-4" />
           </StepperButton>
         </div>

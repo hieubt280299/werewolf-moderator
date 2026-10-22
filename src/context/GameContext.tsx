@@ -154,12 +154,12 @@ const samePool = (a: readonly RoleId[], b: readonly RoleId[]) => a.length === b.
 
 /**
  * Night picks that depend on the wolves' victim go stale when it changes: the Witch's heal
- * must still be aimed at someone really being attacked.
+ * must still be aimed at someone the pack is really attacking.
  */
 function withNightActions(state: GameState, patch: Partial<GameState['nightActions']>): GameState {
   const next = { ...state, nightActions: { ...state.nightActions, ...patch } };
   const save = next.nightActions.witchSaveTarget;
-  if (save && !rules.effectiveWolfTargets(next).includes(save)) next.nightActions.witchSaveTarget = null;
+  if (save && !rules.witchVictims(next).includes(save)) next.nightActions.witchSaveTarget = null;
   return next;
 }
 
@@ -190,6 +190,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_NIGHT_STEP':
       return { ...state, nightStepIndex: Math.max(0, action.index) };
     case 'SET_NIGHT_ACTION':
+      // The Drunk becomes their real role the moment it's picked.
+      if (action.field === 'drunkRole') return rules.chooseDrunkRole(state, action.value as RoleId | null);
       return withNightActions(state, { [action.field]: action.value });
     case 'SET_TARGET_LIST':
       if (action.field === 'cupidTargets') return withNightActions(state, { cupidTargets: action.targets });
@@ -220,7 +222,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Same players and deck, but the wizard starts over at the Players step.
       return createInitialState({ ...state.setup, names: state.players.map((p) => p.name), step: 'players', deal: null });
     case 'NEW_GAME':
-      return createInitialState({ experience: state.setup.experience, pool: state.setup.pool });
+      // The same table usually plays again: keep the names as typed, the experience and the pool.
+      return createInitialState({ names: state.setup.names, experience: state.setup.experience, pool: state.setup.pool });
     case 'HYDRATE':
       return normalizeGameState(action.state);
     case 'MARK_RECORDED':

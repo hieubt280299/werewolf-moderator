@@ -3,6 +3,40 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - Unreleased
+
+### Added
+- **New game keeps the table:** starting a new game keeps the player names (as typed) and the table experience from the last game, so the moderator doesn't retype the whole table.
+- **Easier dealing:** on the Deal board, the whole seat is the drag handle, so pressing anywhere on a filled seat picks up its card, not just on the card itself. Seats are tighter around a slightly larger card.
+- **Coloured timeline:** role names in the timeline are tinted in their team's colour (Village blue, Wolf red, Vampire violet, Cult green, Tanner brown), and so is the winning team in the game-over line.
+- **One line per accusation:** the timeline no longer writes a line per accuser. The accusation is logged once it ends, e.g. "D (Spellcaster) was executed by vote (accused by 4 people)". Hovering or tapping "4 people" lists the accusers and their roles. A Prince surviving the vote, a withdrawn accusation and one dropped when the day ends without an elimination get the same treatment.
+
+### Changed
+- **Win conditions**, checked among the living players:
+  - Only one team left: it wins.
+  - Three or more teams, or two teams without the Village: play goes on.
+  - The Village against one other team:
+    - The Village has no kill power left and is strictly outnumbered: the other team wins.
+    - Neither team can kill or change anyone's team, and they are equal in number: a draw.
+    - Anything else: play goes on.
+  - Kill powers: the Werewolves (not a lone Fruit Brute), Vampires, the Hunter, the Witch's unused poison and the reworked Tanner. Team-changing powers: the Cult Leader, the Drunk before night 3, and a Doppelgänger with a target. Day votes don't count.
+  - Parity alone no longer hands the Werewolves the game. They win once they outnumber a Village that can't kill.
+  - The Tanner (standard rules) and a Cult Leader who has recruited everyone still win at once. A standard Tanner never holds the game open, and only the Cult Leader counts as the Cult: recruits keep their team.
+  - The Lone Wolf counts with the Werewolves, but still only wins as the last player alive.
+- **At most 3 teams:** Village, Werewolves and one of The Couple (Cupid), Vampires, Cult or Tanner (standard rules). The Lone Wolf counts with the Werewolves, and the reworked Tanner is a Villager.
+  - The Deck step locks + on roles that would bring a fourth team and blocks dealing such a deck.
+  - Auto-balance never builds one, and the Drunk's real role can't bring one in.
+- **Big Bad Wolf (house rule):** the Witch is shown, and can heal, only the pack's victim, never the Big Bad Wolf's own strike. His strike may hit anyone next to the pack's victim except himself, even another wolf.
+- **Dire Wolf:** choosing a companion is a setup ability, so the Dire Wolf now wakes alone among the night-1 setup roles (after the Masons), before the pack, instead of with the Threats.
+- **Leprechaun:** both neighbours of the wolves' target are offered, wolves included, since the Leprechaun doesn't know who the wolves are.
+- **Lovers:** on night 1, a new "The Lovers" call follows Cupid's. Its **Show the Lovers** button opens a full-screen view with only the two lovers' names and roles, for the moderator to show them. Cupid's script no longer wakes the lovers.
+- **Cursed:** never has a night call of their own. The night after being bitten, the wolves' turn shows a note to silently wake them with the pack (like the Wolf Cub's double-kill note).
+- **Drunk:**
+  - The real role can only be a Village or Werewolf role (the Lone Wolf counts with the Werewolves). Vampires, Cult and the standard Tanner are excluded, as are the night-1 setup roles (Cupid, Doppelgänger, Virginia Woolf, Mason, Dire Wolf, Minion) and the Ghost.
+  - The pick takes effect at once. The Drunk uses the new role later that same night, and the Seer and other inspectors see it. Changing or clearing the pick swaps it back.
+- **Priest:** "That player cannot be eliminated by any killing ability that night." The blessing now also stops the Witch's poison and the Hunter's aim (house rule). The Bodyguard still only stops Werewolf attacks. A broken heart and the reworked Tanner still go through every protection.
+- The Witch's note no longer starts with "House rule:".
+
 ## [1.0.0] - Unreleased
 
 Implements [`UPDATE_v1.0.0.md`](UPDATE_v1.0.0.md). In review in [PR #3](https://github.com/hieubt280299/werewolf-moderator/pull/3).

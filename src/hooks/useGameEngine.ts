@@ -9,7 +9,6 @@ import {
   auraResult,
   buildNightSteps,
   canNominate,
-  effectiveWolfTargets,
   eligibleTargets,
   eligibleVoters,
   evaluateWinner,
@@ -19,6 +18,7 @@ import {
   seerResult,
   sorceressResult,
   voteCount,
+  witchVictims,
   votesNeeded,
   type WitchMode,
 } from '../utils/gameRules';
@@ -49,7 +49,7 @@ export function useGameEngine() {
       votesNeeded: votesNeeded(state),
       pendingTrigger: state.pendingTriggers[0] ?? null,
       canNominate: canNominate(state),
-      projectedWinner: evaluateWinner(state.players, null, state.rules),
+      projectedWinner: evaluateWinner(state),
     };
   }, [state]);
 
@@ -118,7 +118,8 @@ export function useGameEngine() {
       auraResult,
       piResult: (id: string) => piResult(state, id),
       neighborsOf: (id: string) => neighbors(state.players, id),
-      wolfVictims: () => effectiveWolfTargets(state),
+      /** Who the Witch is shown: the pack's victims (never the Big Bad Wolf's own strike). */
+      wolfVictims: () => witchVictims(state),
       voteCount: (nominationId: string) => {
         const nom = state.nominations.find((n) => n.id === nominationId);
         return nom ? voteCount(state, nom) : 0;

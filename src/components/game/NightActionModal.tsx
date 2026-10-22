@@ -1,13 +1,15 @@
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Flame, Ghost, HeartCrack, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Flame, Ghost, HeartCrack, Heart, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import type { NightActionField, NightActionKind, NightStep, NightTargetListField, Player, RoleId } from '../../@types/game';
-import { ROLES, ROLE_ORDER } from '../../data/roles';
+import { ROLES } from '../../data/roles';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useNightSequence } from '../../hooks/useNightSequence';
 import { useI18n } from '../../i18n/I18nContext';
+import { drunkRoleOptions } from '../../utils/gameRules';
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
+import { LoversReveal } from './LoversReveal';
 import { Button, Sheet } from '../shared/ui';
 
 const SINGLE_FIELD: Partial<Record<NightActionKind, NightActionField>> = {
@@ -51,6 +53,11 @@ const ACCENT: Partial<Record<NightActionKind, 'village' | 'wolf' | 'vampire' | '
   leprechaunRedirect: 'cult',
 };
 
+type Translate = ReturnType<typeof useI18n>['t'];
+
+/** A call's name: its role's, or "The Lovers" for their meeting. */
+const stepName = (t: Translate, step: NightStep) => (step.action === 'loversMeet' ? t('night.lovers') : t(`role.${step.roleId}.name`));
+
 /** Step-by-step wake-up assistant. Low-contrast cyan UI so it doesn't light faces in a dark room. */
 export function NightActionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
@@ -72,7 +79,7 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
               key={s.id}
               type="button"
               onClick={() => night.goTo(i)}
-              aria-label={t(`role.${s.roleId}.name`)}
+              aria-label={stepName(t, s)}
               className={clsx(
                 'h-1.5 flex-1 rounded-full transition-colors',
                 // A wider gap marks where each block of the night begins.
@@ -100,7 +107,7 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
         {step && (
           <p className="mb-3 flex items-center gap-2 text-sm italic text-village/80">
             <EyeOff className="h-4 w-4 shrink-0" />
-            {t('night.close', { role: t(`role.${step.roleId}.name`) })}
+            {t('night.close', { role: stepName(t, step) })}
           </p>
         )}
         <div className="flex gap-3">
@@ -137,8 +144,8 @@ const SEDUCED_NOTE: Partial<Record<NightActionKind, 'Pack' | 'BigBadWolf' | 'Ins
 };
 
 /** Scripts for calls that aren't a role's own night power. */
-const STEP_SCRIPT: Partial<Record<NightActionKind, 'night.script.cursed' | 'night.script.doppelganger' | 'night.script.bigBadWolf' | 'night.script.hunter'>> = {
-  cursedAwaken: 'night.script.cursed',
+const STEP_SCRIPT: Partial<Record<NightActionKind, 'night.script.lovers' | 'night.script.doppelganger' | 'night.script.bigBadWolf' | 'night.script.hunter'>> = {
+  loversMeet: 'night.script.lovers',
   doppelgangerAwaken: 'night.script.doppelganger',
   bigBadWolfStrike: 'night.script.bigBadWolf',
   hunterLink: 'night.script.hunter',
@@ -149,7 +156,7 @@ function StepView({ step }: { step: NightStep }) {
   const engine = useGameEngine();
   const night = useNightSequence();
   const { state, byId } = engine;
-  const roleName = t(`role.${step.roleId}.name`);
+  const roleName = stepName(t, step);
   const actors = step.actors.map((id) => byId.get(id)).filter((p): p is Player => !!p);
   const scriptKey = STEP_SCRIPT[step.action];
   const script = scriptKey ? t(scriptKey) : t(`role.${step.roleId}.script`);
@@ -175,6 +182,9 @@ function StepView({ step }: { step: NightStep }) {
       {step.ghost && <Notice icon={<Ghost className="h-4 w-4" />}>{t('night.ghost')}</Notice>}
       {step.note === 'wolvesSkip' && <Notice tone="ember">{t('night.wolvesSkip')}</Notice>}
       {step.note === 'wolvesDouble' && !step.ghost && <Notice tone="wolf">{t('night.wolvesDouble')}</Notice>}
+      {!!step.joining?.length && !step.ghost && (
+        <Notice tone="wolf">{t('night.cursedJoins', { names: step.joining.map((id) => byId.get(id)?.name ?? '?').join(', ') })}</Notice>
+      )}
       {step.note === 'noPotions' && !step.ghost && <Notice>{t('night.noPotions')}</Notice>}
       {step.note === 'bigBadWolf' && !step.ghost && <Notice tone="wolf">{t('night.bigBadWolf')}</Notice>}
       {step.note === 'fruitBrute' && <Notice tone="ember">{t('night.fruitBrute')}</Notice>}
@@ -394,12 +404,13 @@ function Notice({ children, icon, tone = 'village' }: { children: ReactNode; ico
 function InfoPanel({ step }: { step: NightStep }) {
   const { t } = useI18n();
   const { alive, byId } = useGameEngine();
-  if (step.action === 'cursedAwaken' || step.action === 'doppelgangerAwaken') {
+  if (step.action === 'loversMeet') return <LoversPanel />;
+  if (step.action === 'doppelgangerAwaken') {
     // Woken to learn the role they changed into: show it to them.
     const woken = step.actors.map((id) => byId.get(id)).filter((p): p is Player => !!p);
     return (
       <div className="space-y-3">
-        <p className="text-xs uppercase tracking-wide text-bone-dim">{t(step.action === 'cursedAwaken' ? 'night.cursedShow' : 'night.doppelgangerShow')}</p>
+        <p className="text-xs uppercase tracking-wide text-bone-dim">{t('night.doppelgangerShow')}</p>
         {woken.map((p) => (
           <div key={p.id} className="flex items-center gap-3">
             <RoleCard roleId={p.roleId} size="sm" showWeight={false} />
@@ -427,6 +438,24 @@ function InfoPanel({ step }: { step: NightStep }) {
 }
 
 /** The pack's (first) victim, for the calls that act around it: Leprechaun, Big Bad Wolf. */
+/** The Lovers' call: opens a full-screen view of just the two of them, to show the Lovers. */
+function LoversPanel() {
+  const { t } = useI18n();
+  const { state, byId } = useGameEngine();
+  const [showing, setShowing] = useState(false);
+  const lovers = state.nightActions.cupidTargets.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+  if (lovers.length !== 2) return <Notice>{t('night.loversNone')}</Notice>;
+  return (
+    <div className="space-y-2">
+      <Button variant="village" size="lg" block onClick={() => setShowing(true)} icon={<Heart className="h-5 w-5" />}>
+        {t('night.loversShow')}
+      </Button>
+      <p className="text-xs text-bone-faint">{t('night.loversHint')}</p>
+      {showing && <LoversReveal lovers={lovers} rules={state.rules} onClose={() => setShowing(false)} />}
+    </div>
+  );
+}
+
 function WolfTargetSummary({ step }: { step: NightStep }) {
   const { t } = useI18n();
   const { state, byId } = useGameEngine();
@@ -463,8 +492,8 @@ function TroublemakerToggle({ step }: { step: NightStep }) {
 function DrunkRolePicker() {
   const { t } = useI18n();
   const engine = useGameEngine();
-  const chosen = engine.state.nightActions.drunkRole;
-  const options = ROLE_ORDER.filter((id) => id !== 'drunk');
+  const { drunkRole: chosen } = engine.state.nightActions;
+  const options = drunkRoleOptions(engine.state.rules);
   return (
     <div>
       <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">{t('night.drunkPick')}</p>
