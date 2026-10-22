@@ -88,7 +88,7 @@ describe('night resolution', () => {
   it('gives the wolves two kills after the Wolf Cub dies', () => {
     let s = game(['werewolf', 'wolfCub', 'villager', 'villager', 'villager', 'villager', 'villager']);
     s = rules.startDay(rules.resolveNight(s));
-    s = rules.nominate(s, 'p1', []);
+    s = rules.nominate(s, 'p1');
     s = rules.executeNomination(s, s.nominations[0].id);
     s = rules.startNight(s);
     expect(rules.buildNightSteps(s).find((x) => x.action === 'wolfKill')?.targetCount).toBe(2);
@@ -107,7 +107,7 @@ describe('night resolution', () => {
 describe('day & win conditions', () => {
   it('lets the Prince survive their first vote', () => {
     let s = rules.startDay(rules.resolveNight(game(['werewolf', 'prince', 'villager', 'villager', 'villager'])));
-    s = rules.nominate(s, 'p1', []);
+    s = rules.nominate(s, 'p1');
     s = rules.executeNomination(s, s.nominations[0].id);
     expect(alive(s, 'p1')).toBe(true);
     expect(s.players[1].status.princeRevealed).toBe(true);
@@ -117,7 +117,7 @@ describe('day & win conditions', () => {
     let s = game(['werewolf', 'vampire', 'villager', 'villager', 'villager', 'villager', 'villager']);
     s = rules.startDay(rules.resolveNight(withActions(s, { vampireTarget: 'p2' })));
     expect(alive(s, 'p2')).toBe(true);
-    s = rules.nominate(s, 'p3', []);
+    s = rules.nominate(s, 'p3');
     expect(alive(s, 'p2')).toBe(false);
   });
 
@@ -160,7 +160,7 @@ describe('v0.1.0 mechanics', () => {
 
   it('never counts the accused voting on their own nomination', () => {
     let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager'])));
-    s = rules.nominate(s, 'p0', ['p1']);
+    s = rules.nominate(s, 'p0');
     s = rules.setVoters(s, s.nominations[0].id, ['p0', 'p1', 'p2', 'p2']);
     expect(s.nominations[0].voters).toEqual(['p1', 'p2']);
   });
@@ -169,16 +169,21 @@ describe('v0.1.0 mechanics', () => {
     let s = game(['werewolf', 'seer', 'villager', 'villager', 'villager']);
     s = rules.resolveNight(withActions(s, { wolfTargets: ['p2'], seerTarget: 'p0' }));
     s = rules.startDay(s);
-    s = rules.nominate(s, 'p0', ['p1']);
+    s = rules.nominate(s, 'p0');
+    // P2 was killed in the night, so can't vote.
+    s = rules.setVoters(s, s.nominations[0].id, ['p1', 'p2', 'p3']);
     s = rules.executeNomination(s, s.nominations[0].id);
     const tx = (key: string, params?: Record<string, string | number>) =>
       key + (params ? ' ' + Object.entries(params).map(([k, v]) => `${k}=${v}`).join(' ') : '');
     const groups = groupTimeline(s.log, tx);
     expect(groups.map((g) => g.label)).toEqual(['phase.nightN round=1', 'phase.dayN round=1', 'phase.gameOver']);
-    // One line for the vote, carrying its accuser.
-    const vote = s.log.find((e) => e.key === 'log.eliminated.voteAccused')!;
+    // One line for the vote, carrying its voters.
+    const vote = s.log.find((e) => e.key === 'log.eliminated.voteVoted')!;
     expect(formatTimelineEntry(vote, tx)).toContain('name=P0 role=role.werewolf.name');
-    expect(vote.people).toEqual([{ name: 'P1', role: 'seer' }]);
+    expect(vote.people).toEqual([
+      { name: 'P1', role: 'seer' },
+      { name: 'P3', role: 'villager' },
+    ]);
   });
 
   it('keeps lifetime stats right when a game is re-recorded with a new winner', () => {
@@ -211,7 +216,7 @@ describe('expansion roles', () => {
 
   it('ends the game with a Tanner win when the Tanner is eliminated', () => {
     let s = day(game(['werewolf', 'tanner', 'villager', 'villager', 'villager']));
-    s = rules.nominate(s, 'p1', []);
+    s = rules.nominate(s, 'p1');
     s = rules.executeNomination(s, s.nominations[0].id);
     expect(s.winner).toEqual({ team: 'tanner', winnerIds: ['p1'] });
   });
@@ -282,7 +287,7 @@ describe('expansion roles', () => {
   it('applies Mayor, Village Idiot, Pacifist and Old Hag voting rules', () => {
     let s = game(['werewolf', 'mayor', 'villageIdiot', 'pacifist', 'oldHag', 'villager', 'villager']);
     s = day(withActions(s, { oldHagTarget: 'p5' }));
-    s = rules.nominate(s, 'p0', []);
+    s = rules.nominate(s, 'p0');
     const nom = s.nominations[0];
     expect(nom.voters).toEqual(['p2']); // the Idiot is forced in
     s = rules.setVoters(s, nom.id, ['p1', 'p3', 'p5']);
@@ -294,10 +299,10 @@ describe('expansion roles', () => {
   it('allows two eliminations the day after the Troublemaker acts', () => {
     let s = day(withActions(game(['werewolf', 'troublemaker', 'villager', 'villager', 'villager', 'villager', 'villager']), { troublemakerActor: 'p1' }));
     expect(s.executionsLeft).toBe(2);
-    s = rules.nominate(s, 'p2', []);
+    s = rules.nominate(s, 'p2');
     s = rules.executeNomination(s, s.nominations[0].id);
     expect(s.dayStep).toBe('voting');
-    s = rules.nominate(s, 'p3', []);
+    s = rules.nominate(s, 'p3');
     s = rules.executeNomination(s, s.nominations[0].id);
     expect(s.dayStep).toBe('closed');
   });
@@ -360,40 +365,105 @@ describe('the Couple', () => {
 });
 
 describe('accusations', () => {
-  it('records several accusers, ignoring the accused and duplicates', () => {
+  it('logs an execution once, with everyone who voted for it', () => {
     let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager'])));
-    s = rules.nominate(s, 'p0', ['p1', 'p2', 'p2', 'p0']);
-    expect(s.nominations[0].accuserIds).toEqual(['p1', 'p2']);
-    // No line per accuser: the accusation is logged once it ends.
+    s = rules.nominate(s, 'p0');
+    // No line when the accusation opens: it is logged once it ends.
     expect(s.log.some((e) => e.key.startsWith('log.nominated'))).toBe(false);
-    const executed = rules.executeNomination(s, s.nominations[0].id).log.find((e) => e.key === 'log.eliminated.voteAccused')!;
-    expect(executed.params?.accusers).toBe(2);
+    s = rules.setVoters(s, s.nominations[0].id, ['p2', 'p1', 'p2', 'p0']);
+    const executed = rules.executeNomination(s, s.nominations[0].id).log.find((e) => e.key === 'log.eliminated.voteVoted')!;
+    expect(executed.params?.voters).toBe(2);
     expect(executed.people).toEqual([
-      { name: 'P1', role: 'seer' },
       { name: 'P2', role: 'villager' },
+      { name: 'P1', role: 'seer' },
     ]);
   });
 
-  it('logs withdrawn and dropped accusations once, and plain wording without accusers', () => {
+  it('names the voters when the Prince survives the vote', () => {
+    let s = rules.startDay(rules.resolveNight(game(['werewolf', 'prince', 'villager', 'villager', 'villager'])));
+    s = rules.nominate(s, 'p1');
+    s = rules.setVoters(s, s.nominations[0].id, ['p0', 'p2', 'p3']);
+    s = rules.executeNomination(s, s.nominations[0].id);
+    expect(s.log.at(-1)).toMatchObject({ key: 'log.princeRevealedVoted', params: { voters: 3 } });
+    expect(s.log.at(-1)?.people).toHaveLength(3);
+  });
+
+  it('logs withdrawn and dropped accusations once, without voters', () => {
     let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'])));
-    s = rules.nominate(s, 'p2', ['p1']);
+    s = rules.nominate(s, 'p2');
+    s = rules.setVoters(s, s.nominations[0].id, ['p1']);
     s = rules.removeNomination(s, s.nominations[0].id);
-    expect(s.log.at(-1)).toMatchObject({ key: 'log.accusationWithdrawnAccused', people: [{ name: 'P1', role: 'seer' }] });
-    s = rules.nominate(s, 'p3', []);
+    expect(s.log.at(-1)?.key).toBe('log.accusationWithdrawn');
+    expect(s.log.at(-1)?.people).toBeUndefined();
+    s = rules.nominate(s, 'p3');
     s = rules.closeDayWithoutExecution(s);
     expect(s.log.slice(-2).map((e) => e.key)).toEqual(['log.accusationWithdrawn', 'log.noExecution']);
     expect(s.log.at(-2)?.people).toBeUndefined();
+  });
+
+  it('still renders accusers in timelines logged before v1.1.0', () => {
+    const legacy = {
+      id: 'l',
+      round: 1,
+      phase: 'day' as const,
+      key: 'log.eliminated.voteAccused',
+      params: { name: 'P0', role: 'werewolf', accusers: 2 },
+      people: [
+        { name: 'P1', role: 'seer' as const },
+        { name: 'P2', role: 'villager' as const },
+      ],
+    };
+    const tx = (key: string, params?: Record<string, string | number>) =>
+      key === 'log.eliminated.voteAccused' ? '{name} ({role}) was executed by vote (accused by {accusers})' : key + (params?.count ?? '');
+    const parts = timelineParts(legacy, tx);
+    expect(parts.find((p) => p.people)).toMatchObject({ text: 'log.accusers2', peopleTitle: 'log.accusersTitle' });
+  });
+});
+
+describe('fresh deaths', () => {
+  it("marks last night's deaths at dawn, and only until the day starts", () => {
+    let s = game(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { wolfTargets: ['p2'] }));
+    expect(rules.freshDeaths(s)).toEqual({ phase: 'night', ids: new Set(['p2']) });
+    s = rules.startDay(s);
+    expect(rules.freshDeaths(s)).toBeNull();
+  });
+
+  it("marks today's deaths once the day is over, not last night's", () => {
+    let s = game(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager', 'villager']);
+    s = rules.startDay(rules.resolveNight(withActions(s, { wolfTargets: ['p2'] })));
+    s = rules.nominate(s, 'p3');
+    s = rules.setVoters(s, s.nominations[0].id, ['p0', 'p1', 'p4', 'p5']);
+    s = rules.executeNomination(s, s.nominations[0].id);
+    expect(s.dayStep).toBe('closed');
+    expect(rules.freshDeaths(s)).toEqual({ phase: 'day', ids: new Set(['p3']) });
+  });
+});
+
+describe('the day is over', () => {
+  it("names who the vote's victim took down with them, but not unrelated deaths", () => {
+    let s = game(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager', 'villager']);
+    s = rules.startDay(rules.resolveNight(withActions(s, { wolfTargets: ['p6'] })));
+    s.players[2].status.lover = true;
+    s.players[3].status.lover = true;
+    // The moderator removes someone by hand: not part of the vote's fallout.
+    s = rules.moderatorEliminate(s, 'p5');
+    s = rules.nominate(s, 'p2');
+    s = rules.setVoters(s, s.nominations[0].id, ['p0', 'p1', 'p4']);
+    s = rules.executeNomination(s, s.nominations[0].id);
+    expect(s.players[3].eliminated?.cause).toBe('heartbreak');
+    expect(rules.dayCascadeDeaths(s).map((p) => p.id)).toEqual(['p3']);
   });
 });
 
 describe('one nomination per day', () => {
   it('refuses a second nomination until the first is withdrawn', () => {
     let s = rules.startDay(rules.resolveNight(game(['werewolf', 'seer', 'villager', 'villager', 'villager'])));
-    s = rules.nominate(s, 'p0', []);
+    s = rules.nominate(s, 'p0');
     expect(rules.canNominate(s)).toBe(false);
-    expect(rules.nominate(s, 'p1', []).nominations.map((n) => n.accusedId)).toEqual(['p0']);
+    expect(rules.nominate(s, 'p1').nominations.map((n) => n.accusedId)).toEqual(['p0']);
     s = rules.removeNomination(s, s.nominations[0].id);
-    s = rules.nominate(s, 'p1', []);
+    s = rules.nominate(s, 'p1');
     expect(s.nominations.map((n) => n.accusedId)).toEqual(['p1']);
   });
 });
@@ -568,7 +638,7 @@ describe('recommended rebalances', () => {
     expect(seduced.pendingTriggers).toEqual([]);
     // Dying by day under the house rule takes no one.
     const voted = rules.startDay(rules.resolveNight(s));
-    expect(rules.executeNomination(rules.nominate(voted, 'p1', []), rules.nominate(voted, 'p1', []).nominations[0].id).pendingTriggers).toEqual([]);
+    expect(rules.executeNomination(rules.nominate(voted, 'p1'), rules.nominate(voted, 'p1').nominations[0].id).pendingTriggers).toEqual([]);
     // Standard rules keep the shot.
     expect(rules.resolveNight(withActions(game(deck), { wolfTargets: ['p1'] })).pendingTriggers).toHaveLength(1);
   });
@@ -613,7 +683,7 @@ describe('recommended rebalances', () => {
     expect(['p2', 'p4', 'p7'].map((id) => alive(seduced, id))).toEqual([false, false, true]);
     // Eliminated by vote, the reworked Tanner simply dies: no Tanner win.
     let voted = rules.startDay(rules.resolveNight(game(deck, { tanner: true })));
-    voted = rules.executeNomination(rules.nominate(voted, 'p2', []), rules.nominate(voted, 'p2', []).nominations[0].id);
+    voted = rules.executeNomination(rules.nominate(voted, 'p2'), rules.nominate(voted, 'p2').nominations[0].id);
     expect(voted.winner).toBeNull();
     const wolvesGone = voted.players.map((p) => (p.id === 'p0' || p.id === 'p1' ? { ...p, alive: false } : p));
     expect(rules.evaluateWinner({ players: wolvesGone, rules: { ...NO_REBALANCES, tanner: true } })?.winnerIds).toContain('p2');
@@ -752,6 +822,32 @@ describe('house-rule snapshot & setup', () => {
     expect(next.setup.names).toEqual(['An', '', 'Binh', 'Chi', 'Dung']);
     expect(next.setup.experience).toBe('veteran');
     expect(next.setup.deck).toEqual([]);
+    expect(next.setup.step ?? 'players').toBe('players');
+  });
+
+  it('rematches the same lineup straight onto the Deal board', () => {
+    let s = gameReducer(createInitialState(), { type: 'UPDATE_SETUP', patch: { experience: 'veteran', pool: ['werewolf', 'seer', 'witch', 'villager'] } });
+    const players = game(['seer', 'werewolf', 'cursed', 'villager', 'villager']).players;
+    s = gameReducer(s, { type: 'START_GAME', players, rules: NO_REBALANCES });
+    // Play changed a role: the rematch deals the original card again.
+    s = { ...s, phase: 'gameOver', players: s.players.map((p) => (p.roleId === 'cursed' ? { ...p, roleId: 'werewolf', alive: false } : p)) };
+    const next = gameReducer(s, { type: 'REMATCH' });
+    expect(next.phase).toBe('setup');
+    expect(next.log).toEqual([]);
+    expect(next.setup.step).toBe('deal');
+    expect(next.setup.names).toEqual(players.map((p) => p.name));
+    expect([...next.setup.deck].sort()).toEqual(['cursed', 'seer', 'villager', 'villager', 'werewolf']);
+    expect(next.setup.deal?.slots).toEqual([null, null, null, null, null]);
+    expect(next.setup.pool).toEqual(expect.arrayContaining(['witch', 'cursed']));
+    expect(next.setup.experience).toBe('veteran');
+  });
+
+  it('rematches onto the Deck step when the deck breaks the current rules', () => {
+    let s = gameReducer(createInitialState(), { type: 'START_GAME', players: game(['seer', 'werewolf', 'vampire', 'cultLeader', 'villager']).players, rules: NO_REBALANCES });
+    s = { ...s, phase: 'gameOver' };
+    const next = gameReducer(s, { type: 'REMATCH' });
+    expect(next.setup.step).toBe('deck');
+    expect(next.setup.deal).toBeNull();
   });
 
   it('splits timeline lines around role and team names, so they can be coloured', () => {

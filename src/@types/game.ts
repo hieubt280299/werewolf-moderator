@@ -276,8 +276,6 @@ export interface PendingTrigger {
 export interface Nomination {
   id: string;
   accusedId: string;
-  /** Everyone who joined the accusation (may be empty). */
-  accuserIds: string[];
   /** Player ids voting to eliminate. */
   voters: string[];
 }
@@ -289,7 +287,7 @@ export interface GameLogEntry {
   /** i18n key, rendered at display time so the log follows the language toggle. */
   key: string;
   params?: Record<string, string | number>;
-  /** Players behind the event, e.g. everyone who accused a nominee (shown on demand). */
+  /** Players behind the event, e.g. everyone who voted to eliminate (shown on demand). */
   people?: { name: string; role: RoleId }[];
 }
 
@@ -458,6 +456,8 @@ export interface GameRecord {
   finishedAt: string;
   rounds: number;
   poolName: string | null;
+  /** The game's Role Pool, for "Start new game from lineup". Missing on games before v1.1.0. */
+  pool?: RoleId[];
   winner: WinTeam;
   players: GameRecordPlayer[];
   /** Seat indexes of the winning players. */

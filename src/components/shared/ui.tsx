@@ -53,13 +53,18 @@ interface SheetProps {
   /** Night sheets stay low-contrast so they don't light up faces in the dark. */
   tone?: 'night' | 'day' | 'neutral';
   closeLabel?: string;
+  /**
+   * Pinned under the scrolling content (action buttons). Outside the scroll area, so content
+   * never shows below or through it.
+   */
+  footer?: ReactNode;
 }
 
 /**
  * Mobile bottom sheet; a centred dialog on wide screens. Pure CSS keyframes
  * (translate3d/opacity), kept mounted just long enough to play the exit animation.
  */
-export function Sheet({ open, onClose, title, children, tone = 'neutral', closeLabel = 'Close' }: SheetProps) {
+export function Sheet({ open, onClose, title, children, tone = 'neutral', closeLabel = 'Close', footer }: SheetProps) {
   const [mounted, setMounted] = useState(open);
   // Mount in the same render that opens (not an effect afterwards), so the sheet starts
   // animating one commit sooner.
@@ -108,7 +113,10 @@ export function Sheet({ open, onClose, title, children, tone = 'neutral', closeL
             )}
           </div>
         )}
-        <div className="overflow-y-auto overscroll-contain px-5 pb-safe">{children}</div>
+        <div className={clsx('overflow-y-auto overscroll-contain px-5', footer ? 'pb-2' : 'pb-safe')}>{children}</div>
+        {footer && (
+          <div className={clsx('shrink-0 border-t px-5 pb-safe pt-3', tone === 'night' ? 'border-village/15' : 'border-panel-edge')}>{footer}</div>
+        )}
       </div>
     </div>,
     document.body,

@@ -1,5 +1,6 @@
 import { RotateCcw, Sparkles, Trophy } from 'lucide-react';
 import type { WinResult, WinTeam } from '../../@types/game';
+import { useAuth } from '../../context/AuthContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
 import { RoleCard } from '../shared/RoleCard';
@@ -22,6 +23,7 @@ const TEAM_TONE: Record<WinTeam, Tone | null> = {
 export function GameOverPanel({ winner }: { winner: WinResult }) {
   const { t } = useI18n();
   const engine = useGameEngine();
+  const { profile } = useAuth();
   const tone = TEAM_TONE[winner.team];
   const winners = new Set(winner.winnerIds);
 
@@ -55,7 +57,7 @@ export function GameOverPanel({ winner }: { winner: WinResult }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Button variant="village" size="lg" onClick={engine.rematch} icon={<RotateCcw className="h-4 w-4" />}>
+        <Button variant="village" size="lg" onClick={() => engine.rematch(profile?.rebalances)} icon={<RotateCcw className="h-4 w-4" />}>
           {t('win.rematch')}
         </Button>
         <Button size="lg" onClick={engine.newGame}>

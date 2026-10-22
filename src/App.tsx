@@ -103,7 +103,7 @@ function Shell() {
           {view === 'home' && <DashboardHome onNavigate={navigate} onOpenSettings={openSettings} />}
           {view === 'game' && (state.phase === 'setup' ? <SetupScreen /> : <ModeratorDashboard />)}
           {view === 'pools' && <PoolBuilder />}
-          {view === 'history' && <HistoryStats />}
+          {view === 'history' && <HistoryStats onNavigate={navigate} />}
         </Suspense>
       </main>
       <ProfileSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />

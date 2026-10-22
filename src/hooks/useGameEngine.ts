@@ -83,8 +83,8 @@ export function useGameEngine() {
       /** Wolverine's tell, played aloud at dawn. */
       playMetallic: () => playCue('metal'),
       startDay: () => dispatch({ type: 'START_DAY' }),
-      nominate: (accusedId: string, accuserIds: string[]) => {
-        dispatch({ type: 'NOMINATE', accusedId, accuserIds });
+      nominate: (accusedId: string) => {
+        dispatch({ type: 'NOMINATE', accusedId });
         playCue('vote');
       },
       setVoters: (nominationId: string, voters: string[]) => dispatch({ type: 'SET_VOTERS', nominationId, voters }),
@@ -103,7 +103,7 @@ export function useGameEngine() {
         playCue('death');
       },
       revive: (playerId: string) => dispatch({ type: 'REVIVE', playerId }),
-      rematch: () => dispatch({ type: 'REMATCH' }),
+      rematch: (rules?: Partial<RebalanceRules> | null) => dispatch({ type: 'REMATCH', rules }),
       newGame: () => dispatch({ type: 'NEW_GAME' }),
       undo: () => dispatch({ type: 'UNDO' }),
     }),

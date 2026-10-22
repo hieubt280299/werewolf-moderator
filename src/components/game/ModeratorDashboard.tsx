@@ -1,10 +1,13 @@
 import clsx from 'clsx';
 import { Biohazard, FlaskConical, Moon, PawPrint, ScrollText, Sun, Users } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Player } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useListMotion } from '../../hooks/useListMotion';
+import { useBoardView } from '../../hooks/useSeatMapPrefs';
 import { useI18n } from '../../i18n/I18nContext';
+import { freshDeaths } from '../../utils/gameRules';
+import { BoardViewSwitch, SeatMap } from '../dashboard/SeatMap';
 import { Button, Chip, SectionTitle } from '../shared/ui';
 import { TimelinePanel } from './TimelineView';
 import { DawnReport } from './DawnReport';
@@ -28,6 +31,7 @@ export function ModeratorDashboard() {
   const [inspected, setInspected] = useState<string | null>(null);
   const lastNight = useRef<number | null>(null);
   const gridRef = useListMotion<HTMLDivElement>(260);
+  const [view, setView] = useBoardView();
 
   // Open the wake-up assistant automatically each time a new night begins.
   useEffect(() => {
@@ -46,6 +50,8 @@ export function ModeratorDashboard() {
   const isDay = state.phase === 'day' || state.phase === 'dawn';
   const inspectedPlayer = state.players.find((p) => p.id === inspected) ?? null;
   const shieldedId = isNight ? state.nightActions.bodyguardTarget : null;
+  const fresh = useMemo(() => freshDeaths(state), [state]);
+  const diedLabel = fresh ? t(fresh.phase === 'night' ? 'status.diedNight' : 'status.diedDay') : undefined;
 
   return (
     <div
@@ -112,19 +118,38 @@ export function ModeratorDashboard() {
           <section>
             <SectionTitle
               aside={
-                <span className="flex items-center gap-1.5 text-xs text-bone-dim">
-                  <Users className="h-3.5 w-3.5" />
-                  {t('dash.alive', { alive: alive.length, total: state.players.length })}
+                <span className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5 text-xs text-bone-dim">
+                    <Users className="h-3.5 w-3.5" />
+                    {t('dash.alive', { alive: alive.length, total: state.players.length })}
+                  </span>
+                  <BoardViewSwitch view={view} onChange={setView} />
                 </span>
               }
             >
               {t('dash.players')}
             </SectionTitle>
-            <div ref={gridRef} className="relative grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {sortForGrid(state.players).map((p) => (
-                <PlayerTile key={p.id} player={p} shielded={p.id === shieldedId} onInspect={inspect} />
-              ))}
-            </div>
+            {view === 'list' ? (
+              <div ref={gridRef} className="relative grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {sortForGrid(state.players, fresh?.ids).map((p) => (
+                  <PlayerTile
+                    key={p.id}
+                    player={p}
+                    shielded={p.id === shieldedId}
+                    diedLabel={fresh?.ids.has(p.id) ? diedLabel : undefined}
+                    onInspect={inspect}
+                  />
+                ))}
+              </div>
+            ) : (
+              <SeatMap
+                players={state.players}
+                shieldedId={shieldedId}
+                freshIds={fresh?.ids}
+                onSelect={inspect}
+                centerLabel={t('dash.alive', { alive: alive.length, total: state.players.length })}
+              />
+            )}
 
             <TimelinePanel log={state.log} />
           </section>
@@ -138,8 +163,11 @@ export function ModeratorDashboard() {
   );
 }
 
-/** Living players first in seat order; the dead sink to the bottom. */
-const sortForGrid = (players: Player[]) => [...players].sort((a, b) => Number(b.alive) - Number(a.alive) || a.seat - b.seat);
+/** Living players first in seat order, then the phase's fresh deaths; earlier deaths sink to the bottom. */
+const sortForGrid = (players: Player[], fresh?: ReadonlySet<string>) => {
+  const rank = (p: Player) => (p.alive ? 0 : fresh?.has(p.id) ? 1 : 2);
+  return [...players].sort((a, b) => rank(a) - rank(b) || a.seat - b.seat);
+};
 
 function PanelHeading({ icon, title }: { icon: ReactNode; title: string }) {
   return (

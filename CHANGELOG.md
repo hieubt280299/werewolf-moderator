@@ -3,6 +3,39 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - Unreleased
+
+Implements [`UPDATE_v1.1.0.md`](UPDATE_v1.1.0.md).
+
+### Added
+- **Seat map:** the moderator board's Players section switches between the list and a seat map. The map shows the players round the table in seat order (seat 1 at the top, then clockwise). Each seat shows its number, the player's name, their role in the team's colour and the role's portrait. Tapping a seat opens the same player sheet as the list.
+  - Turn the table with a drag (touch or mouse) or the arrow keys, or with **Rotate −90°**, **Rotate +90°** and **Reset orientation**. Names and roles stay upright while it turns.
+  - The night script's player choices (every call that picks players, and the Witch's poison) offer the same list / seat map switch. Only the players the call can pick are tappable; picked seats are ringed in the call's colour, and locked seats (the Bodyguard's last protégé, the Hooker's past visits) show a lock with the reason under the map.
+  - One view and one orientation for the whole app: switching or turning the table in the night script changes the board too, and the other way round. Both are remembered on the device.
+  - Large tables alternate seats between two rings so every seat stays readable.
+- **Start new game from lineup:** a finished game's breakdown in History has a button that starts a new game with the same players in the same seats and the same cards and pool. Nothing else carries over: no deaths, night actions or timeline. The game opens on the Deal step with every card back in the tray. Back leads to the Deck and Role Pool steps. If the lineup breaks today's deck rules, such as a fourth team, it opens on the Deck step instead, where the problem is shown.
+- **Records** in History, from the games in the history list:
+  - most played role (Villagers and Werewolves are left out, since nearly every game has them)
+  - role with the most wins
+  - highest win rate (roles with 3 or more wins only)
+  - Role records count games, not cards: two Werewolves in one game are one game played, and one win if they win.
+  - longest game (most nights)
+  - game with the most players
+  - Up to three tied holders are shown side by side, and a note counts any more ties. Tapping a role opens its card; tapping a game opens its breakdown.
+
+### Changed
+- **Timeline names the voters, not the accusers:** an execution reads e.g. "D (Spellcaster) was executed by vote (voted by 5 people)", and hovering or tapping "5 people" lists who voted, with their roles. A Prince surviving the vote gets the same. A withdrawn or dropped accusation had no vote, so its line names no one.
+  - The optional "Accused by" picker is gone from the accusation sheet, and so is the "Accused by N players" line on the vote.
+  - Timelines logged before this version still show their "(accused by …)" lines.
+- **Rematch** at the end of a game works like "Start new game from lineup": the same players in the same seats with the same cards and pool, straight onto the Deal board (or the Deck step if the deck breaks today's rules). **New Game** stays the clean start: the names and pool are kept, the deck is chosen again from the Players step.
+- **Fresh deaths stand out:** at dawn, the players who died in the night are tagged "Died last night"; once the day is over, the day's deaths are tagged "Died today" (and the last phase's when the game ends). They keep their colours with a red glow and sit right after the living players, while earlier deaths stay grey at the bottom. On the seat map they are ringed in red. The tag goes once the next phase starts.
+- **The day is over** also names anyone the vote's victim took down with them (a broken-hearted lover, a link, the Hunter's shot): "Also eliminated: …", without the reason.
+- **Victory split** shows each team's percentage next to its count, e.g. "Village wins: 65% (13/20)".
+- History roster: players are listed in seat order with their seat number, and role names are tinted in their team's colour.
+- **Night script:** the Back / Next buttons sit in a footer outside the scrolling content, so a long step (e.g. with the Seer's result) no longer shows players underneath or through them.
+- Finished games now record their Role Pool, which "Start new game from lineup" restores. Older games fall back to the roles that were dealt.
+- **Vietnamese:** "grimoire" is now **Cuốn bí kíp** ("Cuốn bí kíp của quản trò", "Đang mở Cuốn bí kíp…").
+
 ## [1.0.1] - Unreleased
 
 ### Added

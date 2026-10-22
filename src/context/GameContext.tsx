@@ -21,7 +21,7 @@ import {
   type RoleId,
   type SetupDraft,
 } from '../@types/game';
-import { buildGameRecord, createId, EMPTY_STATUS } from '../utils/gameCalculations';
+import { buildGameRecord, checkLineup, createId, EMPTY_STATUS, lineupOf } from '../utils/gameCalculations';
 import * as rules from '../utils/gameRules';
 import { readJSON, STORAGE_KEYS, writeJSON } from '../utils/storage';
 import { useAuth } from './AuthContext';
@@ -40,7 +40,7 @@ export type GameAction =
   | { type: 'SET_TARGET_LIST'; field: NightTargetListField; targets: string[] }
   | { type: 'RESOLVE_NIGHT' }
   | { type: 'START_DAY' }
-  | { type: 'NOMINATE'; accusedId: string; accuserIds: string[] }
+  | { type: 'NOMINATE'; accusedId: string }
   | { type: 'SET_VOTERS'; nominationId: string; voters: string[] }
   | { type: 'REMOVE_NOMINATION'; nominationId: string }
   | { type: 'EXECUTE'; nominationId: string }
@@ -48,8 +48,11 @@ export type GameAction =
   | { type: 'HUNTER_SHOT'; triggerId: string; targetId: string | null }
   | { type: 'MOD_ELIMINATE'; playerId: string }
   | { type: 'REVIVE'; playerId: string }
-  | { type: 'REMATCH' }
+  /** Same lineup again, on the Deal board. `rules` are the moderator's house rules for the next deal. */
+  | { type: 'REMATCH'; rules?: Partial<RebalanceRules> | null }
   | { type: 'NEW_GAME' }
+  /** A fresh game from a past game's lineup (names, seats, cards), opened on the Deal board. */
+  | { type: 'LOAD_LINEUP'; setup: Partial<SetupDraft> }
   | { type: 'HYDRATE'; state: GameState }
   | { type: 'MARK_RECORDED' }
   | { type: 'UNDO' };
@@ -57,7 +60,7 @@ export type GameAction =
 /** Actions worth an undo checkpoint. Fine-grained edits (votes, night picks) are not. */
 const UNDOABLE = new Set<GameAction['type']>([
   'START_GAME', 'START_NIGHT', 'RESOLVE_NIGHT', 'START_DAY', 'NOMINATE', 'REMOVE_NOMINATION',
-  'EXECUTE', 'CLOSE_DAY', 'HUNTER_SHOT', 'MOD_ELIMINATE', 'REVIVE', 'REMATCH', 'NEW_GAME',
+  'EXECUTE', 'CLOSE_DAY', 'HUNTER_SHOT', 'MOD_ELIMINATE', 'REVIVE', 'REMATCH', 'NEW_GAME', 'LOAD_LINEUP',
 ]);
 const HISTORY_LIMIT = 40;
 /** Quiet period before the game is written to localStorage. */
@@ -143,10 +146,7 @@ export function normalizeGameState(s: GameState): GameState {
     modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
     lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
     players: s.players.map((p) => ({ ...p, status: { ...EMPTY_STATUS, ...p.status } })),
-    nominations: (s.nominations ?? []).map((n) => {
-      const legacy = n as typeof n & { accuserId?: string | null };
-      return { ...n, accuserIds: n.accuserIds ?? (legacy.accuserId ? [legacy.accuserId] : []) };
-    }),
+    nominations: s.nominations ?? [],
   };
 }
 
@@ -203,7 +203,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_DAY':
       return rules.startDay(state);
     case 'NOMINATE':
-      return rules.nominate(state, action.accusedId, action.accuserIds);
+      return rules.nominate(state, action.accusedId);
     case 'SET_VOTERS':
       return rules.setVoters(state, action.nominationId, action.voters);
     case 'REMOVE_NOMINATION':
@@ -219,11 +219,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'REVIVE':
       return rules.revivePlayer(state, action.playerId);
     case 'REMATCH':
-      // Same players and deck, but the wizard starts over at the Players step.
-      return createInitialState({ ...state.setup, names: state.players.map((p) => p.name), step: 'players', deal: null });
+      // Same players in the same seats with the same cards and pool, straight to the Deal board
+      // (Back still leads to the Deck and Pool steps). New Game is the clean start.
+      return createInitialState({
+        experience: state.setup.experience,
+        poolId: state.setup.poolId,
+        poolName: state.setup.poolName,
+        ...checkLineup(lineupOf(state.players, state.setup.pool), action.rules),
+      });
     case 'NEW_GAME':
       // The same table usually plays again: keep the names as typed, the experience and the pool.
       return createInitialState({ names: state.setup.names, experience: state.setup.experience, pool: state.setup.pool });
+    case 'LOAD_LINEUP':
+      // Nothing of the current game carries over (deaths, night picks, timeline) but the experience.
+      return createInitialState({ experience: state.setup.experience, ...action.setup });
     case 'HYDRATE':
       return normalizeGameState(action.state);
     case 'MARK_RECORDED':

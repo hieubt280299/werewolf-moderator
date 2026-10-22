@@ -5,6 +5,7 @@ import type { Nomination } from '../../@types/game';
 import { useListMotion } from '../../hooks/useListMotion';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
+import { dayCascadeDeaths } from '../../utils/gameRules';
 import { PlayerToken } from '../shared/PlayerToken';
 import { Tooltip } from '../shared/Tooltip';
 import { Button, Chip, SectionTitle, Sheet } from '../shared/ui';
@@ -23,6 +24,8 @@ export function VotingPanel() {
   const twoExecutions = (state.executionsLeft ?? 1) > 1 || (state.executedToday !== null && state.dayStep !== 'closed');
   const vampirePending = !state.modifiers.vampireTriggeredToday && alive.some((p) => p.status.vampireMarked);
   const executed = byId.get(state.executedToday ?? '');
+  // Taken down with the vote's victim; the reason stays with the moderator.
+  const alsoEliminated = executed && !executed.alive ? dayCascadeDeaths(state) : [];
   const isOpen = state.dayStep !== 'closed';
   const nominations = state.nominations.filter((n) => byId.get(n.accusedId)?.alive || n.accusedId === state.executedToday);
 
@@ -83,6 +86,9 @@ export function VotingPanel() {
               {executed.alive ? t('day.princeSaved', { name: executed.name }) : t('day.executed', { name: executed.name })}
             </p>
           )}
+          {alsoEliminated.length > 0 && (
+            <p className="mt-1 text-bone-dim">{t('day.alsoEliminated', { names: alsoEliminated.map((p) => p.name).join(', ') })}</p>
+          )}
         </div>
       )}
 
@@ -115,11 +121,6 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
           <div>
             <p className="text-xs uppercase tracking-wide text-bone-dim">{t('day.accused')}</p>
             <p className="font-display text-2xl font-bold uppercase tracking-grimoire text-bone text-shadow-crisp">{accused.name}</p>
-            {nomination.accuserIds.length > 0 && (
-              <p className="text-xs text-bone-faint">
-                {t(nomination.accuserIds.length === 1 ? 'day.accusedByOne' : 'day.accusedBy', { count: nomination.accuserIds.length })}
-              </p>
-            )}
           </div>
           <div className="text-right">
             <p className={clsx('font-display text-2xl font-bold', majority ? 'text-wolf-bright' : 'text-bone')}>
@@ -210,18 +211,14 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
   const { t } = useI18n();
   const engine = useGameEngine();
   const [accused, setAccused] = useState<string | null>(null);
-  const [accusers, setAccusers] = useState<string[]>([]);
 
   useEffect(() => {
-    if (open) {
-      setAccused(null);
-      setAccusers([]);
-    }
+    if (open) setAccused(null);
   }, [open]);
 
   const confirm = () => {
     if (!accused) return;
-    engine.nominate(accused, accusers.filter((id) => id !== accused));
+    engine.nominate(accused);
     onClose();
   };
 
@@ -242,27 +239,6 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
                 onClick={() => setAccused(p.id)}
               />
             ))}
-          </div>
-        </div>
-        <div>
-          <SectionTitle>{t('day.accuser')}</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            {engine.alive
-              .filter((p) => p.id !== accused && !p.status.silenced && !p.status.banished)
-              .map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={accusers.includes(p.id)}
-                  onClick={() => setAccusers((cur) => (cur.includes(p.id) ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
-                  className={clsx(
-                    'min-h-10 rounded-full border px-3 text-sm',
-                    accusers.includes(p.id) ? 'border-ember bg-ember/20 text-bone' : 'border-panel-edge bg-panel-2 text-bone-dim',
-                  )}
-                >
-                  {p.name}
-                </button>
-              ))}
           </div>
         </div>
         <div className="flex gap-3">
