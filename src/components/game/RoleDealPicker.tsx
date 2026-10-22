@@ -267,13 +267,21 @@ function Seat({
   const drop = useDroppable({ id: `seat:${index}`, data: { kind: 'slot', index } satisfies DealLocation });
   const drag = useDraggable({ id: `seat:${index}`, data: { kind: 'slot', index } satisfies DealLocation, disabled: !roleId });
   const tone = roleId ? TONES[ROLES[roleId].cardTone] : null;
+  // The whole seat is both the drop target and, once it holds a card, the drag handle: a
+  // press anywhere on it picks the card up, not just on the card itself.
+  const setRef = (el: HTMLLIElement | null) => {
+    drop.setNodeRef(el);
+    drag.setNodeRef(el);
+  };
 
   return (
     <li
-      ref={drop.setNodeRef}
+      ref={setRef}
+      {...(roleId ? { ...drag.listeners, ...drag.attributes, 'aria-label': `${name} · ${t(`role.${roleId}.name`)}` } : {})}
       onClick={onTap}
       className={clsx(
-        'flex min-h-[156px] cursor-pointer items-center gap-4 rounded-2xl border-2 bg-panel-gradient p-3 pr-4 shadow-card transition-colors',
+        'flex touch-manipulation select-none items-center gap-3 rounded-2xl border-2 bg-panel-gradient p-2 pr-3 shadow-card transition-colors',
+        roleId ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
         drop.isOver
           ? 'border-village bg-village/10 shadow-inner-village'
           : selected
@@ -284,19 +292,11 @@ function Seat({
       )}
     >
       {roleId ? (
-        <div
-          ref={drag.setNodeRef}
-          {...drag.listeners}
-          {...drag.attributes}
-          aria-label={t(`role.${roleId}.name`)}
-          className={clsx('cursor-grab touch-manipulation active:cursor-grabbing', drag.isDragging && 'opacity-30')}
-        >
-          <RoleCard roleId={roleId} size="sm" showWeight={false} selected={selected} />
-        </div>
+        <RoleCard roleId={roleId} size="sm" showWeight={false} selected={selected} className={clsx('!w-28', drag.isDragging && 'opacity-30')} />
       ) : (
         <div
           className={clsx(
-            'flex w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-[7%/5%] border-2 border-dashed transition-colors',
+            'flex w-28 shrink-0 flex-col items-center justify-center gap-1 rounded-[7%/5%] border-2 border-dashed transition-colors',
             drop.isOver ? 'border-village text-village' : 'border-panel-edge text-bone-faint',
           )}
           style={{ aspectRatio: '5 / 7' }}

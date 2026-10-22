@@ -15,7 +15,7 @@ import {
   type WinResult,
   type WinTeam,
 } from '../@types/game';
-import { NIGHT_ORDER, nightGroup, ORDINARY_ROLES, ROLES, roleWinTeam } from '../data/roles';
+import { NIGHT_ORDER, nightGroup, ORDINARY_ROLES, ROLE_ORDER, ROLES, roleWinTeam } from '../data/roles';
 import { createId } from './gameCalculations';
 
 /**
@@ -179,19 +179,18 @@ export function buildNightSteps(s: GameState): NightStep[] {
   const rules = rulesOf(s);
   // Roles in play: the dealt deck plus anything someone has become (Drunk, Doppelgänger…).
   const inPlay = new Set<RoleId>([...s.deck, ...alive.map((p) => p.roleId)]);
-  const holders = (roleId: RoleId) => alive.filter((p) => p.roleId === roleId).map((p) => p.id);
+  // The Drunk keeps their call on night 3 after sobering up mid-script.
+  const holders = (roleId: RoleId) =>
+    roleId === 'drunk' ? alive.filter((p) => isSoberingDrunk(s, p)).map((p) => p.id) : alive.filter((p) => p.roleId === roleId).map((p) => p.id);
   const steps: NightStep[] = [];
   const push = (step: Omit<NightStep, 'group'>) => steps.push({ ...step, group: nightGroup(step.action) });
 
-  // Transformations: wake whoever changed role since they last slept.
+  // Role changes since they last slept: the Doppelgänger gets her own call; a bitten Cursed
+  // just wakes with the pack (see the wolves' turn).
   const waking = (kind: 'cursed' | 'doppelganger') =>
     (m.pendingAwakenings ?? [])
       .filter((w) => w.kind === kind && w.round <= s.round && alive.some((p) => p.id === w.playerId))
       .map((w) => w.playerId);
-  const bitten = waking('cursed');
-  if (bitten.length > 0) {
-    push({ id: 'cursedAwaken', roleId: 'cursed', action: 'cursedAwaken', kind: 'info', actors: bitten, targetCount: 0, ghost: false });
-  }
   const copied = waking('doppelganger');
   if (copied.length > 0) {
     push({ id: 'doppelgangerAwaken', roleId: 'doppelganger', action: 'doppelgangerAwaken', kind: 'info', actors: copied, targetCount: 0, ghost: false });
@@ -215,6 +214,7 @@ export function buildNightSteps(s: GameState): NightStep[] {
       actors: actors.map((p) => p.id),
       targetCount: wolves.length === 0 || skip || onlyFruitBrute ? 0 : m.wolvesDoubleKill || bigBad ? 2 : 1,
       ghost: wolves.length === 0,
+      joining: waking('cursed'),
       note: skip ? 'wolvesSkip' : onlyFruitBrute ? 'fruitBrute' : m.wolvesDoubleKill ? 'wolvesDouble' : bigBad ? 'bigBadWolf' : undefined,
     });
     if (bigBadTurn && inPlay.has('bigBadWolf')) {
@@ -230,6 +230,12 @@ export function buildNightSteps(s: GameState): NightStep[] {
         note: skip ? 'wolvesSkip' : undefined,
       });
     }
+  }
+
+  // Night 1: after Cupid, the Lovers wake to see each other's role. Who they are is read from
+  // tonight's pick when the call is shown.
+  if (firstNight && inPlay.has('cupid')) {
+    push({ id: 'loversMeet', roleId: 'cupid', action: 'loversMeet', kind: 'info', actors: [], targetCount: 0, ghost: false });
   }
 
   // House rule: the Hunter links to a player each night.
@@ -371,7 +377,8 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
     case 'cultRecruit':
       return others.filter((p) => !p.status.inCult);
     case 'leprechaunRedirect':
-      return a.wolfTargets[0] ? neighbors(s.players, a.wolfTargets[0]).filter((p) => !isWolfPlayer(p)) : [];
+      // The Leprechaun doesn't know who the wolves are: either neighbour may be picked, wolf or not.
+      return a.wolfTargets[0] ? neighbors(s.players, a.wolfTargets[0]) : [];
     case 'witchPotion':
       if (witchMode === 'save') {
         if (s.modifiers.witchHealUsed) return [];
@@ -383,10 +390,43 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
     case 'minionMeet':
     case 'troublemakerStir':
     case 'drunkSober':
-    case 'cursedAwaken':
+    case 'loversMeet':
     case 'doppelgangerAwaken':
       return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Drunk sobers up on night 3
+// ---------------------------------------------------------------------------
+
+/** A Drunk on the night they sober up: still drunk, or already playing tonight's pick. */
+const isSoberingDrunk = (s: GameState, p: Player): boolean =>
+  p.originalRoleId === 'drunk' && (p.roleId === 'drunk' || (!!s.nightActions.drunkRole && p.roleId === s.nightActions.drunkRole));
+
+/**
+ * Real roles the Drunk can sober up into: Village or Werewolf side only (the Lone Wolf counts
+ * with the Werewolves; Vampires, Cult and the standard Tanner don't), and no night-1 setup
+ * role, since night 1 is long gone.
+ */
+export const drunkRoleOptions = (rules?: Partial<RebalanceRules> | null): RoleId[] =>
+  ROLE_ORDER.filter((id) => {
+    const team = roleWinTeam(id, rules);
+    return id !== 'drunk' && id !== 'ghost' && !ROLES[id].firstNightOnly && (team === 'village' || team === 'werewolf' || team === 'loneWolf');
+  });
+
+/**
+ * Picks the Drunk's real role (night 3). It takes effect at once: the Drunk acts as that role
+ * in the rest of tonight's script, and inspections see it. Picking again, or clearing the pick,
+ * swaps or restores it.
+ */
+export function chooseDrunkRole(state: GameState, roleId: RoleId | null): GameState {
+  const role = roleId && roleId in ROLES ? roleId : null;
+  return {
+    ...state,
+    players: state.players.map((p) => (p.alive && isSoberingDrunk(state, p) ? { ...p, roleId: role ?? 'drunk' } : p)),
+    nightActions: { ...state.nightActions, drunkRole: role },
+  };
 }
 
 export const seerResult = (p: Player): SeerAppearance => ROLES[p.roleId].seerAppearance;
@@ -469,7 +509,8 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
     if (doppel) {
       doppel.roleId = p.roleId;
       pushLog(s, 'log.doppelgangerCopied', { name: doppel.name, role: p.roleId });
-      // She's woken next night to see her new role.
+      // She plays the new role at once (in the rest of tonight's script, if any; inspections see
+      // it), and is woken on the next night to be shown it.
       s.modifiers.pendingAwakenings.push({ playerId: doppel.id, kind: 'doppelganger', round: s.round + 1 });
     }
     s.modifiers.doppelgangerTarget = null;
@@ -817,9 +858,10 @@ export function resolveNight(state: GameState): GameState {
     recruit.status.inCult = true;
     report.recruited = recruit.id;
   }
+  // The Drunk already plays their real role from the moment it was picked (chooseDrunkRole).
   if (a.drunkRole && a.drunkRole in ROLES) {
     for (const p of s.players) {
-      if (p.alive && p.roleId === 'drunk') {
+      if (p.alive && isSoberingDrunk(s, p)) {
         p.roleId = a.drunkRole as RoleId;
         pushLog(s, 'log.drunkSober', { name: p.name, role: p.roleId });
       }
@@ -865,6 +907,7 @@ function logNightActions(s: GameState) {
   }
   log('log.night.doppelganger', 'doppelganger', a.doppelgangerTarget);
   log('log.night.virginia', 'virginiaWoolf', a.virginiaTarget);
+  log('log.night.direWolf', 'direWolf', a.direWolfTarget);
   // 3 — protection & distraction
   log('log.night.hooker', 'hooker', a.hookerTarget);
   log('log.night.bodyguard', 'bodyguard', a.bodyguardTarget);
@@ -876,7 +919,6 @@ function logNightActions(s: GameState) {
     if (whom) pushLog(s, 'log.night.wolves', whom);
   }
   log('log.night.bigBadWolf', 'bigBadWolf', a.bigBadWolfTarget);
-  log('log.night.direWolf', 'direWolf', a.direWolfTarget);
   log('log.night.sorceress', 'sorceress', a.sorceressTarget);
   // 5 — everyone else
   log('log.night.leprechaun', 'leprechaun', a.leprechaunTarget);

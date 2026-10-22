@@ -239,6 +239,22 @@ describe('expansion roles', () => {
     expect(alive(s, 'p4')).toBe(false);
   });
 
+  it('shows the Leprechaun both neighbours of the victim, wolves included', () => {
+    const s = withActions(game(['werewolf', 'villager', 'leprechaun', 'villager', 'villager']), { wolfTargets: ['p1'] });
+    const step = rules.buildNightSteps(s).find((x) => x.action === 'leprechaunRedirect')!;
+    expect(rules.eligibleTargets(s, step).map((p) => p.id).sort()).toEqual(['p0', 'p2']);
+  });
+
+  it('calls the Lovers right after Cupid on night 1 only', () => {
+    let s = game(['werewolf', 'cupid', 'villager', 'villager', 'villager']);
+    expect(rules.buildNightSteps(s).slice(0, 2).map((x) => [x.action, x.group])).toEqual([
+      ['cupidLink', 1],
+      ['loversMeet', 1],
+    ]);
+    s = rules.startNight(rules.startDay(rules.resolveNight(withActions(s, { cupidTargets: ['p2', 'p3'] }))));
+    expect(rules.buildNightSteps(s).some((x) => x.action === 'loversMeet')).toBe(false);
+  });
+
   it('lets the Leprechaun move the attack to a neighbour, and the Witch sees the real victim', () => {
     const s = withActions(game(['werewolf', 'leprechaun', 'villager', 'villager', 'witch']), { wolfTargets: ['p2'], leprechaunTarget: 'p3' });
     expect(rules.effectiveWolfTargets(s)).toEqual(['p3']);
@@ -388,6 +404,7 @@ describe('v1.0.0 night order', () => {
     const steps = rules.buildNightSteps(s);
     expect(steps.map((x) => x.action)).toEqual([
       'cupidLink',
+      'loversMeet',
       'hookerSeduce',
       'bodyguardProtect',
       'vampireBite',
@@ -397,23 +414,81 @@ describe('v1.0.0 night order', () => {
       'seerInspect',
       'witchPotion',
     ]);
-    expect(steps.map((x) => x.group)).toEqual([1, 3, 3, 4, 4, 4, 4, 5, 5]);
+    expect(steps.map((x) => x.group)).toEqual([1, 1, 3, 3, 4, 4, 4, 4, 5, 5]);
   });
 
-  it('wakes the bitten Cursed and the Doppelgänger who took a role on the next night only', () => {
+  it('calls the Dire Wolf’s companion pick with the night-1 setup, before the pack', () => {
+    const steps = rules.buildNightSteps(game(['direWolf', 'werewolf', 'cupid', 'mason', 'mason', 'hooker', 'villager', 'villager']));
+    expect(steps.map((x) => x.action)).toEqual(['cupidLink', 'loversMeet', 'masonMeet', 'direWolfCompanion', 'hookerSeduce', 'wolfKill']);
+    expect(steps.find((x) => x.action === 'direWolfCompanion')).toMatchObject({ group: 1, actors: ['p0'] });
+  });
+
+  it('wakes the Doppelgänger who took a role, and flags the bitten Cursed in the wolves’ turn, on the next night only', () => {
     let s = game(['werewolf', 'cursed', 'doppelganger', 'seer', 'villager', 'villager', 'villager']);
     s = rules.resolveNight(withActions(s, { wolfTargets: ['p1'], doppelgangerTarget: 'p3' }));
     s = rules.moderatorEliminate(rules.startDay(s), 'p3');
     expect(s.players[2].roleId).toBe('seer');
     s = rules.startNight(s);
     const steps = rules.buildNightSteps(s);
-    expect(steps.slice(0, 2).map((x) => [x.action, x.actors])).toEqual([
-      ['cursedAwaken', ['p1']],
-      ['doppelgangerAwaken', ['p2']],
-    ]);
-    expect(steps[0].group).toBe(2);
+    // The Cursed never gets a call of their own: the moderator wakes them with the pack.
+    expect(steps.map((x) => x.roleId)).not.toContain('cursed');
+    expect(steps[0]).toMatchObject({ action: 'doppelgangerAwaken', actors: ['p2'], group: 2 });
+    expect(steps.find((x) => x.action === 'wolfKill')).toMatchObject({ joining: ['p1'], actors: ['p0', 'p1'] });
     s = rules.startNight(rules.startDay(rules.resolveNight(s)));
-    expect(rules.buildNightSteps(s).some((x) => x.action === 'cursedAwaken' || x.action === 'doppelgangerAwaken')).toBe(false);
+    const later = rules.buildNightSteps(s);
+    expect(later.some((x) => x.action === 'doppelgangerAwaken')).toBe(false);
+    expect(later.find((x) => x.action === 'wolfKill')?.joining).toEqual([]);
+  });
+});
+
+describe('the Drunk', () => {
+  const night3 = (deck: RoleId[]) => {
+    let s = game(deck);
+    for (let i = 0; i < 2; i++) s = rules.startNight(rules.startDay(rules.resolveNight(s)));
+    return s;
+  };
+
+  it('can only sober up into a Village or Werewolf role that isn’t a night-1 setup role', () => {
+    const options = rules.drunkRoleOptions(NO_REBALANCES);
+    // The Lone Wolf counts with the Werewolves.
+    expect(options).toEqual(expect.arrayContaining(['seer', 'witch', 'hunter', 'werewolf', 'sorceress', 'hooker', 'loneWolf']));
+    for (const banned of ['vampire', 'cultLeader', 'tanner', 'cupid', 'doppelganger', 'virginiaWoolf', 'mason', 'direWolf', 'minion', 'ghost', 'drunk'] as RoleId[]) {
+      expect(options).not.toContain(banned);
+    }
+    // The reworked Tanner is a Villager.
+    expect(rules.drunkRoleOptions({ ...NO_REBALANCES, tanner: true })).toContain('tanner');
+  });
+
+  it('plays the picked role at once: later calls include them and the Seer sees it', () => {
+    let s = night3(['werewolf', 'drunk', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    s = gameReducer(s, { type: 'SET_NIGHT_ACTION', field: 'drunkRole', value: 'werewolf' });
+    expect(s.players[1].roleId).toBe('werewolf');
+    const steps = rules.buildNightSteps(s);
+    // Still called as the Drunk (to keep the pick editable), and now wakes with the pack.
+    expect(steps.find((x) => x.action === 'drunkSober')?.actors).toEqual(['p1']);
+    expect(steps.find((x) => x.action === 'wolfKill')?.actors).toEqual(['p0', 'p1']);
+    expect(rules.inspectionResult(s, 'seerInspect', 'p1')).toBe(true);
+    // Changing the pick swaps the role; clearing it makes them the Drunk again.
+    s = gameReducer(s, { type: 'SET_NIGHT_ACTION', field: 'drunkRole', value: 'witch' });
+    expect(s.players[1].roleId).toBe('witch');
+    expect(gameReducer(s, { type: 'SET_NIGHT_ACTION', field: 'drunkRole', value: null }).players[1].roleId).toBe('drunk');
+    const after = rules.resolveNight(s);
+    expect(after.players[1].roleId).toBe('witch');
+    expect(after.log.filter((e) => e.key === 'log.drunkSober')).toHaveLength(1);
+  });
+});
+
+describe('the Doppelgänger', () => {
+  it('plays her new role the night she is woken to see it, and inspections see it', () => {
+    let s = game(['werewolf', 'doppelganger', 'seer', 'witch', 'villager', 'villager', 'villager']);
+    s = rules.resolveNight(withActions(s, { doppelgangerTarget: 'p0' }));
+    s = rules.moderatorEliminate(rules.startDay(s), 'p0'); // the Werewolf is voted out by day
+    expect(s.players[1].roleId).toBe('werewolf');
+    expect(rules.inspectionResult(rules.startNight(s), 'seerInspect', 'p1')).toBe(true);
+    const steps = rules.buildNightSteps(rules.startNight(s));
+    // Woken first to see her role, then she hunts with the pack that same night.
+    expect(steps[0]).toMatchObject({ action: 'doppelgangerAwaken', actors: ['p1'] });
+    expect(steps.find((x) => x.action === 'wolfKill')).toMatchObject({ actors: ['p1'], targetCount: 1, ghost: false });
   });
 });
 

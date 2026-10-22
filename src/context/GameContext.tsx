@@ -190,6 +190,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_NIGHT_STEP':
       return { ...state, nightStepIndex: Math.max(0, action.index) };
     case 'SET_NIGHT_ACTION':
+      // The Drunk becomes their real role the moment it's picked.
+      if (action.field === 'drunkRole') return rules.chooseDrunkRole(state, action.value as RoleId | null);
       return withNightActions(state, { [action.field]: action.value });
     case 'SET_TARGET_LIST':
       if (action.field === 'cupidTargets') return withNightActions(state, { cupidTargets: action.targets });
