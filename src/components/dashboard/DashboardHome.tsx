@@ -83,7 +83,6 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
         <HubTile
           icon={<UserCog className="h-6 w-6" />}
           title={t('hub.profile')}
-          hint={t('hub.profileHint')}
           onClick={onOpenSettings}
           delay={260}
         />
@@ -128,7 +127,7 @@ function HubTile({
 }: {
   icon: ReactNode;
   title: string;
-  hint: string;
+  hint?: string;
   onClick: () => void;
   disabled?: boolean;
   primary?: boolean;
@@ -162,7 +161,7 @@ function HubTile({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block font-display text-lg font-semibold uppercase tracking-grimoire text-bone text-shadow-crisp">{title}</span>
-        <span className="block truncate text-sm text-bone-dim">{hint}</span>
+        {hint && <span className="block truncate text-sm text-bone-dim">{hint}</span>}
       </span>
       {art && (
         <span className="hidden -space-x-3 sm:flex">

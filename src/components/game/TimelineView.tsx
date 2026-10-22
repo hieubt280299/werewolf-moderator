@@ -58,7 +58,7 @@ export function TimelineView({ log, className }: { log: readonly GameLogEntry[];
                 <li key={entry.id} className="text-sm leading-snug text-bone/85">
                   {/* Role and team names are tinted in their team's colour. */}
                   {timelineParts(entry, tx).map((part, i) => {
-                    // "4 people": hover or tap to see who accused, with their roles.
+                    // "4 people": hover or tap to see who voted, with their roles.
                     if (part.people) {
                       return (
                         <Tooltip
@@ -66,7 +66,7 @@ export function TimelineView({ log, className }: { log: readonly GameLogEntry[];
                           className="font-semibold text-bone underline decoration-dotted underline-offset-2"
                           content={
                             <>
-                              <p className="mb-1 font-display uppercase tracking-grimoire text-bone-dim">{t('log.accusersTitle')}</p>
+                              <p className="mb-1 font-display uppercase tracking-grimoire text-bone-dim">{t(part.peopleTitle ?? 'log.votersTitle')}</p>
                               <ul className="space-y-0.5">
                                 {part.people.map((p, j) => (
                                   <li key={j}>

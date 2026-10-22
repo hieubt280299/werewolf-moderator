@@ -5,8 +5,10 @@ import type { NightActionField, NightActionKind, NightStep, NightTargetListField
 import { ROLES } from '../../data/roles';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useNightSequence } from '../../hooks/useNightSequence';
+import { useBoardView } from '../../hooks/useSeatMapPrefs';
 import { useI18n } from '../../i18n/I18nContext';
 import { drunkRoleOptions } from '../../utils/gameRules';
+import { BoardViewSwitch, SeatMap, type SeatAccent } from '../dashboard/SeatMap';
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
 import { LoversReveal } from './LoversReveal';
@@ -41,7 +43,7 @@ const LIST_FIELD: Partial<Record<NightActionKind, NightTargetListField>> = {
 /** Powers the role may decline (the moderator just moves on). */
 const OPTIONAL = new Set<NightActionKind>(['piInspect', 'priestBless', 'leprechaunRedirect', 'troublemakerStir', 'hookerSeduce']);
 
-const ACCENT: Partial<Record<NightActionKind, 'village' | 'wolf' | 'vampire' | 'cult'>> = {
+const ACCENT: Partial<Record<NightActionKind, SeatAccent>> = {
   wolfKill: 'wolf',
   bigBadWolfStrike: 'wolf',
   hookerSeduce: 'vampire',
@@ -70,8 +72,40 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
     onClose();
   };
 
+  const footer = (
+    <>
+      {step && (
+        <p className="mb-3 flex items-center gap-2 text-sm italic text-village/80">
+          <EyeOff className="h-4 w-4 shrink-0" />
+          {t('night.close', { role: stepName(t, step) })}
+        </p>
+      )}
+      <div className="flex gap-3">
+        <Button disabled={night.isFirst} onClick={night.back} icon={<ChevronLeft className="h-4 w-4" />}>
+          {t('night.back')}
+        </Button>
+        {isLast ? (
+          <Button variant="ember" block onClick={finish} icon={<Sunrise className="h-4 w-4" />}>
+            {t('night.finish')}
+          </Button>
+        ) : (
+          <Button variant="village" block onClick={night.next}>
+            {t('night.next')} <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </>
+  );
+
   return (
-    <Sheet open={open} onClose={onClose} tone="night" title={t('night.title', { round: state.round })} closeLabel={t('night.dismiss')}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      tone="night"
+      title={t('night.title', { round: state.round })}
+      closeLabel={t('night.dismiss')}
+      footer={footer}
+    >
       {total > 0 && (
         <div className="mb-4 flex gap-1" aria-label={t('night.stepOf', { current: index + 1, total })}>
           {nightSteps.map((s, i) => (
@@ -93,38 +127,15 @@ export function NightActionModal({ open, onClose }: { open: boolean; onClose: ()
         </div>
       )}
 
-              {step ? (
-          <div key={step.id} className="animate-step-in pb-4">
-            <StepView step={step} />
-          </div>
-        ) : (
-          <p key="empty" className="py-8 text-center text-bone-dim">
-            {t('dash.nightIntro')}
-          </p>
-        )}
-
-      <div className="sticky bottom-0 -mx-5 mt-2 border-t border-village/15 bg-panel/95 px-5 pt-3 pb-safe">
-        {step && (
-          <p className="mb-3 flex items-center gap-2 text-sm italic text-village/80">
-            <EyeOff className="h-4 w-4 shrink-0" />
-            {t('night.close', { role: stepName(t, step) })}
-          </p>
-        )}
-        <div className="flex gap-3">
-          <Button disabled={night.isFirst} onClick={night.back} icon={<ChevronLeft className="h-4 w-4" />}>
-            {t('night.back')}
-          </Button>
-          {isLast ? (
-            <Button variant="ember" block onClick={finish} icon={<Sunrise className="h-4 w-4" />}>
-              {t('night.finish')}
-            </Button>
-          ) : (
-            <Button variant="village" block onClick={night.next}>
-              {t('night.next')} <ChevronRight className="h-4 w-4" />
-            </Button>
-          )}
+      {step ? (
+        <div key={step.id} className="animate-step-in pb-4">
+          <StepView step={step} />
         </div>
-      </div>
+      ) : (
+        <p key="empty" className="py-8 text-center text-bone-dim">
+          {t('dash.nightIntro')}
+        </p>
+      )}
     </Sheet>
   );
 }
@@ -231,7 +242,8 @@ function TargetPicker({ step }: { step: NightStep }) {
   // everyone the Hooker has already seduced.
   const lastProtected = step.action === 'bodyguardProtect' ? state.modifiers.bodyguardLastTarget : null;
   const visited = step.action === 'hookerSeduce' ? state.modifiers.hookerVisited : [];
-  const locked = new Set([lastProtected, ...visited].filter((x): x is string => !!x));
+  const locked = new Map<string, string>(visited.map((id) => [id, t('night.alreadySeduced')]));
+  if (lastProtected) locked.set(lastProtected, t('night.lastProtected'));
   const candidates = [...targets, ...state.players.filter((p) => locked.has(p.id) && p.alive && !step.actors.includes(p.id))];
 
   const toggle = (id: string) => {
@@ -245,29 +257,89 @@ function TargetPicker({ step }: { step: NightStep }) {
   };
 
   return (
-    <div>
-      <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">
-        {step.action === 'cupidLink'
+    <PlayerPicker
+      label={
+        step.action === 'cupidLink'
           ? t('night.chooseLovers')
           : step.targetCount > 1
             ? t('night.chooseTargets', { count: step.targetCount })
-            : t('night.chooseTarget')}
-      </p>
+            : t('night.chooseTarget')
+      }
+      candidates={candidates}
+      selected={selected}
+      accent={ACCENT[step.action] ?? 'village'}
+      locked={locked}
+      onToggle={toggle}
+    />
+  );
+}
+
+interface PlayerPickerProps {
+  label: ReactNode;
+  /** Players offered for this call (locked ones included, shown but not pickable). */
+  candidates: Player[];
+  selected: readonly string[];
+  accent: SeatAccent;
+  /** Shown but not pickable, with the reason (the Bodyguard's last protégé, the Hooker's past visits). */
+  locked?: ReadonlyMap<string, string>;
+  onToggle: (playerId: string) => void;
+}
+
+/**
+ * Players to choose from, as a list or round the table. The view and the table's orientation
+ * are the board's: switching or turning here changes both.
+ */
+function PlayerPicker({ label, candidates, selected, accent, locked, onToggle }: PlayerPickerProps) {
+  const { t } = useI18n();
+  const { state } = useGameEngine();
+  const [view, setView] = useBoardView();
+  const pickable = new Set(candidates.filter((p) => !locked?.has(p.id)).map((p) => p.id));
+  const lockedPlayers = candidates.filter((p) => locked?.has(p.id)).sort((a, b) => a.seat - b.seat);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">{label}</p>
+        <BoardViewSwitch view={view} onChange={setView} />
+      </div>
       {candidates.length === 0 ? (
         <p className="text-sm text-bone-faint">{t('night.noTargets')}</p>
+      ) : view === 'map' ? (
+        <div className="space-y-2">
+          {/* Every seat is drawn so the table reads as it sits; only the candidates can be picked. */}
+          <SeatMap
+            players={state.players}
+            selectable={pickable}
+            selected={selected}
+            accent={accent}
+            notes={locked ? Object.fromEntries(locked) : undefined}
+            onSelect={onToggle}
+            showHint={false}
+            className="max-w-[420px]"
+          />
+          {lockedPlayers.length > 0 && (
+            <ul className="space-y-0.5 text-[11px] text-bone-faint">
+              {lockedPlayers.map((p) => (
+                <li key={p.id}>
+                  {p.seat + 1}. {p.name}: {locked?.get(p.id)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
-          {candidates
+          {[...candidates]
             .sort((a, b) => a.seat - b.seat)
             .map((p) => (
               <PlayerToken
                 key={p.id}
                 player={p}
-                accent={ACCENT[step.action] ?? 'village'}
+                accent={accent}
                 selected={selected.includes(p.id)}
-                disabled={locked.has(p.id)}
-                note={p.id === lastProtected ? t('night.lastProtected') : visited.includes(p.id) ? t('night.alreadySeduced') : undefined}
-                onClick={() => toggle(p.id)}
+                disabled={locked?.has(p.id)}
+                note={locked?.get(p.id)}
+                onClick={() => onToggle(p.id)}
               />
             ))}
         </div>
@@ -311,27 +383,24 @@ function WitchPanel({ step }: { step: NightStep }) {
           </div>
         )}
       </div>
-      <div>
-        <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">
+      {witchKillUsed ? (
+        <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">
           <FlaskConical className="h-3.5 w-3.5 text-wolf-bright" /> {t('night.witchKill')}
-          {witchKillUsed && <span className="text-bone-faint">({t('night.witchUsed')})</span>}
+          <span className="text-bone-faint">({t('night.witchUsed')})</span>
         </p>
-        {!witchKillUsed && (
-          <div className="grid grid-cols-2 gap-2">
-            {killTargets
-              .sort((a, b) => a.seat - b.seat)
-              .map((p) => (
-                <PlayerToken
-                  key={p.id}
-                  player={p}
-                  accent="wolf"
-                  selected={state.nightActions.witchKillTarget === p.id}
-                  onClick={() => engine.setNightAction('witchKillTarget', state.nightActions.witchKillTarget === p.id ? null : p.id)}
-                />
-              ))}
-          </div>
-        )}
-      </div>
+      ) : (
+        <PlayerPicker
+          label={
+            <>
+              <FlaskConical className="h-3.5 w-3.5 text-wolf-bright" /> {t('night.witchKill')}
+            </>
+          }
+          candidates={killTargets}
+          selected={[state.nightActions.witchKillTarget].filter((x): x is string => !!x)}
+          accent="wolf"
+          onToggle={(id) => engine.setNightAction('witchKillTarget', state.nightActions.witchKillTarget === id ? null : id)}
+        />
+      )}
     </div>
   );
 }

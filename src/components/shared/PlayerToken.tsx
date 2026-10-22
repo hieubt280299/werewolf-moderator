@@ -63,13 +63,17 @@ export function PlayerToken({ player, selected, disabled, accent = 'village', sh
   );
 }
 
-/** Illuminated status pills for a player. */
-export function StatusBadges({ player }: { player: Player }) {
+/** Illuminated status pills for a player. `diedLabel` marks a death in the phase that just ended. */
+export function StatusBadges({ player, diedLabel }: { player: Player; diedLabel?: string }) {
   const { t } = useI18n();
   const s = player.status;
   return (
     <div className="flex flex-wrap gap-1">
-      {!player.alive && <Chip icon={<Skull className="h-3 w-3" />}>{t('status.dead')}</Chip>}
+      {!player.alive && (
+        <Chip tone={diedLabel ? 'werewolf' : 'muted'} icon={<Skull className="h-3 w-3" />}>
+          {diedLabel ?? t('status.dead')}
+        </Chip>
+      )}
       {s.protected && <Chip tone="village" icon={<Shield className="h-3 w-3" />}>{t('status.protected')}</Chip>}
       {s.silenced && player.alive && <Chip tone="ember" icon={<VolumeX className="h-3 w-3" />}>{t('status.silenced')}</Chip>}
       {s.vampireMarked && player.alive && <Chip tone="vampire" icon={<Droplet className="h-3 w-3" />}>{t('status.vampireMarked')}</Chip>}

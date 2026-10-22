@@ -3,11 +3,13 @@ import type {
   ExperienceLevel,
   GameLogEntry,
   GameRecord,
+  GameRecordPlayer,
   GameState,
   Player,
   PlayerStatus,
   RebalanceRules,
   RoleId,
+  SetupDraft,
   WinTeam,
 } from '../@types/game';
 import { ROLES, ROLE_ORDER } from '../data/roles';
@@ -392,22 +394,30 @@ export function formatTimelineEntry(entry: GameLogEntry, tx: Translate): string 
     if (typeof params[key] === 'string') params[key] = tx(`role.${params[key]}.name`);
   }
   if (typeof params.team === 'string') params.team = tx(`team.${params.team}`);
-  if (typeof params.accusers === 'number') params.accusers = accusersLabel(params.accusers, tx);
+  for (const key of PEOPLE_PARAMS) {
+    if (typeof params[key] === 'number') params[key] = peopleLabel(params[key] as number, tx);
+  }
   return tx(entry.key, params);
 }
 
-/** "4 people" / "1 person" — who accused a nominee. */
-const accusersLabel = (count: number, tx: Translate) => (count === 1 ? tx('log.accusersOne') : tx('log.accusers', { count }));
+/** "4 people" / "1 person": who voted for an elimination (or, in logs before v1.1.0, who accused). */
+const peopleLabel = (count: number, tx: Translate) => (count === 1 ? tx('log.accusersOne') : tx('log.accusers', { count }));
+
+/** Params counting the people listed in an entry, and the heading of that list. */
+const PEOPLE_PARAMS = ['voters', 'accusers'] as const;
+const PEOPLE_TITLE = { voters: 'log.votersTitle', accusers: 'log.accusersTitle' } as const;
 
 /**
  * A piece of a timeline line: plain text, a role / team name to tint in its team colour, or
- * a count of people listed on demand (an accusation's accusers).
+ * a count of people listed on demand (a vote's voters).
  */
 export interface TimelinePart {
   text: string;
   role?: RoleId;
   team?: WinTeam;
   people?: GameLogEntry['people'];
+  /** Heading of the people list ("Voted by"). */
+  peopleTitle?: (typeof PEOPLE_TITLE)[keyof typeof PEOPLE_TITLE];
 }
 
 const ROLE_PARAMS = new Set(['role', 'role2', 'actorRole']);
@@ -426,7 +436,9 @@ export function timelineParts(entry: GameLogEntry, tx: Translate): TimelinePart[
         return { text: tx(`role.${value}.name`), role: value as RoleId };
       }
       if (chunk === 'team' && typeof value === 'string') return { text: tx(`team.${value}`), team: value as WinTeam };
-      if (chunk === 'accusers' && typeof value === 'number') return { text: accusersLabel(value, tx), people: entry.people ?? [] };
+      if ((chunk === 'voters' || chunk === 'accusers') && typeof value === 'number') {
+        return { text: peopleLabel(value, tx), people: entry.people ?? [], peopleTitle: PEOPLE_TITLE[chunk] };
+      }
       return { text: String(value) };
     })
     .reduce<TimelinePart[]>((parts, part) => {
@@ -471,6 +483,7 @@ export function buildGameRecord(state: GameState): GameRecord | null {
     finishedAt: new Date().toISOString(),
     rounds: state.round,
     poolName: state.setup.poolName ?? null,
+    pool: state.setup.pool,
     winner: state.winner.team,
     players: state.players.map((p) => ({
       name: p.name,
@@ -482,4 +495,42 @@ export function buildGameRecord(state: GameState): GameRecord | null {
     winnerSeats: state.players.filter((p) => winners.has(p.id)).map((p) => p.seat),
     log: state.log,
   };
+}
+
+/**
+ * "Start new game from lineup": the same names in the same seats, the same cards and pool,
+ * placed on the Deal board with every card back in the tray, ready to re-deal.
+ */
+export function lineupSetup(record: GameRecord): Partial<SetupDraft> {
+  return { ...lineupOf(record.players, record.pool), poolId: null, poolName: record.poolName };
+}
+
+/**
+ * A game's lineup (names in seat order, the cards as dealt, the pool) on the Deal board, every
+ * card back in the tray. Used by "Start new game from lineup" and by Rematch.
+ */
+export function lineupOf(
+  players: readonly Pick<GameRecordPlayer, 'name' | 'seat' | 'originalRoleId'>[],
+  pool: readonly RoleId[] = [],
+): Pick<SetupDraft, 'names' | 'deck' | 'pool' | 'step' | 'deal'> {
+  const seated = [...players].sort((a, b) => a.seat - b.seat);
+  // The cards as dealt: a transformed Cursed or a sobered Drunk goes back to its own card.
+  const deck = sortDeck(seated.map((p) => p.originalRoleId));
+  // Games recorded before v1.1.0 have no pool: fall back to the roles that were dealt.
+  return {
+    names: seated.map((p) => p.name),
+    deck,
+    pool: [...new Set([...pool, ...deck])],
+    step: 'deal',
+    deal: emptyDeal(seated.length, deck),
+  };
+}
+
+/**
+ * A lineup the deck rules reject today (e.g. a fourth team, after the rules changed) opens on
+ * the Deck step instead of the Deal board, where the problem is shown.
+ */
+export function checkLineup<T extends Partial<SetupDraft>>(setup: T, rules?: Partial<RebalanceRules> | null): T {
+  const valid = validateDeck(setup.deck ?? [], setup.names?.length ?? 0, rules).length === 0;
+  return valid ? setup : { ...setup, step: 'deck', deal: null };
 }

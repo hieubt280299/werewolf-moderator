@@ -20,4 +20,8 @@ export const STORAGE_KEYS = {
   game: 'wwgm:game:v1',
   settings: 'wwgm:settings:v1',
   language: 'wwgm:lang:v1',
+  /** Players list or seat map on the moderator board. */
+  boardView: 'wwgm:board-view:v1',
+  /** Seat map orientation, in degrees, so it stays aligned with the moderator's seat. */
+  seatRotation: 'wwgm:seat-rotation:v1',
 } as const;

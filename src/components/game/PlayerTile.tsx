@@ -12,6 +12,8 @@ interface PlayerTileProps {
   player: Player;
   /** Bodyguard target while the night is in progress. */
   shielded?: boolean;
+  /** Died in the phase that just ended: the label to show ("Died last night"). */
+  diedLabel?: string;
   /** Stable callback (receives the player id), so the memo holds across board updates. */
   onInspect: (playerId: string) => void;
 }
@@ -19,20 +21,24 @@ interface PlayerTileProps {
 const RESTING = '0 10px 30px -8px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.08)';
 
 /** Player block for the dashboard grid: faction edge, character badge and illuminated statuses. */
-export const PlayerTile = memo(function PlayerTile({ player, shielded, onInspect }: PlayerTileProps) {
+export const PlayerTile = memo(function PlayerTile({ player, shielded, diedLabel, onInspect }: PlayerTileProps) {
   const { t } = useI18n();
   const tone = TONES[ROLES[player.roleId].cardTone];
   const s = player.status;
 
-  const glow = !player.alive
-    ? RESTING
-    : shielded
-      ? TONES.village.inner
-      : s.vampireMarked
-        ? TONES.vampire.inner
-        : s.silenced
-          ? 'inset 0 0 20px rgba(242,106,33,0.45)'
-          : RESTING;
+  // A fresh death keeps its colours and glows red; earlier deaths fade to grey.
+  const fresh = !player.alive && !!diedLabel;
+  const glow = fresh
+    ? TONES.werewolf.inner
+    : !player.alive
+      ? RESTING
+      : shielded
+        ? TONES.village.inner
+        : s.vampireMarked
+          ? TONES.vampire.inner
+          : s.silenced
+            ? 'inset 0 0 20px rgba(242,106,33,0.45)'
+            : RESTING;
 
   return (
     <button
@@ -40,7 +46,7 @@ export const PlayerTile = memo(function PlayerTile({ player, shielded, onInspect
       onClick={() => onInspect(player.id)}
       className={clsx(
         'press relative flex min-h-[96px] w-full flex-col gap-1.5 overflow-hidden rounded-2xl border bg-panel-gradient py-3 pl-4 pr-3 text-left',
-        player.alive ? 'border-panel-edge' : 'border-panel-edge/50 opacity-50 grayscale',
+        player.alive ? 'border-panel-edge' : fresh ? 'border-wolf/60' : 'border-panel-edge/50 opacity-50 grayscale',
       )}
       style={{ boxShadow: glow }}
     >
@@ -57,7 +63,7 @@ export const PlayerTile = memo(function PlayerTile({ player, shielded, onInspect
         </div>
         {shielded && player.alive && <Shield className="h-4 w-4 shrink-0 text-village" />}
       </div>
-      <StatusBadges player={player} />
+      <StatusBadges player={player} diedLabel={diedLabel} />
     </button>
   );
 });

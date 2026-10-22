@@ -1,32 +1,40 @@
 import clsx from 'clsx';
-import { ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { GameRecord, WinTeam } from '../../@types/game';
+import type { GameRecord } from '../../@types/game';
+import type { View } from '../../App';
 import { useAuth } from '../../context/AuthContext';
+import { isActiveGame, useGame } from '../../context/GameContext';
 import { useI18n } from '../../i18n/I18nContext';
-import { TimelineView } from '../game/TimelineView';
-import { Chip, RoleBadge, SectionTitle, Sheet } from '../shared/ui';
+import { checkLineup, lineupSetup } from '../../utils/gameCalculations';
+import { winShares, type WinShareKey } from '../../utils/historyAnalytics';
+import { GameHistoryDetail, TEAM_CHIP, useGameDate } from '../history/GameHistoryDetail';
+import { AdvancedStatsPanel } from '../statistics/AdvancedStatsPanel';
+import { Chip, RoleBadge, SectionTitle } from '../shared/ui';
 
-const TEAM_CHIP: Record<WinTeam, 'village' | 'werewolf' | 'vampire' | 'cult' | 'neutral' | 'muted'> = {
-  village: 'village',
-  werewolf: 'werewolf',
-  loneWolf: 'werewolf',
-  couple: 'vampire',
-  tanner: 'neutral',
-  neutral: 'neutral',
-  vampire: 'vampire',
-  cult: 'cult',
-  draw: 'muted',
+const SHARE_STYLE: Record<WinShareKey, { bar: string; text: string; label: 'history.wolfWins' | 'history.villageWins' | 'history.otherWins' }> = {
+  werewolf: { bar: 'bg-wolf', text: 'text-wolf-bright', label: 'history.wolfWins' },
+  village: { bar: 'bg-village', text: 'text-village', label: 'history.villageWins' },
+  other: { bar: 'bg-vampire', text: 'text-vampire', label: 'history.otherWins' },
 };
 
-/** Career statistics and the log of finished games. */
-export function HistoryStats() {
-  const { t, language } = useI18n();
+/** Career statistics, records and the log of finished games. */
+export function HistoryStats({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const { t } = useI18n();
   const { profile, listGames } = useAuth();
+  const { state, dispatch } = useGame();
   const [games, setGames] = useState<GameRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<GameRecord | null>(null);
   const stats = profile?.stats;
+  const fmt = useGameDate();
+
+  const replay = (game: GameRecord) => {
+    if (isActiveGame(state) && !window.confirm(t('hub.confirmNew'))) return;
+    dispatch({ type: 'LOAD_LINEUP', setup: checkLineup(lineupSetup(game), profile?.rebalances) });
+    setOpen(null);
+    onNavigate('game');
+  };
 
   useEffect(() => {
     listGames()
@@ -34,9 +42,7 @@ export function HistoryStats() {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [listGames]);
 
-  const total = stats ? Math.max(1, stats.werewolfWins + stats.villageWins + stats.otherWins) : 1;
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const shares = stats ? winShares(stats) : [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 pb-16 pt-6">
@@ -51,13 +57,26 @@ export function HistoryStats() {
           <div className="panel p-4">
             <p className="mb-2 font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('history.split')}</p>
             <div className="flex h-3 overflow-hidden rounded-full bg-panel-edge">
-              <span className="bg-wolf" style={{ width: `${(stats.werewolfWins / total) * 100}%` }} />
-              <span className="bg-village" style={{ width: `${(stats.villageWins / total) * 100}%` }} />
-              <span className="bg-vampire" style={{ width: `${(stats.otherWins / total) * 100}%` }} />
+              {shares.map((s) => (
+                <span key={s.key} className={SHARE_STYLE[s.key].bar} style={{ width: `${s.total ? (s.wins / s.total) * 100 : 0}%` }} />
+              ))}
             </div>
+            <ul className="mt-3 grid gap-1.5 sm:grid-cols-3">
+              {shares.map((s) => (
+                <li key={s.key} className="flex items-center gap-2 text-sm">
+                  <span aria-hidden className={clsx('h-2.5 w-2.5 shrink-0 rounded-full', SHARE_STYLE[s.key].bar)} />
+                  <span className="text-bone-dim">{t(SHARE_STYLE[s.key].label)}:</span>
+                  <span className={clsx('font-display font-semibold', SHARE_STYLE[s.key].text)}>
+                    {t('history.share', { percent: s.percent, wins: s.wins, total: s.total })}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}
+
+      {games && games.length > 0 && <AdvancedStatsPanel games={games} onOpenGame={setOpen} />}
 
       <section>
         <SectionTitle>{t('history.recent')}</SectionTitle>
@@ -94,34 +113,7 @@ export function HistoryStats() {
         </ul>
       </section>
 
-      <Sheet open={!!open} onClose={() => setOpen(null)} title={open ? t(`win.${open.winner}`) : ''} closeLabel={t('settings.close')}>
-        {open && (
-          <div className="space-y-6 pb-6">
-            <p className="text-xs text-bone-faint">{fmt(open.finishedAt)}</p>
-            <div>
-              <SectionTitle>{t('history.roster')}</SectionTitle>
-              <ul className="grid grid-cols-2 gap-2">
-                {open.players.map((p) => (
-                  <li key={p.seat} className={clsx('flex items-center gap-2 rounded-xl border border-panel-edge bg-panel-2 p-2', !p.alive && 'opacity-60')}>
-                    <RoleBadge roleId={p.roleId} size={34} dead={!p.alive} />
-                    <span className="min-w-0 flex-1">
-                      <span className={clsx('flex items-center gap-1 truncate text-sm font-semibold text-bone', !p.alive && 'line-through')}>
-                        {open.winnerSeats.includes(p.seat) && <Sparkles className="h-3 w-3 shrink-0 text-ember" />}
-                        {p.name}
-                      </span>
-                      <span className="block truncate text-xs text-bone-dim">{t(`role.${p.roleId}.name`)}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <SectionTitle>{t('dash.log')}</SectionTitle>
-              <TimelineView log={open.log} />
-            </div>
-          </div>
-        )}
-      </Sheet>
+      <GameHistoryDetail game={open} onClose={() => setOpen(null)} onReplay={replay} />
     </div>
   );
 }

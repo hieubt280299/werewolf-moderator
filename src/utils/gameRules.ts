@@ -79,17 +79,18 @@ function pushLog(s: GameState, key: string, params?: Record<string, string | num
 
 type People = NonNullable<GameLogEntry['people']>;
 
-/** Everyone who accused a nominee, as the timeline names them. */
-const accusersOf = (s: GameState, nom: Nomination): People =>
-  nom.accuserIds.map((id) => findPlayer(s, id)).filter((p): p is Player => !!p).map((p) => ({ name: p.name, role: p.roleId }));
+/** Everyone who voted to eliminate a nominee, as the timeline names them. */
+const votersOf = (s: GameState, nom: Nomination): People =>
+  nom.voters.map((id) => findPlayer(s, id)).filter((p): p is Player => !!p).map((p) => ({ name: p.name, role: p.roleId }));
 
 /**
- * The line that closes an accusation. With accusers it takes the `…Accused` wording, which
- * ends in "(accused by N people)" and lists them on demand.
+ * The line that closes a vote. With voters it takes the `…Voted` wording, which ends in
+ * "(voted by N people)" and lists them on demand. (Logs from before v1.1.0 may instead
+ * carry the `…Accused` wording with the accusers; the timeline still renders those.)
  */
-function logAccusation(s: GameState, key: string, params: Record<string, string | number>, accusers: People) {
-  if (accusers.length === 0) pushLog(s, key, params);
-  else pushLog(s, `${key}Accused`, { ...params, accusers: accusers.length }, accusers);
+function logVote(s: GameState, key: string, params: Record<string, string | number>, voters: People) {
+  if (voters.length === 0) pushLog(s, key, params);
+  else pushLog(s, `${key}Voted`, { ...params, voters: voters.length }, voters);
 }
 
 // ---------------------------------------------------------------------------
@@ -473,7 +474,7 @@ type DeathSink = { playerId: string; cause: EliminationCause }[];
  * companion, Virginia Woolf, the Hunter's night link). Cascaded deaths are appended to
  * `sink` when given.
  */
-function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'night' | 'day', sink?: DeathSink, accusers: People = []): boolean {
+function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'night' | 'day', sink?: DeathSink, voters: People = []): boolean {
   const p = findPlayer(s, id);
   if (!p || !p.alive) return false;
   const rules = rulesOf(s);
@@ -483,7 +484,7 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
   p.status.protected = false;
   p.status.woundedRound = null;
   sink?.push({ playerId: p.id, cause });
-  logAccusation(s, `log.eliminated.${cause}`, { name: p.name, role: p.roleId }, accusers);
+  logVote(s, `log.eliminated.${cause}`, { name: p.name, role: p.roleId }, voters);
 
   if (p.roleId === 'wolfCub') {
     s.modifiers.wolvesDoubleKill = true;
@@ -957,6 +958,51 @@ export function startDay(state: GameState): GameState {
 /** Mayor's vote counts twice. */
 export const voteWeight = (p: Player): number => (p.roleId === 'mayor' ? 2 : 1);
 
+export interface FreshDeaths {
+  /** The phase that just ended. */
+  phase: 'night' | 'day';
+  ids: Set<string>;
+}
+
+/** Orders eliminations in time: night N, then day N, then night N + 1. */
+const deathOrder = (e: NonNullable<Player['eliminated']>) => e.round * 2 + (e.phase === 'day' ? 1 : 0);
+
+/**
+ * Players who died in the phase that just ended, set apart from earlier deaths until the next
+ * phase begins: last night's deaths at dawn, today's once the day is over, and the last
+ * phase's when the game ends. Null while a phase is still being played.
+ */
+export function freshDeaths(s: GameState): FreshDeaths | null {
+  let latest: number | null = null;
+  if (s.phase === 'dawn') latest = s.round * 2;
+  else if (s.phase === 'day' && s.dayStep === 'closed') latest = s.round * 2 + 1;
+  else if (s.phase === 'gameOver') {
+    // The game ended in whichever phase saw the last death.
+    for (const p of s.players) if (p.eliminated) latest = Math.max(latest ?? 0, deathOrder(p.eliminated));
+  }
+  if (latest === null) return null;
+  const ids = new Set(s.players.filter((p) => !p.alive && p.eliminated && deathOrder(p.eliminated) === latest).map((p) => p.id));
+  return { phase: latest % 2 === 1 ? 'day' : 'night', ids };
+}
+
+/** Deaths a day's elimination can drag along: a broken heart, a link, the Hunter's shot. */
+const VOTE_CASCADE = new Set<EliminationCause>(['heartbreak', 'linked', 'hunter']);
+
+/**
+ * Who else died today because of the vote's victim (lovers, links, the Hunter's revenge), for
+ * the day's closing announcement. The vote's victim and unrelated deaths (Vampire victims,
+ * the moderator's own eliminations) are left out.
+ */
+export const dayCascadeDeaths = (s: GameState): Player[] =>
+  s.players.filter(
+    (p) =>
+      !p.alive &&
+      p.id !== s.executedToday &&
+      p.eliminated?.round === s.round &&
+      p.eliminated.phase === 'day' &&
+      VOTE_CASCADE.has(p.eliminated.cause),
+  );
+
 /** Who may cast a vote today (the Old Hag's exile has left the village). */
 export const eligibleVoters = (s: GameState): Player[] => alivePlayers(s.players).filter((p) => !p.status.banished);
 
@@ -985,7 +1031,7 @@ export const canNominate = (s: GameState): boolean =>
   s.phase === 'day' && s.dayStep !== 'closed' && s.nominations.length === 0 && (s.executionsLeft ?? 1) > 0;
 
 /** First nomination of the day also collects any Vampire victims. */
-export function nominate(state: GameState, accusedId: string, accuserIds: readonly string[] = []): GameState {
+export function nominate(state: GameState, accusedId: string): GameState {
   if (!canNominate(state)) return state;
   const s = clone(state);
   if (!s.modifiers.vampireTriggeredToday) {
@@ -996,12 +1042,8 @@ export function nominate(state: GameState, accusedId: string, accuserIds: readon
   }
   const accused = findPlayer(s, accusedId);
   if (accused?.alive && !accused.status.banished) {
-    const accusers = [...new Set(accuserIds)]
-      .filter((id) => id !== accusedId)
-      .map((id) => findPlayer(s, id))
-      .filter((p): p is Player => !!p?.alive);
-    // Logged once the accusation ends (elimination, Prince reveal or withdrawal), with its accusers.
-    s.nominations.push({ id: createId('nom'), accusedId, accuserIds: accusers.map((p) => p.id), voters: normalizeVoters(s, { accusedId }, []) });
+    // Logged once the accusation ends (elimination, Prince reveal or withdrawal), with its voters.
+    s.nominations.push({ id: createId('nom'), accusedId, voters: normalizeVoters(s, { accusedId }, []) });
   }
   s.dayStep = 'voting';
   return finalize(s);
@@ -1018,7 +1060,7 @@ export function setVoters(state: GameState, nominationId: string, voters: string
 function logWithdrawn(s: GameState, noms: readonly Nomination[]) {
   for (const nom of noms) {
     const accused = findPlayer(s, nom.accusedId);
-    if (accused) logAccusation(s, 'log.accusationWithdrawn', { name: accused.name, role: accused.roleId }, accusersOf(s, nom));
+    if (accused) pushLog(s, 'log.accusationWithdrawn', { name: accused.name, role: accused.roleId });
   }
 }
 
@@ -1036,9 +1078,9 @@ export function executeNomination(state: GameState, nominationId: string): GameS
   if (!nom || !accused?.alive) return state;
   if (accused.roleId === 'prince' && !accused.status.princeRevealed) {
     accused.status.princeRevealed = true;
-    logAccusation(s, 'log.princeRevealed', { name: accused.name, role: 'prince' }, accusersOf(s, nom));
+    logVote(s, 'log.princeRevealed', { name: accused.name, role: 'prince' }, votersOf(s, nom));
   } else {
-    killPlayer(s, accused.id, 'vote', 'day', undefined, accusersOf(s, nom));
+    killPlayer(s, accused.id, 'vote', 'day', undefined, votersOf(s, nom));
   }
   s.executedToday = accused.id;
   s.executionsLeft = Math.max(0, (s.executionsLeft ?? 1) - 1);
