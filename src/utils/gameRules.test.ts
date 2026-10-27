@@ -9,6 +9,7 @@ import {
   addsTeam,
   timelineParts,
   calculateBalance,
+  deckMixGaps,
   extraTeams,
   EMPTY_STATUS,
   EXPERIENCE_TARGET,
@@ -56,6 +57,48 @@ describe('generateBalancedDeck', () => {
     expect(validateDeck(deck, n)).toEqual([]);
     expect(Math.abs(calculateBalance(deck) - EXPERIENCE_TARGET.standard)).toBeLessThanOrEqual(2);
     expect(deck.every((id) => id === 'villager' || id === 'werewolf' || pool.includes(id))).toBe(true);
+  });
+});
+
+describe('auto-balance deck mix', () => {
+  it('reports which tier slots a deck leaves empty', () => {
+    // Tier 1: Villager, Werewolf. Tier 2: every night, night 1 only, no night call.
+    // Tier 3: wolf-team special, kill, protect, info.
+    expect(deckMixGaps(['werewolf', 'werewolf', 'seer', 'villager', 'villager'])).toEqual([0, 2, 3]);
+    expect(deckMixGaps(['werewolf', 'seer', 'mason', 'mason', 'hunter'])).toEqual([1, 0, 2]);
+    expect(deckMixGaps(['villager', 'wolfCub', 'witch', 'cupid', 'prince'])).toEqual([1, 0, 1]);
+    // The reworked Tanner can kill; the standard one can't.
+    expect(deckMixGaps(['tanner'])[2]).toBe(4);
+    expect(deckMixGaps(['tanner'], { tanner: true })[2]).toBe(3);
+  });
+
+  it('fills every tier the pool allows', () => {
+    const pool: RoleId[] = ['seer', 'bodyguard', 'hunter', 'witch', 'prince', 'mayor', 'mason', 'cupid', 'lycan', 'cursed', 'wolfCub', 'sorceress', 'minion'];
+    for (const n of [6, 8, 10, 12, 16]) {
+      for (const seed of [1, 2, 3, 4]) {
+        const deck = generateBalancedDeck({ playerCount: n, pool, experience: 'standard', random: seeded(seed * 17 + n) });
+        expect(deckMixGaps(deck)).toEqual([0, 0, 0]);
+        expect(validateDeck(deck, n)).toEqual([]);
+        expect(Math.abs(calculateBalance(deck) - EXPERIENCE_TARGET.standard)).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('keeps at least one Villager even when the pool could fill every seat', () => {
+    const pool = (Object.keys(ROLES) as RoleId[]).filter((id) => ROLES[id].difficulty === 1);
+    for (const seed of [1, 2, 3]) {
+      const deck = generateBalancedDeck({ playerCount: 8, pool, experience: 'beginner', random: seeded(seed) });
+      expect(deck).toContain('villager');
+      expect(deck).toContain('werewolf');
+    }
+  });
+
+  it('skips slots the pool cannot fill', () => {
+    // No first-night role, no wolf-team special: those slots stay empty, the rest fill.
+    const pool: RoleId[] = ['seer', 'bodyguard', 'hunter', 'prince', 'lycan', 'cursed'];
+    const deck = generateBalancedDeck({ playerCount: 7, pool, experience: 'standard', random: seeded(9) });
+    expect(deckMixGaps(deck)).toEqual([0, 1, 1]);
+    expect(validateDeck(deck, 7)).toEqual([]);
   });
 });
 
@@ -885,17 +928,27 @@ describe('house-rule snapshot & setup', () => {
 });
 
 describe('role pools', () => {
-  it('groups roles into Village / Wolves / Other, easiest first, then by weight', () => {
+  it('groups roles into Village / Wolves / Other: easiest first, then most favouring the side, then by name', () => {
     expect(ROLE_SECTIONS.map((sec) => sec.id)).toEqual(['village', 'wolves', 'other']);
     expect(ROLE_SECTIONS.flatMap((sec) => sec.roles)).toHaveLength(Object.keys(ROLES).length);
+    const name = (id: RoleId) => dictionaries.en[`role.${id}.name`];
     for (const sec of ROLE_SECTIONS) {
+      const side = sec.id === 'village' ? -1 : 1;
       for (let i = 1; i < sec.roles.length; i++) {
         const [a, b] = [ROLES[sec.roles[i - 1]], ROLES[sec.roles[i]]];
-        expect(a.difficulty < b.difficulty || (a.difficulty === b.difficulty && a.weight <= b.weight)).toBe(true);
+        const byWeight = side * (a.weight - b.weight);
+        expect(
+          a.difficulty < b.difficulty ||
+            (a.difficulty === b.difficulty && (byWeight < 0 || (byWeight === 0 && name(a.id).localeCompare(name(b.id), 'en') < 0))),
+        ).toBe(true);
       }
     }
+    // Beginner Village: Seer (+7) first; Bodyguard, Diseased, Hunter… (+3) alphabetical.
+    expect(ROLE_SECTIONS[0].roles.slice(0, 7)).toEqual(['seer', 'bodyguard', 'diseased', 'hunter', 'priest', 'prince', 'mason']);
+    // Beginner Wolves: Wolf Man (−9) first.
+    expect(ROLE_SECTIONS[1].roles.slice(0, 3)).toEqual(['wolfMan', 'werewolf', 'fruitBrute']);
     expect(ROLE_SECTIONS[1].roles).toContain('minion');
-    expect(ROLE_SECTIONS[2].roles).toEqual(expect.arrayContaining(['tanner', 'vampire', 'cultLeader']));
+    expect(ROLE_SECTIONS[2].roles).toEqual(['vampire', 'tanner', 'cultLeader']);
   });
 
   it('always keeps Villager and Werewolf in a pool', () => {
