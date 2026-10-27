@@ -3,6 +3,18 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - Unreleased
+
+### Changed
+- **Auto-balance picks a fuller mix of roles.** It first keeps the deck balanced for the table's experience. It then tries to include each group below, highest priority first, as far as the pool and the number of seats allow:
+  1. At least one Villager and one Werewolf.
+  2. A role that wakes every night, a role that wakes only on night 1, and a role with no night action.
+  3. A Werewolf-team role with an ability, a role that can kill, a role that protects or saves, and a role that gathers information.
+  - The plain Villager and Werewolf don't count toward groups 2 and 3.
+  - Kill: Hunter, Witch, Wolf Cub, Big Bad Wolf, Vampire, and the reworked Tanner. Protect or save: Bodyguard, Priest, Witch, Hooker, Leprechaun. Information: Seer, Apprentice Seer, Aura Seer, P.I., Sorceress, Ghost.
+  - An auto-balanced deck always has at least one Villager now.
+- **Role order:** in the Role Pool and Deck steps (and the pool editor), each team's roles are sorted by difficulty (Beginner first), then by how strongly they favour that team (for the Village, highest weight first; for Wolves and the other teams, lowest first), then by English name (A to Z).
+
 ## [1.1.0] - Unreleased
 
 Implements [`UPDATE_v1.1.0.md`](UPDATE_v1.1.0.md).

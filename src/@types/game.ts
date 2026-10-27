@@ -100,6 +100,16 @@ export type NightActionKind =
 /** 1 = beginner-friendly, 2 = intermediate, 3 = advanced (also rare third-party teams). */
 export type Difficulty = 1 | 2 | 3;
 
+/**
+ * What a role can do beyond the plain Villager / Werewolf, for the auto-balancer's mix:
+ * eliminate players (beyond the pack's nightly kill), protect or save them, or learn
+ * something about them.
+ */
+export type RoleAbility = 'kill' | 'protect' | 'info';
+
+/** When a role wakes: every night, night 1 only, some other night (the Drunk), or never. */
+export type NightWake = 'everyNight' | 'firstNight' | 'later' | 'never';
+
 export interface Role {
   id: RoleId;
   faction: Faction;
@@ -117,6 +127,7 @@ export interface Role {
   firstNightOnly?: boolean;
   maxCopies: number;
   difficulty: Difficulty;
+  abilities: RoleAbility[];
 }
 
 export type Phase = 'setup' | 'night' | 'dawn' | 'day' | 'gameOver';

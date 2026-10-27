@@ -12,7 +12,7 @@ import type {
   SetupDraft,
   WinTeam,
 } from '../@types/game';
-import { ROLES, ROLE_ORDER } from '../data/roles';
+import { nightWake, ROLES, ROLE_ORDER } from '../data/roles';
 
 /**
  * Target deck weight per experience level.
@@ -192,10 +192,47 @@ function isValidDraft(deck: RoleId[], wolfCount: number, rules?: Partial<Rebalan
   return true;
 }
 
+type MixTest = (id: RoleId, rules?: Partial<RebalanceRules> | null) => boolean;
+
+/** A test only special roles pass, so the plain Villager and Werewolf never fill it. */
+const special =
+  (test: MixTest): MixTest =>
+  (id, rules) =>
+    id !== 'villager' && id !== 'werewolf' && test(id, rules);
+
 /**
- * Generates a deck of `playerCount` roles drawn from `pool` whose weight sum lands
- * as close as possible to the experience target, preferring decks that use more of
- * the selected special roles. Greedy seed + hill-climb; deterministic with `random`.
+ * The mix the auto-balancer aims for, highest priority first. Tier 1: a plain Villager and a
+ * plain Werewolf. Tier 2: special roles that wake every night, on night 1 only, and never.
+ * Tier 3: a Werewolf-team role with an ability, and roles that kill, protect and inspect.
+ * Tiers 2 and 3 look past the plain Villager and Werewolf, which would fill them trivially.
+ */
+export const DECK_MIX: readonly (readonly MixTest[])[] = [
+  [(id) => id === 'villager', (id) => id === 'werewolf'],
+  [
+    special((id) => nightWake(id) === 'everyNight'),
+    special((id) => nightWake(id) === 'firstNight'),
+    special((id) => nightWake(id) === 'never'),
+  ],
+  [
+    special((id) => ROLES[id].faction === 'werewolf'),
+    // The reworked Tanner takes down whoever uses a night power on them.
+    special((id, rules) => ROLES[id].abilities.includes('kill') || (id === 'tanner' && !!rules?.tanner)),
+    special((id) => ROLES[id].abilities.includes('protect')),
+    special((id) => ROLES[id].abilities.includes('info')),
+  ],
+];
+
+/** How many of each tier's DECK_MIX slots the deck leaves empty. */
+export function deckMixGaps(deck: readonly RoleId[], rules?: Partial<RebalanceRules> | null): number[] {
+  const roles = [...new Set(deck)];
+  return DECK_MIX.map((tier) => tier.filter((test) => !roles.some((id) => test(id, rules))).length);
+}
+
+/**
+ * Generates a deck of `playerCount` roles drawn from `pool` whose weight sum lands within
+ * tolerance of the experience target, then fills as much of DECK_MIX as the pool allows
+ * (tier by tier), then gets closer to the target and uses more of the selected special
+ * roles. Greedy seed + hill-climb; deterministic with `random`.
  */
 export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   const random = options.random ?? secureRandom;
@@ -219,13 +256,23 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   const shuffled = shuffle(specialPool, random).sort((a, b) => (a === 'seer' ? -1 : b === 'seer' ? 1 : 0));
   // Only one extra team (Couple, Vampires, Cult or Tanner) may join Village and Werewolves.
   const extra = shuffled.map((id) => extraTeamOf(id, options.rules)).find((t) => !!t);
-  const prioritized = shuffled.filter((id) => {
+  const allowed = shuffled.filter((id) => {
     const team = extraTeamOf(id, options.rules);
     return !team || team === extra;
   });
-  // Enough specials to keep Villagers under half the table, when the pool allows it.
+  // Lead with one role for each DECK_MIX slot it can fill, in priority order.
+  const lead: RoleId[] = [];
+  for (const test of DECK_MIX.flat()) {
+    if (lead.some((id) => test(id, options.rules))) continue;
+    const pick = allowed.find((id) => test(id, options.rules));
+    if (pick) lead.push(pick);
+  }
+  const prioritized = [...lead, ...allowed.filter((id) => !lead.includes(id))];
+  // Enough specials to keep Villagers under half the table, when the pool allows it, and
+  // room for at least one Villager.
   const villagerCap = maxAutoVillagers(n);
-  seed.push(...prioritized.slice(0, Math.max(Math.ceil(villageSlots * 0.6), villageSlots - villagerCap)));
+  const specials = Math.min(villageSlots - 1, Math.max(Math.ceil(villageSlots * 0.6), villageSlots - villagerCap));
+  seed.push(...prioritized.slice(0, specials));
   while (seed.length < n) seed.push('villager');
 
   const score = (deck: RoleId[]): number => {
@@ -234,32 +281,57 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
     const missing = specialPool.reduce((n, id) => n + (deck.includes(id) ? 0 : id === 'seer' ? 4 : 1), 0);
     const villagers = deck.filter((id) => id === 'villager').length;
     const overCap = Math.max(0, villagers - villagerCap);
-    // The villager cap outweighs balance; it's only exceeded if the pool is too small.
-    return overCap * 1000 + balance * 10 + missing * 0.5 + (villagers === 0 ? 0 : 0.01 * villagers);
+    const [mix1, mix2, mix3] = deckMixGaps(deck, options.rules);
+    // Each term outweighs everything after it: the villager cap (only exceeded if the pool
+    // is too small), a balanced deck, the DECK_MIX tiers, closeness to the target, then
+    // more of the pool and fewer Villagers.
+    return (
+      overCap * 1e5 +
+      Math.max(0, balance - BALANCE_TOLERANCE) * 1e4 +
+      mix1 * 1000 +
+      mix2 * 100 +
+      mix3 * 10 +
+      balance * 2 +
+      missing * 0.1 +
+      villagers * 0.001
+    );
+  };
+
+  const villagePicks = [...specialPool, 'villager'] as RoleId[];
+  const mutate = (deck: RoleId[]) => {
+    const slot = Math.floor(random() * n);
+    deck[slot] = ROLES[deck[slot]].isWolf ? pickOne(wolfPool, random) : pickOne(villagePicks, random);
+    // Masons come in groups: a lone one leaves too, or brings a partner.
+    const masons = deck.flatMap((id, i) => (id === 'mason' ? [i] : []));
+    if (masons.length !== 1) return;
+    if (random() < 0.5) deck[masons[0]] = pickOne(villagePicks.filter((id) => id !== 'mason'), random);
+    else {
+      const others = deck.flatMap((id, i) => (!ROLES[id].isWolf && id !== 'mason' ? [i] : []));
+      if (others.length) deck[pickOne(others, random)] = 'mason';
+    }
   };
 
   let best = seed;
   let bestScore = score(best);
-  let current = best;
-  let currentScore = bestScore;
-
-  for (let iter = 0; iter < 1500; iter++) {
-    const candidate = [...current];
-    const slot = Math.floor(random() * n);
-    if (ROLES[candidate[slot]].isWolf) {
-      candidate[slot] = pickOne(wolfPool, random);
-    } else {
-      candidate[slot] = pickOne([...specialPool, 'villager'] as RoleId[], random);
-    }
-    if (!isValidDraft(candidate, wolfCount, options.rules)) continue;
-    const s = score(candidate);
-    // Accept improvements, and sideways moves half the time to escape plateaus.
-    if (s < currentScore || (s === currentScore && random() < 0.5)) {
-      current = candidate;
-      currentScore = s;
-      if (s < bestScore) {
-        best = candidate;
-        bestScore = s;
+  // A few climbs from the seed, keeping the best: one can stall a swap short of a full mix.
+  for (let climb = 0; climb < 6; climb++) {
+    let current = seed;
+    let currentScore = score(seed);
+    for (let iter = 0; iter < 1000; iter++) {
+      const candidate = [...current];
+      mutate(candidate);
+      // Two changes at once now and then, e.g. to swap in a missing role and rebalance.
+      if (random() < 0.4) mutate(candidate);
+      if (!isValidDraft(candidate, wolfCount, options.rules)) continue;
+      const s = score(candidate);
+      // Accept improvements, and sideways moves half the time to escape plateaus.
+      if (s < currentScore || (s === currentScore && random() < 0.5)) {
+        current = candidate;
+        currentScore = s;
+        if (s < bestScore) {
+          best = candidate;
+          bestScore = s;
+        }
       }
     }
   }

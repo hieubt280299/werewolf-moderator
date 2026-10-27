@@ -4,12 +4,15 @@ import type {
   Faction,
   NightActionKind,
   NightGroup,
+  NightWake,
   RebalanceRules,
   Role,
+  RoleAbility,
   RoleId,
   SeerAppearance,
   WinTeam,
 } from '../@types/game';
+import { dictionaries } from '../i18n/translations';
 
 /**
  * Ultimate Werewolf Deluxe role catalogue. Weights match the printed card values.
@@ -78,20 +81,21 @@ interface Spec {
   nightAction?: NightActionKind;
   firstNightOnly?: boolean;
   maxCopies?: number;
+  abilities?: RoleAbility[];
 }
 
 const SPECS: Record<RoleId, Spec> = {
   // --- Village ---------------------------------------------------------------
   villager: { faction: 'village', weight: 1, difficulty: 1, maxCopies: 30 },
-  seer: { faction: 'village', weight: 7, difficulty: 1, nightAction: 'seerInspect' },
-  hooker: { faction: 'village', weight: 7, difficulty: 2, nightAction: 'hookerSeduce' },
-  apprenticeSeer: { faction: 'village', weight: 4, difficulty: 2 },
-  auraSeer: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'auraInspect' },
-  pi: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'piInspect' },
-  bodyguard: { faction: 'village', weight: 3, difficulty: 1, nightAction: 'bodyguardProtect' },
-  priest: { faction: 'village', weight: 3, difficulty: 1, nightAction: 'priestBless' },
-  hunter: { faction: 'village', weight: 3, difficulty: 1 },
-  witch: { faction: 'village', weight: 4, difficulty: 2, nightAction: 'witchPotion' },
+  seer: { faction: 'village', weight: 7, difficulty: 1, nightAction: 'seerInspect', abilities: ['info'] },
+  hooker: { faction: 'village', weight: 7, difficulty: 2, nightAction: 'hookerSeduce', abilities: ['protect'] },
+  apprenticeSeer: { faction: 'village', weight: 4, difficulty: 2, abilities: ['info'] },
+  auraSeer: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'auraInspect', abilities: ['info'] },
+  pi: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'piInspect', abilities: ['info'] },
+  bodyguard: { faction: 'village', weight: 3, difficulty: 1, nightAction: 'bodyguardProtect', abilities: ['protect'] },
+  priest: { faction: 'village', weight: 3, difficulty: 1, nightAction: 'priestBless', abilities: ['protect'] },
+  hunter: { faction: 'village', weight: 3, difficulty: 1, abilities: ['kill'] },
+  witch: { faction: 'village', weight: 4, difficulty: 2, nightAction: 'witchPotion', abilities: ['kill', 'protect'] },
   prince: { faction: 'village', weight: 3, difficulty: 1 },
   mayor: { faction: 'village', weight: 2, difficulty: 1 },
   mason: { faction: 'village', weight: 2, difficulty: 1, nightAction: 'masonMeet', firstNightOnly: true, maxCopies: 3 },
@@ -99,11 +103,11 @@ const SPECS: Record<RoleId, Spec> = {
   diseased: { faction: 'village', weight: 3, difficulty: 1 },
   villageIdiot: { faction: 'village', weight: 2, difficulty: 1 },
   pacifist: { faction: 'village', weight: -1, difficulty: 1 },
-  ghost: { faction: 'village', weight: 2, difficulty: 2 },
+  ghost: { faction: 'village', weight: 2, difficulty: 2, abilities: ['info'] },
   spellcaster: { faction: 'village', weight: 1, difficulty: 2, nightAction: 'spellcasterSilence' },
   oldHag: { faction: 'village', weight: 1, difficulty: 2, nightAction: 'oldHagBanish' },
   troublemaker: { faction: 'village', weight: -3, difficulty: 2, nightAction: 'troublemakerStir' },
-  leprechaun: { faction: 'village', weight: 5, difficulty: 3, nightAction: 'leprechaunRedirect' },
+  leprechaun: { faction: 'village', weight: 5, difficulty: 3, nightAction: 'leprechaunRedirect', abilities: ['protect'] },
   drunk: { faction: 'village', weight: 4, difficulty: 3, nightAction: 'drunkSober' },
   lycan: { faction: 'village', weight: -1, difficulty: 2, seerAppearance: 'werewolf' },
   // Can end up on either team, so the card is split Village blue / Wolf red.
@@ -114,20 +118,20 @@ const SPECS: Record<RoleId, Spec> = {
 
   // --- Wolves ----------------------------------------------------------------
   werewolf: { faction: 'werewolf', weight: -6, difficulty: 1, isWolf: true, nightAction: 'wolfKill', maxCopies: 10 },
-  wolfCub: { faction: 'werewolf', weight: -8, difficulty: 2, isWolf: true, nightAction: 'wolfKill' },
+  wolfCub: { faction: 'werewolf', weight: -8, difficulty: 2, isWolf: true, nightAction: 'wolfKill', abilities: ['kill'] },
   wolfMan: { faction: 'werewolf', weight: -9, difficulty: 1, isWolf: true, seerAppearance: 'village', nightAction: 'wolfKill' },
-  bigBadWolf: { faction: 'werewolf', weight: -9, difficulty: 2, isWolf: true, nightAction: 'wolfKill' },
+  bigBadWolf: { faction: 'werewolf', weight: -9, difficulty: 2, isWolf: true, nightAction: 'wolfKill', abilities: ['kill'] },
   direWolf: { faction: 'werewolf', weight: -4, difficulty: 2, isWolf: true, nightAction: 'direWolfCompanion', firstNightOnly: true },
   fangFace: { faction: 'werewolf', weight: -5, difficulty: 2, isWolf: true, nightAction: 'wolfKill' },
   fruitBrute: { faction: 'werewolf', weight: -3, difficulty: 1, isWolf: true, nightAction: 'wolfKill' },
   wolverine: { faction: 'werewolf', weight: -4, difficulty: 3, isWolf: true, nightAction: 'wolfKill' },
   minion: { faction: 'werewolf', weight: -6, difficulty: 2, nightAction: 'minionMeet', firstNightOnly: true },
-  sorceress: { faction: 'werewolf', weight: -3, difficulty: 2, nightAction: 'sorceressInspect' },
+  sorceress: { faction: 'werewolf', weight: -3, difficulty: 2, nightAction: 'sorceressInspect', abilities: ['info'] },
   loneWolf: { faction: 'werewolf', weight: -5, difficulty: 3, isWolf: true, winTeam: 'loneWolf', nightAction: 'wolfKill' },
 
   // --- Rare third parties ----------------------------------------------------
   tanner: { faction: 'neutral', weight: -2, difficulty: 3, winTeam: 'tanner' },
-  vampire: { faction: 'vampire', weight: -7, difficulty: 3, nightAction: 'vampireBite', maxCopies: 4 },
+  vampire: { faction: 'vampire', weight: -7, difficulty: 3, nightAction: 'vampireBite', maxCopies: 4, abilities: ['kill'] },
   cultLeader: { faction: 'cult', weight: 1, difficulty: 3, nightAction: 'cultRecruit' },
 };
 
@@ -147,6 +151,7 @@ export const ROLES: Record<RoleId, Role> = Object.fromEntries(
       nightOrder: spec.nightAction ? NIGHT_ORDER[spec.nightAction] : undefined,
       firstNightOnly: spec.firstNightOnly,
       maxCopies: spec.maxCopies ?? 1,
+      abilities: spec.abilities ?? [],
     } satisfies Role,
   ]),
 ) as Record<RoleId, Role>;
@@ -171,17 +176,29 @@ export type RoleSectionId = 'village' | 'wolves' | 'other';
 
 /**
  * Roles grouped for pickers: Village, Wolves (incl. Minion & Sorceress), then the rare
- * third parties. Within a section: easiest first, then by balance weight.
+ * third parties. Within a section: easiest first, then the roles that favour the section's
+ * side most (highest weight for the Village, lowest for the others), then by English name.
  */
 export const ROLE_SECTIONS: { id: RoleSectionId; roles: RoleId[] }[] = (() => {
   const sectionOf = (id: RoleId): RoleSectionId =>
     ROLES[id].faction === 'village' ? 'village' : ROLES[id].faction === 'werewolf' ? 'wolves' : 'other';
-  const order = (a: RoleId, b: RoleId) => ROLES[a].difficulty - ROLES[b].difficulty || ROLES[a].weight - ROLES[b].weight;
-  return (['village', 'wolves', 'other'] as const).map((id) => ({
-    id,
-    roles: ROLE_ORDER.filter((r) => sectionOf(r) === id).sort(order),
-  }));
+  const name = (id: RoleId) => dictionaries.en[`role.${id}.name`];
+  return (['village', 'wolves', 'other'] as const).map((section) => {
+    // Weights are + for the Village, − against it, so only the Village sorts high to low.
+    const side = section === 'village' ? -1 : 1;
+    const order = (a: RoleId, b: RoleId) =>
+      ROLES[a].difficulty - ROLES[b].difficulty || side * (ROLES[a].weight - ROLES[b].weight) || name(a).localeCompare(name(b), 'en');
+    return { id: section, roles: ROLE_ORDER.filter((r) => sectionOf(r) === section).sort(order) };
+  });
 })();
+
+/** When a role is called at night. The Drunk only wakes on night 3. */
+export const nightWake = (id: RoleId): NightWake => {
+  const role = ROLES[id];
+  if (!role.nightAction) return 'never';
+  if (role.firstNightOnly) return 'firstNight';
+  return id === 'drunk' ? 'later' : 'everyNight';
+};
 
 /** Plain Werewolf / Villager — what the Aura Seer reports as "ordinary". */
 export const ORDINARY_ROLES: ReadonlySet<RoleId> = new Set<RoleId>(['villager', 'werewolf']);
