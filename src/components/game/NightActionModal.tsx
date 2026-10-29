@@ -1,5 +1,20 @@
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, EyeOff, FlaskConical, Flame, Ghost, HeartCrack, Heart, Info, Sunrise, ThumbsDown, ThumbsUp } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  EyeOff,
+  FlaskConical,
+  Flame,
+  Ghost,
+  HeartCrack,
+  Heart,
+  Info,
+  ShieldOff,
+  Sunrise,
+  Swords,
+  ThumbsDown,
+  ThumbsUp,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { NightActionField, NightActionKind, NightStep, NightTargetListField, Player, RoleId } from '../../@types/game';
 import { ROLES } from '../../data/roles';
@@ -7,12 +22,12 @@ import { useGameEngine } from '../../hooks/useGameEngine';
 import { useNightSequence } from '../../hooks/useNightSequence';
 import { useBoardView } from '../../hooks/useSeatMapPrefs';
 import { useI18n } from '../../i18n/I18nContext';
-import { drunkRoleOptions } from '../../utils/gameRules';
+import { drunkRoleOptions, type DebuffShield, type KillDebuffs } from '../../utils/gameRules';
 import { BoardViewSwitch, SeatMap, type SeatAccent } from '../dashboard/SeatMap';
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
 import { LoversReveal } from './LoversReveal';
-import { Button, Sheet } from '../shared/ui';
+import { Button, Chip, Sheet } from '../shared/ui';
 
 const SINGLE_FIELD: Partial<Record<NightActionKind, NightActionField>> = {
   seerInspect: 'seerTarget',
@@ -191,7 +206,7 @@ function StepView({ step }: { step: NightStep }) {
       </div>
 
       {step.ghost && <Notice icon={<Ghost className="h-4 w-4" />}>{t('night.ghost')}</Notice>}
-      {step.note === 'wolvesSkip' && <Notice tone="ember">{t('night.wolvesSkip')}</Notice>}
+      {step.note === 'wolvesSkip' && <Notice tone="ember">{t(step.action === 'bigBadWolfStrike' ? 'night.wolvesSkipBbw' : 'night.wolvesSkip')}</Notice>}
       {step.note === 'wolvesDouble' && !step.ghost && <Notice tone="wolf">{t('night.wolvesDouble')}</Notice>}
       {!!step.joining?.length && !step.ghost && (
         <Notice tone="wolf">{t('night.cursedJoins', { names: step.joining.map((id) => byId.get(id)?.name ?? '?').join(', ') })}</Notice>
@@ -206,7 +221,15 @@ function StepView({ step }: { step: NightStep }) {
         </Notice>
       )}
       {step.action === 'hookerSeduce' && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.hookerOnce')}</p>}
-      {step.action === 'bodyguardProtect' && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.bodyguardRule')}</p>}
+      {step.action === 'bodyguardProtect' && step.targetCount > 0 && (
+        <p className="text-xs text-bone-faint">{t(night.rules.bigBadWolf ? 'night.bodyguardRuleBbw' : 'night.bodyguardRule')}</p>
+      )}
+      {step.action === 'bigBadWolfStrike' && step.targetCount > 0 && (
+        <p className="flex items-start gap-1.5 text-xs text-bone-faint">
+          <ShieldOff className="mt-px h-3.5 w-3.5 shrink-0 text-wolf-bright" />
+          {t('night.bigBadWolfRule')}
+        </p>
+      )}
       {OPTIONAL.has(step.action) && step.targetCount > 0 && <p className="text-xs text-bone-faint">{t('night.optional')}</p>}
 
       {/* Results sit above the picker so the sticky footer never hides them. */}
@@ -217,6 +240,10 @@ function StepView({ step }: { step: NightStep }) {
       {step.action === 'auraInspect' && state.nightActions.auraSeerTarget && <AuraResult playerId={state.nightActions.auraSeerTarget} />}
       {step.action === 'piInspect' && state.nightActions.piTarget && <PiResult playerId={state.nightActions.piTarget} />}
       {(step.action === 'leprechaunRedirect' || step.action === 'bigBadWolfStrike') && step.targetCount > 0 && <WolfTargetSummary step={step} />}
+      {/* Rebalanced Big Bad Wolf: how tonight's stacked kills resolve, before anyone else acts on them. */}
+      {(step.action === 'leprechaunRedirect' || step.action === 'bigBadWolfStrike') && step.targetCount > 0 && night.rules.bigBadWolf && (
+        <KillDebuffPanel />
+      )}
 
       {step.kind === 'info' && !step.ghost && <InfoPanel step={step} />}
       {step.kind === 'toggle' && step.targetCount > 0 && <TroublemakerToggle step={step} />}
@@ -356,7 +383,12 @@ function WitchPanel({ step }: { step: NightStep }) {
   const victims = engine.wolfVictims().map((id) => byId.get(id)).filter((p): p is Player => !!p);
   const killTargets = engine.targetsFor(step, 'kill');
   const { witchHealUsed, witchKillUsed } = state.modifiers;
-  const { witchSeesVictims } = useNightSequence();
+  const { witchSeesVictims, debuffsOf } = useNightSequence();
+  // Victims the Big Bad Wolf struck too: her potion only lifts the pack's kill.
+  const doomed = victims.filter((p) => {
+    const hit = debuffsOf(p.id);
+    return !!hit?.debuffs.includes('bbwKill') && !hit.dispelled.bbwKill;
+  });
 
   return (
     <div className="space-y-4">
@@ -380,6 +412,13 @@ function WitchPanel({ step }: { step: NightStep }) {
                 onClick={() => engine.setNightAction('witchSaveTarget', state.nightActions.witchSaveTarget === p.id ? null : p.id)}
               />
             ))}
+          </div>
+        )}
+        {witchSeesVictims && !witchHealUsed && doomed.length > 0 && (
+          <div className="mt-2">
+            <Notice tone="wolf" icon={<ShieldOff className="h-4 w-4" />}>
+              {t('night.witchBbw', { names: doomed.map((p) => p.name).join(', ') })}
+            </Notice>
           </div>
         )}
       </div>
@@ -506,7 +545,6 @@ function InfoPanel({ step }: { step: NightStep }) {
   );
 }
 
-/** The pack's (first) victim, for the calls that act around it: Leprechaun, Big Bad Wolf. */
 /** The Lovers' call: opens a full-screen view of just the two of them, to show the Lovers. */
 function LoversPanel() {
   const { t } = useI18n();
@@ -525,6 +563,7 @@ function LoversPanel() {
   );
 }
 
+/** The pack's (first) victim, for the calls that act around it: Leprechaun, Big Bad Wolf. */
 function WolfTargetSummary({ step }: { step: NightStep }) {
   const { t } = useI18n();
   const { state, byId } = useGameEngine();
@@ -534,6 +573,74 @@ function WolfTargetSummary({ step }: { step: NightStep }) {
     <div className="space-y-2">
       <PlayerToken player={target} accent="wolf" selected />
       <p className="text-xs text-bone-faint">{t(step.action === 'bigBadWolfStrike' ? 'night.bigBadWolfNext' : 'night.leprechaunKeep')}</p>
+    </div>
+  );
+}
+
+/** Who lifted a debuff, named by their role. */
+const SHIELD_ROLE: Record<DebuffShield, RoleId> = { hooker: 'hooker', priest: 'priest', bodyguard: 'bodyguard', witch: 'witch' };
+
+type Outcome = 'dies' | 'saved' | 'cancelled' | 'turns' | 'wounded';
+
+/** What dawn brings this victim, as the night stands. */
+function outcomeOf(hit: KillDebuffs, p: Player): Outcome {
+  if (!hit.lands) return Object.values(hit.dispelled).every((x) => x === 'hooker') ? 'cancelled' : 'saved';
+  if (p.roleId === 'cursed') return 'turns';
+  if (p.roleId === 'toughGuy' && p.status.woundedRound === null) return 'wounded';
+  return 'dies';
+}
+
+const OUTCOME_TONE: Record<Outcome, string> = {
+  dies: 'text-wolf-bright',
+  saved: 'text-village',
+  cancelled: 'text-bone-dim',
+  turns: 'text-ember',
+  wounded: 'text-ember',
+};
+
+/**
+ * Moderator-only resolution of tonight's wolf attacks: each victim's kill debuffs
+ * (`[Wolfpack, Big Bad Wolf]`), what lifted each one so far, and what that means at dawn.
+ */
+function KillDebuffPanel() {
+  const { t } = useI18n();
+  const { byId } = useGameEngine();
+  const { debuffs } = useNightSequence();
+  if (debuffs.length === 0) return null;
+  return (
+    <div className="space-y-2.5 rounded-xl border border-wolf/30 bg-wolf/5 p-3">
+      <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">
+        <Swords className="h-3.5 w-3.5 text-wolf-bright" /> {t('debuff.title')}
+      </p>
+      <ul className="space-y-2.5">
+        {debuffs.map((hit) => {
+          const p = byId.get(hit.targetId);
+          if (!p) return null;
+          const outcome = outcomeOf(hit, p);
+          return (
+            <li key={hit.targetId} className="space-y-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <span className="text-sm text-bone">
+                  {p.seat + 1}. {p.name}
+                </span>
+                <span className={clsx('text-xs font-semibold uppercase tracking-wide', OUTCOME_TONE[outcome])}>{t(`debuff.outcome.${outcome}`)}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {hit.debuffs.map((d) => {
+                  const by = hit.dispelled[d];
+                  return (
+                    <Chip key={d} tone={by ? 'muted' : 'werewolf'} icon={d === 'bbwKill' ? <ShieldOff className="h-3 w-3" /> : undefined}>
+                      <span className={clsx(by && 'line-through')}>{t(`debuff.${d}`)}</span>
+                      {by && <span className="normal-case">· {t(`role.${SHIELD_ROLE[by]}.name`)}</span>}
+                    </Chip>
+                  );
+                })}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-[11px] text-bone-faint">{t('debuff.hint')}</p>
     </div>
   );
 }

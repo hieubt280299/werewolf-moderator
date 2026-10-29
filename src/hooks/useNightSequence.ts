@@ -3,11 +3,13 @@ import type { NightGroup, NightStep, Player } from '../@types/game';
 import {
   actionSeduced,
   inspectionResult,
+  killDebuffs,
   rulesOf,
   seducedPlayer,
   witchSeesVictims,
   wolfAttacks,
   type InspectAction,
+  type KillDebuffs,
 } from '../utils/gameRules';
 import { useGameEngine } from './useGameEngine';
 
@@ -18,7 +20,8 @@ import { useGameEngine } from './useGameEngine';
  *
  * On top of the game engine it answers what the moderator needs at each call: whether the
  * Hooker's seduction cancels this power, what an inspector is told (inverted when seduced),
- * and what the Witch may see under the house rules.
+ * what the Witch may see under the house rules, and the resolution queue of tonight's kill
+ * debuffs — `[WolfpackKill, BBWKill]` per victim, with what lifts each (see killDebuffs).
  */
 export function useNightSequence() {
   const engine = useGameEngine();
@@ -29,11 +32,16 @@ export function useNightSequence() {
 
   const derived = useMemo(() => {
     const seduced = seducedPlayer(state) ?? null;
+    const debuffs = killDebuffs(state);
     return {
       /** Tonight's seduced player, if the Hooker has chosen. */
       seduced,
       /** Wolf attacks that will land (after the Leprechaun, minus seduced attackers). */
       attacks: wolfAttacks(state),
+      /** Each victim's kill debuffs as things stand, with what lifts them, in attack order. */
+      debuffs,
+      /** One player's kill debuffs tonight, if any wolf attack falls on them. */
+      debuffsOf: (playerId: string): KillDebuffs | undefined => debuffs.find((d) => d.targetId === playerId),
       witchSeesVictims: witchSeesVictims(state),
       rules: rulesOf(state),
     };

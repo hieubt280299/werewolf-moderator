@@ -7,6 +7,7 @@ import { useSettings } from '../../context/SettingsContext';
 import { useI18n } from '../../i18n/I18nContext';
 import { describeAuthError } from '../auth/authErrors';
 import { RebalancesSection } from '../settings/RebalancesSection';
+import { SignInMethodsSection } from '../settings/SignInMethodsSection';
 import { LanguageToggle } from '../shared/LanguageToggle';
 import { Button, Sheet, TextField, Toggle } from '../shared/ui';
 
@@ -45,6 +46,9 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
   const [emailPassword, setEmailPassword] = useState('');
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const emailSection = useRef<HTMLDivElement>(null);
+  // Both forms ask for the current password, which an account made with Google may not have.
+  const hasPassword = auth.mode !== 'firebase' || !!auth.user?.providers?.includes('password');
+  const username = auth.user?.username;
 
   useEffect(() => {
     if (pwOpen) pwSection.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -113,7 +117,13 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
   return (
     <div className="space-y-4 pb-6">
       <Section title={t('profile.account')}>
-        <p className="font-display text-lg tracking-grimoire text-bone">@{auth.user?.username}</p>
+        {username ? (
+          <p className="font-display text-lg tracking-grimoire text-bone">@{username}</p>
+        ) : (
+          <p className="font-display text-lg tracking-grimoire text-bone">
+            {auth.profile?.displayName} <span className="block text-xs normal-case tracking-normal text-bone-dim">{t('profile.googleAccount')}</span>
+          </p>
+        )}
         <p className={clsx('flex items-center gap-1.5 text-xs', auth.mode === 'firebase' ? 'text-village' : 'text-bone-faint')}>
           {auth.mode === 'firebase' ? <Cloud className="h-3.5 w-3.5" /> : <HardDrive className="h-3.5 w-3.5" />}
           {auth.mode === 'firebase' ? t('profile.storageCloud') : t('profile.storageLocal')}
@@ -132,6 +142,8 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
           )}
         </div>
       </Section>
+
+      <SignInMethodsSection />
 
       <Section title={t('profile.displayName')}>
         <form onSubmit={saveName} className="flex gap-2">
@@ -234,7 +246,7 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
         {pwMsg?.ok && <p className="text-center text-xs text-village">{pwMsg.text}</p>}
         {emailMsg?.ok && <p className="text-center text-xs text-village">{emailMsg.text}</p>}
         {/* Account security: password and recovery email side by side. */}
-        {(!pwOpen || !emailOpen) && (
+        {hasPassword && (!pwOpen || !emailOpen) && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {!pwOpen && (
               <Button block onClick={openPassword} icon={<KeyRound className="h-4 w-4" />}>

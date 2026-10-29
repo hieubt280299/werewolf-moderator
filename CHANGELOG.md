@@ -3,6 +3,41 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - Unreleased
+
+Implements [`UPDATE_v1.2.0.md`](UPDATE_v1.2.0.md).
+
+### Added
+- **Continue with Google** on the sign-in screen (Firebase mode).
+  - A first Google sign-in creates a profile at once. The display name comes from the Google account; stats and role pools start empty.
+  - The Google window opens as a popup. It switches to a full-page redirect when the popup is blocked, or in the installed home-screen app.
+  - `vercel.json` proxies Firebase's sign-in helper (`/__/auth`), so redirects keep working in browsers that block third-party storage. Setup steps are in the README.
+- **One profile per email.** Signing in with Google using a username account's email opens that same account: same decks, history, stats and settings.
+  - Google addresses (@gmail.com, Workspace) merge automatically.
+  - Any other address asks once for the account's password, then links Google to it.
+- **Sign-in methods** in Profile & settings:
+  - Connect or disconnect Google.
+  - Add username & password to an account made with Google.
+  - Verify your email.
+  - Disconnecting Google is refused while it is the only way to sign in. Connecting is refused if that Google account already has its own profile.
+- **Email verification.** New sign-ups get a verification email.
+  - If Google replaced an unverified account's password, the app offers once to set a new one, so the username keeps working.
+- **Kill debuffs** (rebalanced Big Bad Wolf). Each victim carries `WolfpackKill` and/or `BBWKill`:
+  - The Bodyguard and the Witch's Healing Potion lift only `WolfpackKill`.
+  - Only the Priest's (Mục Sư) blessing lifts `BBWKill`, and it lifts every debuff.
+  - A victim with both, saved by the Bodyguard or Witch, still dies. The timeline notes that the Big Bad Wolf's strike couldn't be stopped.
+- **Tonight's wolf attacks** panel at the Big Bad Wolf's and Leprechaun's calls. It lists each victim's debuffs, what has lifted them so far, and the result at dawn: dies, survives, turns, or wounded.
+  - The Witch's call warns the moderator when a victim she can heal was also struck by the Big Bad Wolf.
+
+### Changed
+- **The rebalanced Big Bad Wolf's strike is unhealable.** The Bodyguard no longer stops it; the Witch still can't. Only the Priest's blessing does.
+- **The pack's kill and the Big Bad Wolf's strike can stack on one player**, through the Leprechaun moving the pack's kill onto the strike's target. The Big Bad Wolf still strikes only a neighbour of the pack's victim.
+  - Seducing the Big Bad Wolf cancels both attacks. Seducing another Werewolf cancels only the pack's, so a stacked victim still dies.
+  - For a Cursed or a Tough Guy, a stack is one wolf attack: the Cursed turns once, the Tough Guy is wounded once.
+  - A Diseased killed by the strike (even when the Bodyguard or Witch lifted the pack's kill) makes the pack **and** the Big Bad Wolf skip the next night, as when he is seduced. The rules engine drops any wolf target set on a skipped night, and the Big Bad Wolf's call says his strike is off too.
+- **The Leprechaun can move the pack's kill onto another of tonight's pack victims** (the standard Big Bad Wolf's two kills, or a Wolf Cub night). The first victim is spared. The other is attacked once, and one save covers it. Before, this choice was silently ignored.
+- Firestore rules: an account made with Google may set its username once.
+
 ## [1.1.1] - Unreleased
 
 ### Changed

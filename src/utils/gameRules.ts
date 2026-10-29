@@ -291,15 +291,20 @@ export interface WolfAttack {
  * Tonight's wolf attacks that will land: after the Leprechaun's redirect (which happens
  * before the Witch wakes, so she sees the real victim), minus any a seduction cancelled.
  * `attempted` keeps the cancelled ones too (they still count as touching the Tanner).
+ *
+ * One player may be attacked more than once: the Leprechaun can move the pack's kill onto
+ * another of tonight's victims, and the Big Bad Wolf's strike stacks on top of the pack's.
  */
 export function wolfAttacks(s: GameState, { attempted = false } = {}): WolfAttack[] {
+  // The Diseased was eaten last night: neither the pack nor the Big Bad Wolf hunts tonight.
+  if (s.modifiers.wolvesSkipNextNight) return [];
   const a = s.nightActions;
   const attacks: WolfAttack[] = [];
   if (attempted || !packSeduced(s)) {
     const targets = [...new Set(a.wolfTargets)];
     const redirect = a.leprechaunTarget;
     const leprechaunAlive = s.players.some((p) => p.alive && p.roleId === 'leprechaun');
-    if (leprechaunAlive && !actionSeduced(s, 'leprechaunRedirect') && redirect && targets[0] && !targets.includes(redirect)) {
+    if (leprechaunAlive && !actionSeduced(s, 'leprechaunRedirect') && redirect && targets[0]) {
       if (neighbors(s.players, targets[0]).some((p) => p.id === redirect)) targets[0] = redirect;
     }
     attacks.push(...targets.map((targetId) => ({ targetId, by: 'pack' as const })));
@@ -307,24 +312,82 @@ export function wolfAttacks(s: GameState, { attempted = false } = {}): WolfAttac
   const strike = a.bigBadWolfTarget;
   const bigBadAlive = s.players.some((p) => p.alive && p.roleId === 'bigBadWolf');
   const strikeLands = attempted || !actionSeduced(s, 'bigBadWolfStrike');
-  if (rulesOf(s).bigBadWolf && strike && bigBadAlive && strikeLands && !attacks.some((x) => x.targetId === strike)) {
+  if (rulesOf(s).bigBadWolf && strike && bigBadAlive && strikeLands) {
     attacks.push({ targetId: strike, by: 'bigBadWolf' });
   }
   return attacks;
 }
 
 /** The players the wolves will really attack tonight. */
-export const effectiveWolfTargets = (s: GameState): string[] => wolfAttacks(s).map((x) => x.targetId);
+export const effectiveWolfTargets = (s: GameState): string[] => [...new Set(wolfAttacks(s).map((x) => x.targetId))];
 
 /**
  * Who the Witch is shown — and may heal: only the pack's victims. The Big Bad Wolf's own
  * strike (house rule) stays hidden from her.
  */
-export const witchVictims = (s: GameState): string[] => wolfAttacks(s).filter((x) => x.by === 'pack').map((x) => x.targetId);
+export const witchVictims = (s: GameState): string[] => [...new Set(wolfAttacks(s).filter((x) => x.by === 'pack').map((x) => x.targetId))];
 
 /** The Priest's blessing tonight: it stops every killing power aimed at that player. */
 export const blessedPlayer = (s: GameState): string | null =>
   s.nightActions.priestTarget && !actionSeduced(s, 'priestBless') ? s.nightActions.priestTarget : null;
+
+// ---------------------------------------------------------------------------
+// Kill debuffs (v1.2.0) — what each wolf attack leaves on its victim, and what lifts it
+// ---------------------------------------------------------------------------
+
+/** `wolfpackKill`: the pack's attack. `bbwKill`: the rebalanced Big Bad Wolf's unhealable strike. */
+export type KillDebuff = 'wolfpackKill' | 'bbwKill';
+/** What lifted a debuff: a seduced attacker, the Priest's blessing, the Bodyguard, the Healing Potion. */
+export type DebuffShield = 'hooker' | 'priest' | 'bodyguard' | 'witch';
+
+export interface KillDebuffs {
+  targetId: string;
+  /** In attack order: `[wolfpackKill, bbwKill]` when both fell on this player. */
+  debuffs: KillDebuff[];
+  /** The debuffs lifted tonight, and what lifted each. */
+  dispelled: Partial<Record<KillDebuff, DebuffShield>>;
+  /** A debuff is still active: the attack lands (a Cursed turns, a Tough Guy is wounded, anyone else dies). */
+  lands: boolean;
+}
+
+/**
+ * Tonight's kill debuffs, one entry per victim in attack order.
+ *
+ * - `wolfpackKill` is lifted by the Bodyguard or the Witch's Healing Potion.
+ * - `bbwKill` (house rule) is lifted by neither: only the Priest's blessing, which lifts every
+ *   debuff. A victim carrying both whom the Bodyguard or Witch saves therefore still dies.
+ * - A seduced attacker's debuff never lands. The Big Bad Wolf hunts with the pack, so seducing
+ *   him cancels both; seducing another Werewolf cancels only the pack's.
+ *
+ * The pack's kill moved onto another of its own victims (Leprechaun) is still one debuff.
+ */
+export function killDebuffs(s: GameState): KillDebuffs[] {
+  const a = s.nightActions;
+  const blessed = blessedPlayer(s);
+  const guarded = actionSeduced(s, 'bodyguardProtect') ? null : a.bodyguardTarget;
+  const healed = actionSeduced(s, 'witchPotion') ? null : a.witchSaveTarget;
+  const seduced: Record<KillDebuff, boolean> = { wolfpackKill: packSeduced(s), bbwKill: actionSeduced(s, 'bigBadWolfStrike') };
+  const shieldFor = (debuff: KillDebuff, targetId: string): DebuffShield | null => {
+    if (seduced[debuff]) return 'hooker';
+    if (targetId === blessed) return 'priest';
+    if (debuff === 'bbwKill') return null;
+    if (targetId === guarded) return 'bodyguard';
+    return targetId === healed ? 'witch' : null;
+  };
+
+  const hits = new Map<string, KillDebuffs>();
+  for (const { targetId, by } of wolfAttacks(s, { attempted: true })) {
+    const debuff: KillDebuff = by === 'pack' ? 'wolfpackKill' : 'bbwKill';
+    const hit = hits.get(targetId) ?? { targetId, debuffs: [], dispelled: {}, lands: false };
+    hits.set(targetId, hit);
+    if (hit.debuffs.includes(debuff)) continue;
+    hit.debuffs.push(debuff);
+    const shield = shieldFor(debuff, targetId);
+    if (shield) hit.dispelled[debuff] = shield;
+  }
+  for (const hit of hits.values()) hit.lands = hit.debuffs.some((d) => !hit.dispelled[d]);
+  return [...hits.values()];
+}
 
 /** House rule: once the Healing Potion is used, the Witch no longer learns the wolves' victim. */
 export const witchSeesVictims = (s: GameState): boolean => !(rulesOf(s).witch && s.modifiers.witchHealUsed);
@@ -702,7 +765,10 @@ export function resolveNight(state: GameState): GameState {
   // Seductions are fixed before anything changes roles tonight (a seduced Cursed who turns
   // doesn't retroactively spoil the pack's kill).
   const cancelled = new Set((Object.keys(NIGHT_ORDER) as NightActionKind[]).filter((x) => actionSeduced(s, x)));
+  // Read before tonight's modifiers are reset below (a Diseased-skipped night has no attacks).
   const attacks = wolfAttacks(s);
+  const attempted = wolfAttacks(s, { attempted: true });
+  const hits = killDebuffs(s);
   if (a.hookerTarget && !m.hookerVisited.includes(a.hookerTarget)) m.hookerVisited.push(a.hookerTarget);
   // Tonight's awakenings have been called; ones queued from here on are for a later night.
   m.pendingAwakenings = m.pendingAwakenings.filter((w) => w.round > s.round);
@@ -711,13 +777,10 @@ export function resolveNight(state: GameState): GameState {
   m.wolvesSkipNextNight = false;
   m.wolvesDoubleKill = false;
 
-  // The Bodyguard only stops Werewolf attacks; the Priest's blessing stops every killing power.
+  // The Priest's blessing stops every killing power (wolf attacks: see killDebuffs).
   const blessed = blessedPlayer(s);
-  const shielded = new Set([cancelled.has('bodyguardProtect') ? null : a.bodyguardTarget, blessed].filter((x): x is string => !!x));
   // A seduced Witch's potions are spent with no effect.
-  const witchWorks = !cancelled.has('witchPotion');
-  const witchSave = witchWorks ? a.witchSaveTarget : null;
-  const witchKill = witchWorks ? a.witchKillTarget : null;
+  const witchKill = cancelled.has('witchPotion') ? null : a.witchKillTarget;
 
   const dying: { playerId: string; cause: EliminationCause }[] = [];
   const willDie = (id: string) => dying.some((d) => d.playerId === id);
@@ -762,7 +825,7 @@ export function resolveNight(state: GameState): GameState {
     acted('bodyguard', a.bodyguardTarget);
     acted('priest', a.priestTarget);
     touch(a.vampireTarget, strongest(holdersOf('vampire')));
-    for (const attack of wolfAttacks(s, { attempted: true })) {
+    for (const attack of attempted) {
       touch(attack.targetId, attack.by === 'pack' ? strongest(living.filter(isWolfPlayer)) : holdersOf('bigBadWolf'));
     }
     acted('direWolf', a.direWolfTarget);
@@ -788,14 +851,18 @@ export function resolveNight(state: GameState): GameState {
     report.metallic = ringDistance(s.players, wolverine.id, firstVictim) <= closest;
   }
 
-  for (const { targetId, by } of attacks) {
+  for (const { targetId, lands, dispelled } of hits) {
     const p = findPlayer(s, targetId);
     if (!p?.alive || willDie(targetId)) continue;
-    // The Witch only heals the pack's victim; the Big Bad Wolf's own strike is hidden from her.
-    if (shielded.has(targetId) || (by === 'pack' && targetId === witchSave)) {
-      report.saved.push(targetId);
+    if (!lands) {
+      // Saved — unless the attacks never happened at all (every attacker was seduced).
+      if (Object.values(dispelled).some((x) => x !== 'hooker')) report.saved.push(targetId);
       continue;
     }
+    const lifted = dispelled.wolfpackKill;
+    if (lifted === 'bodyguard' || lifted === 'witch') pushLog(s, 'log.bigBadWolfUnstoppable', { name: p.name, role: p.roleId });
+    // However many debuffs land, it is one wolf attack: a Cursed turns once, a Tough Guy is
+    // wounded once, and anyone else dies.
     if (p.roleId === 'cursed') {
       p.roleId = 'werewolf';
       p.status.transformed = true;

@@ -1,7 +1,33 @@
-import type { AuthErrorCode, RecoveryEmailChange, ResetDelivery, SessionUser } from '../@types/auth';
+import type { AuthErrorCode, GoogleOutcome, RecoveryEmailChange, ResetDelivery, SessionUser } from '../@types/auth';
 import type { GameRecord, GameState, LifetimeStats, RolePool, UserProfile, WinTeam } from '../@types/game';
 
 export type { AuthErrorCode } from '../@types/auth';
+
+/** The signed-in account's sign-in methods and email, as Firebase knows them right now. */
+export type AccountInfo = Pick<SessionUser, 'providers' | 'email' | 'emailVerified'>;
+
+/** Firebase only (v1.2.0): Google sign-in and managing how an account signs in. */
+export interface CloudAccounts {
+  /** Popup, or a redirect where popups don't work (the installed app, a blocked popup). */
+  signInWithGoogle(): Promise<GoogleOutcome>;
+  /** Picks up a Google redirect started before the page reloaded; null if there was none. */
+  resumeGoogleRedirect(): Promise<GoogleOutcome | null>;
+  /** After `needsPassword`: signs in to the account that owns the email and links Google to it. */
+  linkPendingGoogle(password: string): Promise<void>;
+  cancelPendingGoogle(): void;
+  /** Links Google to the signed-in account. */
+  connectGoogle(): Promise<GoogleOutcome>;
+  /** Refused when Google is the account's only way to sign in. */
+  disconnectGoogle(): Promise<void>;
+  /**
+   * Adds username + password sign-in to an account made with Google, or just a password when
+   * the profile already has a username (e.g. Google replaced an unverified one). Returns the username.
+   */
+  addPasswordSignIn(password: string, username?: string): Promise<string>;
+  /** Sends the verification link to the account's email. */
+  sendVerificationEmail(): Promise<void>;
+  account(): AccountInfo | null;
+}
 
 /**
  * Storage backend for moderator accounts. Two implementations share this contract:
@@ -10,6 +36,8 @@ export type { AuthErrorCode } from '../@types/auth';
  */
 export interface ProfileStore {
   mode: 'firebase' | 'local';
+  /** Firebase only: Google sign-in and sign-in methods. */
+  cloud?: CloudAccounts;
   onAuthChange(callback: (user: SessionUser | null) => void): () => void;
   signUp(username: string, password: string, displayName: string, recoveryEmail: string): Promise<void>;
   signIn(username: string, password: string): Promise<void>;
@@ -104,7 +132,8 @@ export function newProfile(user: SessionUser, displayName?: string, recoveryEmai
   return {
     uid: user.uid,
     username: user.username,
-    displayName: displayName?.trim() || user.username,
+    // Accounts made with Google have no username: fall back to the email's name.
+    displayName: (displayName?.trim() || user.username || recoveryEmail?.split('@')[0] || 'Moderator').slice(0, 30),
     recoveryEmail,
     pools: [] as RolePool[],
     stats: { ...EMPTY_STATS },
