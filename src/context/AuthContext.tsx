@@ -2,15 +2,24 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   RESET_RESEND_SECONDS,
   type AuthActionLink,
+  type GoogleOutcome,
   type RecoveryEmailChange,
   type RecoveryStage,
   type ResetDelivery,
   type SessionUser,
 } from '../@types/auth';
 import { MAX_POOLS, NO_REBALANCES, type GameRecord, type RebalanceRules, type RolePool, type UserProfile } from '../@types/game';
-import { AuthError, getProfileStore, type ProfileStore } from '../services/profileStore';
+import { AuthError, getProfileStore, type CloudAccounts, type ProfileStore } from '../services/profileStore';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
+
+/**
+ * An account outcome to show until dismissed:
+ * - `connected` / `error`: a Google redirect that finished as the app loaded;
+ * - `notLinked`: signed in by password to link Google, but the link was refused (e.g. a
+ *   recovery-email change is pending). Shown once the app is up, never on the sign-in screen.
+ */
+export type AccountNotice = { kind: 'connected' } | { kind: 'error'; error: unknown } | { kind: 'notLinked'; error: unknown };
 
 interface AuthValue {
   status: Status;
@@ -18,6 +27,25 @@ interface AuthValue {
   user: SessionUser | null;
   profile: UserProfile | null;
   store: ProfileStore | null;
+  // v1.2.0 — Google (Firebase only) -----------------------------------------
+  /** Google sign-in is offered (Firebase mode). */
+  googleEnabled: boolean;
+  /** A Google redirect is being picked up as the app loads. */
+  googleResuming: boolean;
+  signInWithGoogle: () => Promise<GoogleOutcome>;
+  /** Google found a username account with the same email: its password links the two. */
+  pendingGoogle: { email: string } | null;
+  linkPendingGoogle: (password: string) => Promise<void>;
+  cancelPendingGoogle: () => void;
+  /** Refused while a recovery-email change waits for confirmation (cancelEmailChange). */
+  connectGoogle: () => Promise<GoogleOutcome>;
+  disconnectGoogle: () => Promise<void>;
+  cancelEmailChange: () => Promise<void>;
+  /** Username + password for an account made with Google (or just a password, if it has a username). */
+  addPasswordSignIn: (password: string, username?: string) => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
+  accountNotice: AccountNotice | null;
+  dismissAccountNotice: () => void;
   signIn: (username: string, password: string) => Promise<void>;
   /** The recovery email is required: it's where password resets are sent. */
   signUp: (username: string, password: string, displayName: string, recoveryEmail: string) => Promise<void>;
@@ -52,6 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const profileRef = useRef<UserProfile | null>(null);
   profileRef.current = profile;
+  const [pendingGoogle, setPendingGoogle] = useState<{ email: string } | null>(null);
+  const [googleResuming, setGoogleResuming] = useState(false);
+  const [accountNotice, setAccountNotice] = useState<AccountNotice | null>(null);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -68,14 +99,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         try {
           const loaded = await s.loadProfile(next);
-          // Firebase accounts sign in by email, so the username comes from the profile.
-          setUser({ ...next, username: loaded.username || next.username });
+          // Firebase accounts sign in by email, so the username comes from the profile. Sign-in
+          // methods are read again: Google may have been linked while the profile loaded.
+          setUser({ ...next, ...s.cloud?.account(), username: loaded.username || next.username });
           setProfile(loaded);
           setStatus('signedIn');
         } catch {
           setStatus('signedOut');
         }
       });
+      // Back from Google after a redirect sign-in (or connecting Google in Settings).
+      if (s.cloud) {
+        setGoogleResuming(true);
+        s.cloud
+          .resumeGoogleRedirect()
+          .then((outcome) => {
+            if (outcome?.status === 'needsPassword') setPendingGoogle({ email: outcome.email });
+            if (outcome?.status === 'done' && outcome.mode === 'link') setAccountNotice({ kind: 'connected' });
+          })
+          .catch((error: unknown) => setAccountNotice({ kind: 'error', error }))
+          .finally(() => setGoogleResuming(false));
+      }
     });
     return () => {
       cancelled = true;
@@ -86,6 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const requireStore = useCallback(() => {
     if (!store) throw new Error('Auth is still loading');
     return store;
+  }, [store]);
+
+  const requireCloud = useCallback((): CloudAccounts => {
+    const cloud = requireStore().cloud;
+    if (!cloud) throw new AuthError('googleUnavailable');
+    return cloud;
+  }, [requireStore]);
+
+  /** Re-reads the account's sign-in methods after linking, unlinking or verifying. */
+  const refreshAccount = useCallback(() => {
+    const account = store?.cloud?.account();
+    if (account) setUser((u) => (u ? { ...u, ...account } : u));
   }, [store]);
 
   const patchProfile = useCallback(
@@ -110,6 +166,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       store,
+      googleEnabled: !!store?.cloud,
+      googleResuming,
+      signInWithGoogle: async () => {
+        const outcome = await requireCloud().signInWithGoogle();
+        setPendingGoogle(outcome.status === 'needsPassword' ? { email: outcome.email } : null);
+        return outcome;
+      },
+      pendingGoogle,
+      linkPendingGoogle: async (password) => {
+        try {
+          await requireCloud().linkPendingGoogle(password);
+        } catch (err) {
+          if (!(err instanceof AuthError && err.code === 'emailChangePending')) throw err;
+          // Signed in, but Google stays unlinked: the app opens and says why.
+          setAccountNotice({ kind: 'notLinked', error: err });
+        }
+        setPendingGoogle(null);
+        refreshAccount();
+      },
+      cancelPendingGoogle: () => {
+        store?.cloud?.cancelPendingGoogle();
+        setPendingGoogle(null);
+      },
+      connectGoogle: async () => {
+        const outcome = await requireCloud().connectGoogle();
+        refreshAccount();
+        return outcome;
+      },
+      disconnectGoogle: async () => {
+        // Without a username, the password alone can't be used to sign in.
+        if (!profileRef.current?.username) throw new AuthError('lastSignInMethod');
+        await requireCloud().disconnectGoogle();
+        refreshAccount();
+      },
+      cancelEmailChange: async () => {
+        await requireCloud().cancelEmailChange();
+        setProfile((p) => (p ? { ...p, pendingRecoveryEmail: null } : p));
+      },
+      addPasswordSignIn: async (password, username) => {
+        const claimed = await requireCloud().addPasswordSignIn(password, username);
+        setProfile((p) => (p ? { ...p, username: claimed } : p));
+        setUser((u) => (u ? { ...u, username: claimed } : u));
+        refreshAccount();
+      },
+      sendVerificationEmail: () => requireCloud().sendVerificationEmail(),
+      accountNotice,
+      dismissAccountNotice: () => setAccountNotice(null),
       signIn: (u, p) => requireStore().signIn(u, p),
       signUp: (u, p, name, email) => requireStore().signUp(u, p, name, email),
       signOut: () => requireStore().signOut(),
@@ -125,7 +228,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyResetCode: (u, code) => requireStore().verifyResetCode(u, code),
       checkResetLink: (code) => requireStore().checkResetLink(code),
       completePasswordReset: (ticket, next) => requireStore().completePasswordReset(ticket, next),
-      applyEmailAction: (code) => requireStore().applyEmailAction(code),
+      applyEmailAction: async (code) => {
+        await requireStore().applyEmailAction(code);
+        refreshAccount();
+      },
       updateDisplayName: (name) => patchProfile({ displayName: name.trim() }),
       updateRebalances: (rules) => patchProfile({ rebalances: { ...NO_REBALANCES, ...rules } }),
       savePool: async (pool) => {
@@ -143,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       listGames: async () => (profileRef.current ? requireStore().listGames(profileRef.current.uid) : []),
     }),
-    [status, store, user, profile, requireStore, patchProfile],
+    [status, store, user, profile, requireStore, patchProfile, requireCloud, refreshAccount, pendingGoogle, googleResuming, accountNotice],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

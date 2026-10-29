@@ -1,10 +1,37 @@
 import clsx from 'clsx';
-import { Bandage, Check, Crown, DoorOpen, Droplet, Flame, Heart, Shield, Skull, VolumeX } from 'lucide-react';
-import type { Player } from '../../@types/game';
+import { Bandage, Check, Crown, DoorOpen, Droplet, Flame, Heart, Link2, Shield, Skull, VolumeX } from 'lucide-react';
+import type { CardTone, Player } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
+import type { DeathLink } from '../../utils/gameRules';
 import { toneAccentFill, TONES } from './tones';
 import { Chip, RoleBadge } from './ui';
+
+/** A death link as one player sees it: the other end, and which way the death travels. */
+export interface LinkBadge {
+  kind: DeathLink['kind'];
+  /** This player dies when the partner does (Virginia's chosen, the Dire Wolf). */
+  diesWith: boolean;
+  partner: string;
+}
+
+/** A link's colour: the role that made it (Virginia Woolf, the Dire Wolf). */
+export const LINK_TONE: Record<DeathLink['kind'], CardTone> = {
+  virginia: ROLES.virginiaWoolf.cardTone,
+  direWolf: ROLES.direWolf.cardTone,
+};
+
+/** Every player's death links, named for display, by player id. */
+export function linkBadges(players: readonly Player[], links: readonly DeathLink[]): Map<string, LinkBadge[]> {
+  const name = (id: string) => players.find((p) => p.id === id)?.name ?? '?';
+  const out = new Map<string, LinkBadge[]>();
+  const add = (id: string, badge: LinkBadge) => out.set(id, [...(out.get(id) ?? []), badge]);
+  for (const l of links) {
+    add(l.from, { kind: l.kind, diesWith: false, partner: name(l.to) });
+    add(l.to, { kind: l.kind, diesWith: true, partner: name(l.from) });
+  }
+  return out;
+}
 
 type Accent = 'village' | 'wolf' | 'ember' | 'vampire' | 'cult';
 
@@ -63,8 +90,11 @@ export function PlayerToken({ player, selected, disabled, accent = 'village', sh
   );
 }
 
-/** Illuminated status pills for a player. `diedLabel` marks a death in the phase that just ended. */
-export function StatusBadges({ player, diedLabel }: { player: Player; diedLabel?: string }) {
+/**
+ * Illuminated status pills for a player. `diedLabel` marks a death in the phase that just ended;
+ * `links` are the player's death links (Virginia Woolf, Dire Wolf), named.
+ */
+export function StatusBadges({ player, diedLabel, links }: { player: Player; diedLabel?: string; links?: readonly LinkBadge[] }) {
   const { t } = useI18n();
   const s = player.status;
   return (
@@ -81,6 +111,11 @@ export function StatusBadges({ player, diedLabel }: { player: Player; diedLabel?
       {s.princeRevealed && <Chip tone="village" icon={<Crown className="h-3 w-3" />}>{t('status.princeRevealed')}</Chip>}
       {s.transformed && <Chip tone="werewolf">{t('status.transformed')}</Chip>}
       {s.lover && <Chip tone="vampire" icon={<Heart className="h-3 w-3" />}>{t('status.lover')}</Chip>}
+      {links?.map((l, i) => (
+        <Chip key={i} tone={LINK_TONE[l.kind]} icon={<Link2 className="h-3 w-3" />}>
+          {t(l.diesWith ? 'status.diesWith' : 'status.takesAlong', { name: l.partner })}
+        </Chip>
+      ))}
       {s.banished && player.alive && <Chip tone="neutral" icon={<DoorOpen className="h-3 w-3" />}>{t('status.banished')}</Chip>}
       {s.woundedRound !== null && s.woundedRound !== undefined && player.alive && (
         <Chip tone="ember" icon={<Bandage className="h-3 w-3" />}>{t('status.wounded')}</Chip>

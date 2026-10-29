@@ -137,12 +137,14 @@ const isGameState = (value: unknown): value is GameState =>
  * fields), so older games from localStorage or Firestore keep loading.
  */
 export function normalizeGameState(s: GameState): GameState {
+  // Before v1.2.0 the Leprechaun picked a player; a night saved then restarts their call blind.
+  const { leprechaunTarget: _picked, ...nightActions } = s.nightActions as GameState['nightActions'] & { leprechaunTarget?: unknown };
   return {
     ...s,
     executionsLeft: s.executionsLeft ?? 1,
     // Games dealt before house rules existed play by the standard rules.
     rules: { ...NO_REBALANCES, ...s.rules },
-    nightActions: { ...rules.emptyNightActions(), ...s.nightActions },
+    nightActions: { ...rules.emptyNightActions(), ...nightActions },
     modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
     lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
     players: s.players.map((p) => ({ ...p, status: { ...EMPTY_STATUS, ...p.status } })),
@@ -195,9 +197,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return withNightActions(state, { [action.field]: action.value });
     case 'SET_TARGET_LIST':
       if (action.field === 'cupidTargets') return withNightActions(state, { cupidTargets: action.targets });
-      // Retargeting the wolves invalidates the Leprechaun's redirect and the Big Bad Wolf's
-      // strike, which both depend on the first victim's seat.
-      return withNightActions(state, { wolfTargets: action.targets, leprechaunTarget: null, bigBadWolfTarget: null });
+      // Retargeting the wolves invalidates the Big Bad Wolf's strike, which must sit next to a
+      // pack target. The Leprechaun's blind left / right move still applies to the new targets.
+      return withNightActions(state, { wolfTargets: action.targets, bigBadWolfTarget: null });
     case 'RESOLVE_NIGHT':
       return rules.resolveNight(state);
     case 'START_DAY':

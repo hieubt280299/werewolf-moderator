@@ -3,6 +3,7 @@ import {
   type EliminationCause,
   type GameLogEntry,
   type GameState,
+  type LeprechaunMove,
   type NightActionKind,
   type NightActions,
   type NightReport,
@@ -37,7 +38,7 @@ export const emptyNightActions = (): NightActions => ({
   direWolfTarget: null,
   doppelgangerTarget: null,
   virginiaTarget: null,
-  leprechaunTarget: null,
+  leprechaunMove: null,
   auraSeerTarget: null,
   piTarget: null,
   priestTarget: null,
@@ -108,6 +109,17 @@ export function neighbors(players: readonly Player[], id: string): Player[] {
   const left = ring[(i - 1 + ring.length) % ring.length];
   const right = ring[(i + 1) % ring.length];
   return left.id === right.id ? [left] : [left, right];
+}
+
+/**
+ * The living player one seat from `id` in a direction. Seats are numbered clockwise and
+ * everyone faces the middle, so left is the next seat clockwise, right counter-clockwise.
+ */
+export function neighborToward(players: readonly Player[], id: string, move: LeprechaunMove): Player | undefined {
+  const ring = seatRing(players);
+  const i = ring.findIndex((p) => p.id === id);
+  if (i < 0 || ring.length < 2) return undefined;
+  return ring[(i + (move === 'left' ? 1 : -1) + ring.length) % ring.length];
 }
 
 function ringDistance(players: readonly Player[], a: string, b: string): number {
@@ -186,8 +198,9 @@ export function buildNightSteps(s: GameState): NightStep[] {
   const steps: NightStep[] = [];
   const push = (step: Omit<NightStep, 'group'>) => steps.push({ ...step, group: nightGroup(step.action) });
 
-  // Role changes since they last slept: the Doppelgänger gets her own call; a bitten Cursed
-  // just wakes with the pack (see the wolves' turn).
+  // Role changes since they last slept. Neither is called aloud, so the table can't tell: the
+  // Doppelgänger is silently tapped awake to be shown her new role; a bitten Cursed is silently
+  // tapped to wake with the pack (see the wolves' turn).
   const waking = (kind: 'cursed' | 'doppelganger') =>
     (m.pendingAwakenings ?? [])
       .filter((w) => w.kind === kind && w.round <= s.round && alive.some((p) => p.id === w.playerId))
@@ -264,7 +277,9 @@ export function buildNightSteps(s: GameState): NightStep[] {
         ? 'role'
         : action === 'troublemakerStir'
           ? 'toggle'
-          : 'targets';
+          : action === 'leprechaunRedirect'
+            ? 'direction'
+            : 'targets';
     const active = actors.length > 0 && !used && !noPotions;
     push({
       id: roleId,
@@ -288,43 +303,122 @@ export interface WolfAttack {
 }
 
 /**
- * Tonight's wolf attacks that will land: after the Leprechaun's redirect (which happens
- * before the Witch wakes, so she sees the real victim), minus any a seduction cancelled.
- * `attempted` keeps the cancelled ones too (they still count as touching the Tanner).
+ * Where the Leprechaun's blind move sends each of the pack's targets: one seat left or right,
+ * every target alike (both on a Wolf Cub night or with the standard Big Bad Wolf). Empty when
+ * they don't move or the pack chose no one. Seduction isn't considered here (see wolfAttacks).
+ */
+export function leprechaunShifts(s: GameState): { from: string; to: string }[] {
+  const move = s.nightActions.leprechaunMove;
+  if (!move) return [];
+  return [...new Set(s.nightActions.wolfTargets)].flatMap((from) => {
+    const to = neighborToward(s.players, from, move);
+    return to ? [{ from, to: to.id }] : [];
+  });
+}
+
+/**
+ * Tonight's wolf attacks that will land: after the Leprechaun's move (which happens before the
+ * Witch wakes, so she sees the real victims), minus any a seduction cancelled. `attempted`
+ * keeps the cancelled ones too (they still count as touching the Tanner).
+ *
+ * One player may be attacked more than once: the Big Bad Wolf's strike stacks on the pack's
+ * kill when the Leprechaun moves it onto the strike's target.
  */
 export function wolfAttacks(s: GameState, { attempted = false } = {}): WolfAttack[] {
+  // The Diseased was eaten last night: neither the pack nor the Big Bad Wolf hunts tonight.
+  if (s.modifiers.wolvesSkipNextNight) return [];
   const a = s.nightActions;
   const attacks: WolfAttack[] = [];
   if (attempted || !packSeduced(s)) {
-    const targets = [...new Set(a.wolfTargets)];
-    const redirect = a.leprechaunTarget;
     const leprechaunAlive = s.players.some((p) => p.alive && p.roleId === 'leprechaun');
-    if (leprechaunAlive && !actionSeduced(s, 'leprechaunRedirect') && redirect && targets[0] && !targets.includes(redirect)) {
-      if (neighbors(s.players, targets[0]).some((p) => p.id === redirect)) targets[0] = redirect;
-    }
+    const moved = new Map(leprechaunAlive && !actionSeduced(s, 'leprechaunRedirect') ? leprechaunShifts(s).map((m) => [m.from, m.to]) : []);
+    const targets = [...new Set(a.wolfTargets)].map((id) => moved.get(id) ?? id);
     attacks.push(...targets.map((targetId) => ({ targetId, by: 'pack' as const })));
   }
   const strike = a.bigBadWolfTarget;
   const bigBadAlive = s.players.some((p) => p.alive && p.roleId === 'bigBadWolf');
   const strikeLands = attempted || !actionSeduced(s, 'bigBadWolfStrike');
-  if (rulesOf(s).bigBadWolf && strike && bigBadAlive && strikeLands && !attacks.some((x) => x.targetId === strike)) {
+  if (rulesOf(s).bigBadWolf && strike && bigBadAlive && strikeLands) {
     attacks.push({ targetId: strike, by: 'bigBadWolf' });
   }
   return attacks;
 }
 
 /** The players the wolves will really attack tonight. */
-export const effectiveWolfTargets = (s: GameState): string[] => wolfAttacks(s).map((x) => x.targetId);
+export const effectiveWolfTargets = (s: GameState): string[] => [...new Set(wolfAttacks(s).map((x) => x.targetId))];
 
 /**
  * Who the Witch is shown — and may heal: only the pack's victims. The Big Bad Wolf's own
  * strike (house rule) stays hidden from her.
+ *
+ * A pack whose kill the Hooker cancelled still shows its victims: an empty list would tell
+ * the Witch the Hooker found a wolf. Healing one spends the potion for nothing.
  */
-export const witchVictims = (s: GameState): string[] => wolfAttacks(s).filter((x) => x.by === 'pack').map((x) => x.targetId);
+export const witchVictims = (s: GameState): string[] =>
+  [...new Set(wolfAttacks(s, { attempted: true }).filter((x) => x.by === 'pack').map((x) => x.targetId))];
 
 /** The Priest's blessing tonight: it stops every killing power aimed at that player. */
 export const blessedPlayer = (s: GameState): string | null =>
   s.nightActions.priestTarget && !actionSeduced(s, 'priestBless') ? s.nightActions.priestTarget : null;
+
+// ---------------------------------------------------------------------------
+// Kill debuffs (v1.2.0) — what each wolf attack leaves on its victim, and what lifts it
+// ---------------------------------------------------------------------------
+
+/** `wolfpackKill`: the pack's attack. `bbwKill`: the rebalanced Big Bad Wolf's unhealable strike. */
+export type KillDebuff = 'wolfpackKill' | 'bbwKill';
+/** What lifted a debuff: a seduced attacker, the Priest's blessing, the Bodyguard, the Healing Potion. */
+export type DebuffShield = 'hooker' | 'priest' | 'bodyguard' | 'witch';
+
+export interface KillDebuffs {
+  targetId: string;
+  /** In attack order: `[wolfpackKill, bbwKill]` when both fell on this player. */
+  debuffs: KillDebuff[];
+  /** The debuffs lifted tonight, and what lifted each. */
+  dispelled: Partial<Record<KillDebuff, DebuffShield>>;
+  /** A debuff is still active: the attack lands (a Cursed turns, a Tough Guy is wounded, anyone else dies). */
+  lands: boolean;
+}
+
+/**
+ * Tonight's kill debuffs, one entry per victim in attack order.
+ *
+ * - `wolfpackKill` is lifted by the Bodyguard or the Witch's Healing Potion.
+ * - `bbwKill` (house rule) is lifted by neither: only the Priest's blessing, which lifts every
+ *   debuff. A victim carrying both whom the Bodyguard or Witch saves therefore still dies.
+ * - A seduced attacker's debuff never lands. The Big Bad Wolf hunts with the pack, so seducing
+ *   him cancels both; seducing another Werewolf cancels only the pack's.
+ *
+ * Two pack attacks landing on one player (the Leprechaun's shift at a tiny table) are still one
+ * debuff.
+ */
+export function killDebuffs(s: GameState): KillDebuffs[] {
+  const a = s.nightActions;
+  const blessed = blessedPlayer(s);
+  const guarded = actionSeduced(s, 'bodyguardProtect') ? null : a.bodyguardTarget;
+  const healed = actionSeduced(s, 'witchPotion') ? null : a.witchSaveTarget;
+  const seduced: Record<KillDebuff, boolean> = { wolfpackKill: packSeduced(s), bbwKill: actionSeduced(s, 'bigBadWolfStrike') };
+  const shieldFor = (debuff: KillDebuff, targetId: string): DebuffShield | null => {
+    if (seduced[debuff]) return 'hooker';
+    if (targetId === blessed) return 'priest';
+    if (debuff === 'bbwKill') return null;
+    if (targetId === guarded) return 'bodyguard';
+    return targetId === healed ? 'witch' : null;
+  };
+
+  const hits = new Map<string, KillDebuffs>();
+  for (const { targetId, by } of wolfAttacks(s, { attempted: true })) {
+    const debuff: KillDebuff = by === 'pack' ? 'wolfpackKill' : 'bbwKill';
+    const hit = hits.get(targetId) ?? { targetId, debuffs: [], dispelled: {}, lands: false };
+    hits.set(targetId, hit);
+    if (hit.debuffs.includes(debuff)) continue;
+    hit.debuffs.push(debuff);
+    const shield = shieldFor(debuff, targetId);
+    if (shield) hit.dispelled[debuff] = shield;
+  }
+  for (const hit of hits.values()) hit.lands = hit.debuffs.some((d) => !hit.dispelled[d]);
+  return [...hits.values()];
+}
 
 /** House rule: once the Healing Potion is used, the Witch no longer learns the wolves' victim. */
 export const witchSeesVictims = (s: GameState): boolean => !(rulesOf(s).witch && s.modifiers.witchHealUsed);
@@ -348,11 +442,11 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
       return prey;
     }
     case 'bigBadWolfStrike': {
-      // House rule: a second victim seated directly next to the pack's (first) target —
-      // anyone but the Big Bad Wolf himself, even another wolf.
-      const primary = a.wolfTargets[0];
-      if (!primary) return [];
-      return neighbors(s.players, primary).filter((p) => !actors.has(p.id) && !a.wolfTargets.includes(p.id));
+      // House rule: a victim seated directly next to one of the pack's targets (either one on a
+      // Wolf Cub night) — anyone but the Big Bad Wolf himself, even another wolf, but never a
+      // pack target.
+      const adjacent = new Map(a.wolfTargets.flatMap((id) => neighbors(s.players, id)).map((p) => [p.id, p]));
+      return [...adjacent.values()].filter((p) => !actors.has(p.id) && !a.wolfTargets.includes(p.id));
     }
     case 'hookerSeduce':
       // Each player can be seduced only once per game.
@@ -377,9 +471,6 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
       return alive.filter((p) => p.roleId !== 'vampire');
     case 'cultRecruit':
       return others.filter((p) => !p.status.inCult);
-    case 'leprechaunRedirect':
-      // The Leprechaun doesn't know who the wolves are: either neighbour may be picked, wolf or not.
-      return a.wolfTargets[0] ? neighbors(s.players, a.wolfTargets[0]) : [];
     case 'witchPotion':
       if (witchMode === 'save') {
         if (s.modifiers.witchHealUsed) return [];
@@ -387,6 +478,8 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
         return alive.filter((p) => victims.includes(p.id));
       }
       return s.modifiers.witchKillUsed ? [] : others;
+    // The Leprechaun picks a direction, not a player (they never see the Werewolves' target).
+    case 'leprechaunRedirect':
     case 'masonMeet':
     case 'minionMeet':
     case 'troublemakerStir':
@@ -395,6 +488,25 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
     case 'doppelgangerAwaken':
       return [];
   }
+}
+
+/** How many players each night-1 setup call has picked so far. */
+const SETUP_PICKS: Partial<Record<NightActionKind, (a: NightActions) => number>> = {
+  cupidLink: (a) => a.cupidTargets.length,
+  doppelgangerCopy: (a) => (a.doppelgangerTarget ? 1 : 0),
+  virginiaFear: (a) => (a.virginiaTarget ? 1 : 0),
+  direWolfCompanion: (a) => (a.direWolfTarget ? 1 : 0),
+};
+
+/**
+ * A night-1 setup call (Cupid, Doppelgänger, Virginia Woolf, Dire Wolf) still missing its
+ * picks. Setup can't be skipped: the night doesn't move past it until it's done. A table too
+ * small to offer enough players only needs as many as there are.
+ */
+export function setupIncomplete(s: GameState, step: NightStep): boolean {
+  const picked = SETUP_PICKS[step.action];
+  if (!picked || step.ghost || step.targetCount === 0) return false;
+  return picked(s.nightActions) < Math.min(step.targetCount, eligibleTargets(s, step).length);
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +649,30 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
     killPlayer(s, link, 'linked', when, sink);
   }
   return true;
+}
+
+/** A night-1 bond that takes a second player down: when `from` is eliminated, so is `to`. */
+export interface DeathLink {
+  kind: 'virginia' | 'direWolf';
+  from: string;
+  to: string;
+}
+
+/**
+ * The one-way death links made on night 1, for the board to show (the Lovers carry their
+ * own status): Virginia Woolf takes her chosen player with her, and the Dire Wolf dies with
+ * their companion. A Doppelgänger who became one of these roles carries the link too.
+ * Kept after the deaths, like the Lovers' mark.
+ */
+export function deathLinks(s: Pick<GameState, 'players' | 'modifiers'>): DeathLink[] {
+  const m = s.modifiers;
+  const holders = (roleId: RoleId) => s.players.filter((p) => p.roleId === roleId);
+  const virginia = m.virginiaTarget;
+  const companion = m.direWolfCompanion;
+  return [
+    ...(virginia ? holders('virginiaWoolf').filter((p) => p.id !== virginia).map((p) => ({ kind: 'virginia' as const, from: p.id, to: virginia })) : []),
+    ...(companion ? holders('direWolf').filter((p) => p.id !== companion).map((p) => ({ kind: 'direWolf' as const, from: companion, to: p.id })) : []),
+  ];
 }
 
 /** What the win check reads from a game; tests and previews may pass just the players. */
@@ -702,7 +838,10 @@ export function resolveNight(state: GameState): GameState {
   // Seductions are fixed before anything changes roles tonight (a seduced Cursed who turns
   // doesn't retroactively spoil the pack's kill).
   const cancelled = new Set((Object.keys(NIGHT_ORDER) as NightActionKind[]).filter((x) => actionSeduced(s, x)));
+  // Read before tonight's modifiers are reset below (a Diseased-skipped night has no attacks).
   const attacks = wolfAttacks(s);
+  const attempted = wolfAttacks(s, { attempted: true });
+  const hits = killDebuffs(s);
   if (a.hookerTarget && !m.hookerVisited.includes(a.hookerTarget)) m.hookerVisited.push(a.hookerTarget);
   // Tonight's awakenings have been called; ones queued from here on are for a later night.
   m.pendingAwakenings = m.pendingAwakenings.filter((w) => w.round > s.round);
@@ -711,13 +850,10 @@ export function resolveNight(state: GameState): GameState {
   m.wolvesSkipNextNight = false;
   m.wolvesDoubleKill = false;
 
-  // The Bodyguard only stops Werewolf attacks; the Priest's blessing stops every killing power.
+  // The Priest's blessing stops every killing power (wolf attacks: see killDebuffs).
   const blessed = blessedPlayer(s);
-  const shielded = new Set([cancelled.has('bodyguardProtect') ? null : a.bodyguardTarget, blessed].filter((x): x is string => !!x));
   // A seduced Witch's potions are spent with no effect.
-  const witchWorks = !cancelled.has('witchPotion');
-  const witchSave = witchWorks ? a.witchSaveTarget : null;
-  const witchKill = witchWorks ? a.witchKillTarget : null;
+  const witchKill = cancelled.has('witchPotion') ? null : a.witchKillTarget;
 
   const dying: { playerId: string; cause: EliminationCause }[] = [];
   const willDie = (id: string) => dying.some((d) => d.playerId === id);
@@ -762,12 +898,13 @@ export function resolveNight(state: GameState): GameState {
     acted('bodyguard', a.bodyguardTarget);
     acted('priest', a.priestTarget);
     touch(a.vampireTarget, strongest(holdersOf('vampire')));
-    for (const attack of wolfAttacks(s, { attempted: true })) {
+    for (const attack of attempted) {
       touch(attack.targetId, attack.by === 'pack' ? strongest(living.filter(isWolfPlayer)) : holdersOf('bigBadWolf'));
     }
     acted('direWolf', a.direWolfTarget);
     acted('sorceress', a.sorceressTarget);
-    acted('leprechaun', a.leprechaunTarget);
+    // The Leprechaun's move reaches whoever it lands on, blind or not.
+    for (const { to } of leprechaunShifts(s)) acted('leprechaun', to);
     acted('seer', a.seerTarget);
     acted('auraSeer', a.auraSeerTarget);
     acted('pi', a.piTarget);
@@ -788,14 +925,18 @@ export function resolveNight(state: GameState): GameState {
     report.metallic = ringDistance(s.players, wolverine.id, firstVictim) <= closest;
   }
 
-  for (const { targetId, by } of attacks) {
+  for (const { targetId, lands, dispelled } of hits) {
     const p = findPlayer(s, targetId);
     if (!p?.alive || willDie(targetId)) continue;
-    // The Witch only heals the pack's victim; the Big Bad Wolf's own strike is hidden from her.
-    if (shielded.has(targetId) || (by === 'pack' && targetId === witchSave)) {
-      report.saved.push(targetId);
+    if (!lands) {
+      // Saved — unless the attacks never happened at all (every attacker was seduced).
+      if (Object.values(dispelled).some((x) => x !== 'hooker')) report.saved.push(targetId);
       continue;
     }
+    const lifted = dispelled.wolfpackKill;
+    if (lifted === 'bodyguard' || lifted === 'witch') pushLog(s, 'log.bigBadWolfUnstoppable', { name: p.name, role: p.roleId });
+    // However many debuffs land, it is one wolf attack: a Cursed turns once, a Tough Guy is
+    // wounded once, and anyone else dies.
     if (p.roleId === 'cursed') {
       p.roleId = 'werewolf';
       p.status.transformed = true;
@@ -922,7 +1063,13 @@ function logNightActions(s: GameState) {
   log('log.night.bigBadWolf', 'bigBadWolf', a.bigBadWolfTarget);
   log('log.night.sorceress', 'sorceress', a.sorceressTarget);
   // 5 — everyone else
-  log('log.night.leprechaun', 'leprechaun', a.leprechaunTarget);
+  if (a.leprechaunMove) {
+    const shifts = leprechaunShifts(s);
+    const key = a.leprechaunMove === 'left' ? 'log.night.leprechaunLeft' : 'log.night.leprechaunRight';
+    for (const { to } of shifts) log(key, 'leprechaun', to);
+    const mover = actor('leprechaun');
+    if (shifts.length === 0 && mover) pushLog(s, `${key}Nothing`, mover);
+  }
   const seer = inspected('seerInspect', a.seerTarget);
   if (seer !== null) log(seer ? 'log.night.seerWolf' : 'log.night.seerVillage', 'seer', a.seerTarget);
   const aura = inspected('auraInspect', a.auraSeerTarget);

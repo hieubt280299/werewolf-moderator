@@ -11,11 +11,11 @@ npm run build      # typecheck + production build (deploy dist/ to Vercel)
 
 ## Features (v1.0.0)
 
-- **Moderator accounts** — username + password + recovery email; profile with display name, up to 10 saved role pools, game history and lifetime stats. **Forgot password?** on the sign-in screen, and **Change verification email** in Profile & settings.
+- **Moderator accounts** — username + password + recovery email, or **Continue with Google** (Firebase mode); profile with display name, up to 10 saved role pools, game history and lifetime stats. **Forgot password?** on the sign-in screen, and **Change verification email** and **Sign-in methods** in Profile & settings. Google and a username account with the same email share one profile.
 - **Hub** — start / continue a game, custom role pools, history & analytics, profile & settings.
 - **Game setup** — Players → Role Pool (load or build a pool, save it) → Deck (counts or auto-balance from the pool) → Deal (drag and drop cards onto seats).
-- **Play** — guided night script in a strict order (night-1 setup → transformations → Hooker / Bodyguard → Vampires → Werewolves → Minion / Sorceress → everyone else), dawn report (who died, never who killed), accusations (the accused can't vote on their own nomination), Hunter / Wolf Cub / Diseased / Cursed / Prince / Vampire / Cult rules, win checks. The Bodyguard only stops Werewolf attacks; the Priest's blessing stops every killing power.
-- **Recommended rebalances** — optional house rules for the Hunter, Witch, Big Bad Wolf and Tanner, with a master toggle. A game keeps the rules it was dealt with.
+- **Play** — guided night script in a strict order (night-1 setup → transformations → Hooker / Bodyguard → Vampires → Werewolves → Minion / Sorceress → everyone else), dawn report (who died, never who killed), accusations (the accused can't vote on their own nomination), Hunter / Wolf Cub / Diseased / Cursed / Prince / Vampire / Cult rules, win checks. The Bodyguard only stops Werewolf attacks; the Priest's blessing stops every killing power. The Leprechaun plays blind: they move the Werewolves' attack one seat left (clockwise) or right (counter-clockwise), or leave it.
+- **Recommended rebalances** — optional house rules for the Hunter, Witch, Big Bad Wolf and Tanner, with a master toggle. A game keeps the rules it was dealt with. The rebalanced Big Bad Wolf's strike is unhealable: only the Priest's blessing stops it.
 - **Timeline / Diễn biến** — oldest-first game log grouped by Night/Day (Night 1 → Day 1 → Night 2…), every event naming the player and their role.
 - **42 roles** (16 base, 25 expansion and the Hooker) with portraits. A game has at most 3 teams: Village, Wolves and one of The Couple, Vampires, Cult or Tanner. Every role has a difficulty level (1–3), and auto-balance respects the table's experience. Auto-balance also aims for a varied deck: a Villager and a Werewolf, roles that wake every night, on night 1 only and never, and a special wolf plus killing, protecting and information roles.
 - **Card preview** — tap any card in the deck builder or deck selection to read it full-size.
@@ -38,7 +38,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
    - Moderators sign in with a username. Each account's Firebase email is its **recovery email**, and `usernames/{username}` maps the username to it. One recovery email can belong to one account only.
    - Accounts made before v1.0.0 use a synthetic address (`username@werewolf-gm.example.com`) until a recovery email is added in *Profile & settings* and confirmed. Sign in once with v1.0.0 so the app can register the username in `usernames/`.
 4. **Create Firestore**: *Build → Firestore Database → Create database* → choose a region close to your players → start in **production mode**.
-5. **Publish the security rules**: open the *Rules* tab, paste the contents of [`firestore.rules`](firestore.rules), and click *Publish*. These rules keep every user's data private to them, cap saved role pools at 10, and make usernames immutable. `usernames/{username}` can be read by exact id, so sign-in and Forgot Password can find the account before anyone is signed in. Entries can't be listed.
+5. **Publish the security rules**: open the *Rules* tab, paste the contents of [`firestore.rules`](firestore.rules), and click *Publish*. These rules keep every user's data private to them, cap saved role pools at 10, and make usernames immutable once set. `usernames/{username}` can be read by exact id, so sign-in and Forgot Password can find the account before anyone is signed in. Entries can't be listed.
 6. **Configure the app**: copy `.env.example` to `.env` and fill in the values from step 2:
    ```env
    VITE_FIREBASE_API_KEY=...
@@ -50,15 +50,43 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
    ```
    Restart `npm run dev`. The sign-in screen should now say your data syncs through Firebase.
 7. **Deploy on Vercel**: add the same six variables under *Project → Settings → Environment Variables*, then redeploy. Under *Authentication → Settings → Authorized domains*, add your Vercel domain (e.g. `your-app.vercel.app`). Emailed links return to this domain.
-8. **Reset emails open the app** (optional but recommended): *Authentication → Templates → Password reset → Edit (pencil) → Customize action URL*, and enter your app's URL (e.g. `https://your-app.vercel.app/`). This setting applies to every template. With it, reset links open the app's own New Password form, and recovery-email confirmations are applied in the app. Without it, Firebase's hosted page handles them.
+8. **Reset emails open the app** (optional but recommended): *Authentication → Templates → Password reset → Edit (pencil) → Customize action URL*, and enter your app's URL (e.g. `https://your-app.vercel.app/`). This setting applies to every template. With it, reset links open the app's own New Password form, and recovery-email and sign-up verification links are applied in the app. Without it, Firebase's hosted page handles them.
 
 > The `VITE_FIREBASE_*` values are public client identifiers. They end up in the JS bundle by design, and the security rules are what protect the data. Keep `.env` out of git anyway (it's already ignored).
+
+### Google sign-in (v1.2.0)
+
+1. **Enable the provider**: *Authentication → Sign-in method → Add new provider → Google → Enable*, pick a support email, and save.
+2. **Keep one account per email**: *Authentication → Settings → User account linking* must stay on **Link accounts that use the same email** (the default). That is what makes Google and a username account with the same email open the same profile.
+3. **Serve the sign-in helper from your own domain** (production). [`vercel.json`](vercel.json) proxies `/__/auth/*` and `/__/firebase/*` to `werewolfmoderator-1.firebaseapp.com`. This is Firebase's "Option 3" for browsers that block third-party storage. If you use a different Firebase project, change that host in `vercel.json`.
+   - In Vercel, set `VITE_FIREBASE_AUTH_DOMAIN` to the app's domain (e.g. `your-app.vercel.app`), not `…firebaseapp.com`. Keep `…firebaseapp.com` in your local `.env`.
+   - In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), open the OAuth client named *Web client (auto created by Google Service)* and add `https://your-app.vercel.app/__/auth/handler` under *Authorized redirect URIs*.
+   - The app's domain must be in *Authentication → Settings → Authorized domains* (step 7 above).
+4. **Publish the updated [`firestore.rules`](firestore.rules)**. They let an account made with Google claim a username once, when it adds username & password sign-in.
+
+How it behaves:
+- **Popup first.** The app switches to a full-page redirect when the popup is blocked, or when it runs as the installed home-screen app and the helper is on the app's own domain.
+- **First Google sign-in** creates a profile at once. The display name comes from the Google account; stats and role pools start empty. There is no username until one is added under *Profile & settings → Sign-in methods*.
+- **Same email as a username account:**
+  - For a @gmail.com or Google Workspace address, Firebase merges the two by itself.
+  - For any other address, the app asks once for that account's password and links Google to it (`auth/account-exists-with-different-credential` → `linkWithCredential`).
+  - Either way, it is the same uid, so the same decks, history and stats. `fetchSignInMethodsForEmail` isn't used: it is deprecated and returns nothing while Email Enumeration Protection is on.
+- **Unverified emails:** Firebase lets Google replace the password of an account whose email was never verified. When that happens, the app offers once to set a new password, so the username keeps working.
+  - New sign-ups get a verification email.
+  - *Sign-in methods* nudges unverified accounts to verify.
+- **Sign-in methods** (Profile & settings):
+  - Connect or disconnect Google. Disconnecting is refused while Google is the only way to sign in.
+  - Add username & password to an account made with Google.
+  - A different Google address can be connected here. Connecting is refused if that Google account already has its own profile.
+  - While Google is linked with the same address as the recovery email, that email can't be changed. Disconnect Google first.
+  - While a recovery-email change waits for confirmation, Google can't be connected. Open the link, or use *Cancel change* in the Account section.
+  - Both checks run in the app. Firestore rules can't enforce them, because email changes and provider links are Firebase Auth calls.
 
 **Data layout**
 
 ```
 usernames/{username}         uid, email (the account's sign-in / recovery email), pendingEmail?
-users/{uid}                  username, displayName, recoveryEmail, pendingRecoveryEmail, pools[≤10], stats, rebalances, createdAt
+users/{uid}                  username ('' for a Google account until one is added), displayName, recoveryEmail, pendingRecoveryEmail, pools[≤10], stats, rebalances, createdAt
 users/{uid}/games/{gameId}   finished game: players, winner, winnerSeats, log, ISO timestamps
 users/{uid}/session/active   in-progress game (JSON string) for cross-device resume
 ```
@@ -71,4 +99,4 @@ Changing the recovery email always asks for the current password. With Firebase,
 
 ## Architecture
 
-Pure rules live in `src/utils/gameRules.ts` (night script, Hooker, house rules, resolution) and `src/utils/gameCalculations.ts`. The game state machine is in `src/context/GameContext.tsx`: per-user, persisted, with undo, and it freezes house rules at deal time. `src/hooks/useNightSequence.ts` steps the moderator through the night. Accounts and the Forgot Password flow are in `src/context/AuthContext.tsx`, on top of `src/services/profileStore.ts` (Firebase or local backend). Animations are eased CSS keyframes using only `transform` / `opacity`. Character portraits are SVG, drawn once into cached images (`src/components/shared/RoleAvatar.tsx`).
+Pure rules live in `src/utils/gameRules.ts` (night script, Hooker, house rules, resolution) and `src/utils/gameCalculations.ts`. The game state machine is in `src/context/GameContext.tsx`: per-user, persisted, with undo, and it freezes house rules at deal time. `src/hooks/useNightSequence.ts` steps the moderator through the night. Accounts and the Forgot Password flow are in `src/context/AuthContext.tsx`, on top of `src/services/profileStore.ts` (Firebase or local backend). Google sign-in, account linking and Firebase error mapping are in `src/services/authService.ts`. The night's kill debuffs (`[WolfpackKill, BBWKill]` per victim, and what lifts each) come from `killDebuffs` in `gameRules.ts`. Animations are eased CSS keyframes using only `transform` / `opacity`. Character portraits are SVG, drawn once into cached images (`src/components/shared/RoleAvatar.tsx`).

@@ -287,10 +287,11 @@ describe('expansion roles', () => {
     expect(alive(s, 'p4')).toBe(false);
   });
 
-  it('shows the Leprechaun both neighbours of the victim, wolves included', () => {
+  it('asks the Leprechaun for a direction, never showing them a player', () => {
     const s = withActions(game(['werewolf', 'villager', 'leprechaun', 'villager', 'villager']), { wolfTargets: ['p1'] });
     const step = rules.buildNightSteps(s).find((x) => x.action === 'leprechaunRedirect')!;
-    expect(rules.eligibleTargets(s, step).map((p) => p.id).sort()).toEqual(['p0', 'p2']);
+    expect([step.kind, step.targetCount]).toEqual(['direction', 1]);
+    expect(rules.eligibleTargets(s, step)).toEqual([]);
   });
 
   it('calls the Lovers right after Cupid on night 1 only', () => {
@@ -303,12 +304,32 @@ describe('expansion roles', () => {
     expect(rules.buildNightSteps(s).some((x) => x.action === 'loversMeet')).toBe(false);
   });
 
-  it('lets the Leprechaun move the attack to a neighbour, and the Witch sees the real victim', () => {
-    const s = withActions(game(['werewolf', 'leprechaun', 'villager', 'villager', 'witch']), { wolfTargets: ['p2'], leprechaunTarget: 'p3' });
-    expect(rules.effectiveWolfTargets(s)).toEqual(['p3']);
+  it('moves the attack one seat left (clockwise) or right (counter-clockwise), and the Witch sees the real victim', () => {
+    const s = withActions(game(['werewolf', 'leprechaun', 'villager', 'villager', 'witch']), { wolfTargets: ['p2'] });
+    const left = withActions(s, { leprechaunMove: 'left' });
+    expect(rules.effectiveWolfTargets(left)).toEqual(['p3']);
+    expect(rules.effectiveWolfTargets(withActions(s, { leprechaunMove: 'right' }))).toEqual(['p1']);
+    expect(rules.effectiveWolfTargets(s)).toEqual(['p2']);
+    expect(rules.witchVictims(left)).toEqual(['p3']);
+    // Round the table (the last seat's left is seat 1, even a wolf: it's blind luck), past the dead.
+    expect(rules.effectiveWolfTargets(withActions(left, { wolfTargets: ['p4'] }))).toEqual(['p0']);
+    expect(rules.effectiveWolfTargets(rules.moderatorEliminate(left, 'p3'))).toEqual(['p4']);
+    const after = rules.resolveNight(left);
+    expect([alive(after, 'p2'), alive(after, 'p3')]).toEqual([true, false]);
+    expect(after.log.some((e) => e.key === 'log.night.leprechaunLeft' && e.params?.name === 'P3')).toBe(true);
+    // Moving with no attack to move does nothing, and the timeline says so.
+    const idle = rules.resolveNight(withActions(s, { wolfTargets: [], leprechaunMove: 'right' }));
+    expect(idle.log.some((e) => e.key === 'log.night.leprechaunRightNothing')).toBe(true);
+  });
+
+  it('kills the Leprechaun with the reworked Tanner when the blind move lands on them', () => {
+    const s = withActions(game(['werewolf', 'leprechaun', 'villager', 'tanner', 'villager', 'villager', 'villager'], { tanner: true }), {
+      wolfTargets: ['p2'],
+      leprechaunMove: 'left',
+    });
     const after = rules.resolveNight(s);
-    expect(alive(after, 'p2')).toBe(true);
-    expect(alive(after, 'p3')).toBe(false);
+    // The Tanner, the Leprechaun and the pack's strongest wolf; the first victim is spared.
+    expect(['p3', 'p1', 'p0', 'p2'].map((id) => alive(after, id))).toEqual([false, false, false, true]);
   });
 
   it('gives the Big Bad Wolf two adjacent kills and stops a lone Fruit Brute', () => {
@@ -966,5 +987,272 @@ describe('role pools', () => {
         expect(deck.filter((r) => r === 'villager').length).toBeLessThan(n / 2);
       }
     }
+  });
+});
+
+describe('v1.2.0 unhealable Big Bad Wolf', () => {
+  const house = { bigBadWolf: true };
+  // p7 is the pack's victim; the Big Bad Wolf strikes p8, next to it.
+  const deck: RoleId[] = ['bigBadWolf', 'werewolf', 'leprechaun', 'bodyguard', 'witch', 'priest', 'hooker', 'villager', 'villager', 'villager'];
+  const night = (a: Partial<GameState['nightActions']> = {}) => withActions(game(deck, house), { wolfTargets: ['p7'], bigBadWolfTarget: 'p8', ...a });
+  const hitOn = (s: GameState, id: string) => rules.killDebuffs(s).find((h) => h.targetId === id);
+
+  it('lets only the Priest stop the strike — not the Bodyguard', () => {
+    expect(alive(rules.resolveNight(night({ bodyguardTarget: 'p8' })), 'p8')).toBe(false);
+    expect(alive(rules.resolveNight(night({ bodyguardTarget: 'p7' })), 'p7')).toBe(true);
+    const blessed = rules.resolveNight(night({ priestTarget: 'p8' }));
+    expect(alive(blessed, 'p8')).toBe(true);
+    expect(blessed.lastReport?.saved).toContain('p8');
+  });
+
+  it('stacks [WolfpackKill, BBWKill] when the Leprechaun moves the pack onto the strike', () => {
+    const s = night({ leprechaunMove: 'left' });
+    expect(hitOn(s, 'p8')?.debuffs).toEqual(['wolfpackKill', 'bbwKill']);
+    expect(hitOn(s, 'p7')).toBeUndefined();
+    expect(rules.witchVictims(s)).toEqual(['p8']);
+    const after = rules.resolveNight(s);
+    expect([alive(after, 'p7'), alive(after, 'p8')]).toEqual([true, false]);
+  });
+
+  it('lets the Bodyguard or Witch lift only the pack’s debuff; the Priest lifts both', () => {
+    const guarded = night({ leprechaunMove: 'left', bodyguardTarget: 'p8' });
+    expect(hitOn(guarded, 'p8')).toMatchObject({ dispelled: { wolfpackKill: 'bodyguard' }, lands: true });
+    const afterGuard = rules.resolveNight(guarded);
+    expect(alive(afterGuard, 'p8')).toBe(false);
+    expect(afterGuard.lastReport?.saved).toEqual([]);
+    expect(afterGuard.log.some((e) => e.key === 'log.bigBadWolfUnstoppable')).toBe(true);
+    expect(alive(rules.resolveNight(night({ leprechaunMove: 'left', witchSaveTarget: 'p8' })), 'p8')).toBe(false);
+    const blessed = night({ leprechaunMove: 'left', priestTarget: 'p8' });
+    expect(hitOn(blessed, 'p8')).toMatchObject({ dispelled: { wolfpackKill: 'priest', bbwKill: 'priest' }, lands: false });
+    expect(alive(rules.resolveNight(blessed), 'p8')).toBe(true);
+  });
+
+  it('cancels both debuffs when the Big Bad Wolf is seduced, only the pack’s for another wolf', () => {
+    const bbwSeduced = night({ leprechaunMove: 'left', hookerTarget: 'p0' });
+    expect(hitOn(bbwSeduced, 'p8')).toMatchObject({ dispelled: { wolfpackKill: 'hooker', bbwKill: 'hooker' }, lands: false });
+    const calm = rules.resolveNight(bbwSeduced);
+    expect(alive(calm, 'p8')).toBe(true);
+    // Nobody saved anyone: the attacks simply never happened.
+    expect(calm.lastReport?.saved).toEqual([]);
+    const wolfSeduced = night({ leprechaunMove: 'left', hookerTarget: 'p1' });
+    expect(hitOn(wolfSeduced, 'p8')).toMatchObject({ dispelled: { wolfpackKill: 'hooker' }, lands: true });
+    expect(alive(rules.resolveNight(wolfSeduced), 'p8')).toBe(false);
+  });
+
+  it('counts a stack as one wolf attack for the Cursed and the Tough Guy', () => {
+    const table = (victim: RoleId) =>
+      withActions(game(['bigBadWolf', 'werewolf', 'leprechaun', 'villager', victim, 'villager', 'villager'], house), {
+        wolfTargets: ['p3'],
+        bigBadWolfTarget: 'p4',
+        leprechaunMove: 'left',
+      });
+    const cursed = rules.resolveNight(table('cursed'));
+    expect(cursed.players[4]).toMatchObject({ alive: true, roleId: 'werewolf' });
+    const tough = rules.resolveNight(table('toughGuy'));
+    expect(tough.players[4]).toMatchObject({ alive: true, status: expect.objectContaining({ woundedRound: 1 }) });
+    // The strike alone works the same way.
+    const struck = rules.resolveNight(withActions(table('cursed'), { leprechaunMove: null }));
+    expect(struck.players[4]).toMatchObject({ alive: true, roleId: 'werewolf' });
+  });
+
+  it('makes the pack and the Big Bad Wolf skip the next night when the strike kills the Diseased', () => {
+    const s = withActions(game(['bigBadWolf', 'werewolf', 'bodyguard', 'villager', 'diseased', 'villager', 'villager', 'villager'], house), {
+      wolfTargets: ['p3'],
+      bigBadWolfTarget: 'p4',
+      bodyguardTarget: 'p4',
+    });
+    const after = rules.resolveNight(s);
+    expect(alive(after, 'p4')).toBe(false);
+    expect(after.modifiers.wolvesSkipNextNight).toBe(true);
+
+    // Next night: both calls are skipped, and nothing lands even if a target were set.
+    const sick = rules.startNight(rules.startDay(after));
+    const calls = (g: GameState) => rules.buildNightSteps(g).filter((x) => x.action === 'wolfKill' || x.action === 'bigBadWolfStrike');
+    expect(calls(sick).map((x) => [x.action, x.targetCount, x.note])).toEqual([
+      ['wolfKill', 0, 'wolvesSkip'],
+      ['bigBadWolfStrike', 0, 'wolvesSkip'],
+    ]);
+    const forced = withActions(sick, { wolfTargets: ['p6'], bigBadWolfTarget: 'p7' });
+    expect(rules.killDebuffs(forced)).toEqual([]);
+    const quiet = rules.resolveNight(forced);
+    expect([alive(quiet, 'p6'), alive(quiet, 'p7')]).toEqual([true, true]);
+
+    // The night after, both hunt again.
+    const hungry = rules.startNight(rules.startDay(quiet));
+    expect(calls(hungry).map((x) => x.targetCount)).toEqual([1, 1]);
+  });
+
+  it('still only lets the Big Bad Wolf strike a neighbour of the pack’s victim', () => {
+    const s = night();
+    const strike = rules.buildNightSteps(s).find((x) => x.action === 'bigBadWolfStrike')!;
+    expect(rules.eligibleTargets(s, strike).map((p) => p.id).sort()).toEqual(['p6', 'p8']);
+  });
+
+  it('shifts both of the standard Big Bad Wolf’s victims with one Leprechaun move', () => {
+    const s = withActions(game(['bigBadWolf', 'leprechaun', 'bodyguard', 'villager', 'villager', 'villager', 'villager']), {
+      wolfTargets: ['p3', 'p4'],
+      leprechaunMove: 'left',
+    });
+    expect(rules.effectiveWolfTargets(s)).toEqual(['p4', 'p5']);
+    const after = rules.resolveNight(s);
+    expect(['p3', 'p4', 'p5'].map((id) => alive(after, id))).toEqual([true, false, false]);
+  });
+
+  describe('on a Wolf Cub night (two pack targets)', () => {
+    // The pack attacks p5 and p9.
+    const cubDeck: RoleId[] = ['bigBadWolf', 'werewolf', 'leprechaun', 'witch', 'villager', 'villager', 'villager', 'villager', 'villager', 'villager', 'villager', 'villager'];
+    const cubNight = (a: Partial<GameState['nightActions']> = {}) => {
+      const s = game(cubDeck, house);
+      return withActions({ ...s, modifiers: { ...s.modifiers, wolvesDoubleKill: true } }, { wolfTargets: ['p5', 'p9'], ...a });
+    };
+
+    it('lets the Big Bad Wolf strike next to either pack target', () => {
+      const s = cubNight();
+      expect(rules.buildNightSteps(s).find((x) => x.action === 'wolfKill')!.targetCount).toBe(2);
+      const strike = rules.buildNightSteps(s).find((x) => x.action === 'bigBadWolfStrike')!;
+      expect(rules.eligibleTargets(s, strike).map((p) => p.id).sort()).toEqual(['p10', 'p4', 'p6', 'p8']);
+    });
+
+    it('moves both pack targets with one Leprechaun move — onto the strike, they stack', () => {
+      const s = cubNight({ leprechaunMove: 'left', bigBadWolfTarget: 'p10' });
+      expect(rules.effectiveWolfTargets(s)).toEqual(['p6', 'p10']);
+      expect(rules.killDebuffs(s).find((h) => h.targetId === 'p10')?.debuffs).toEqual(['wolfpackKill', 'bbwKill']);
+      const after = rules.resolveNight(s);
+      expect(['p5', 'p9', 'p6', 'p10'].map((id) => alive(after, id))).toEqual([true, true, false, false]);
+    });
+
+    it('lets the Witch save only one of the two victims', () => {
+      const s = cubNight();
+      expect(rules.witchVictims(s)).toEqual(['p5', 'p9']);
+      let healed = gameReducer(s, { type: 'SET_NIGHT_ACTION', field: 'witchSaveTarget', value: 'p5' });
+      healed = gameReducer(healed, { type: 'SET_NIGHT_ACTION', field: 'witchSaveTarget', value: 'p9' });
+      expect(healed.nightActions.witchSaveTarget).toBe('p9');
+      const after = rules.resolveNight(healed);
+      expect([alive(after, 'p5'), alive(after, 'p9')]).toEqual([false, true]);
+    });
+  });
+});
+
+describe('v1.2.0 localization', () => {
+  it('names the Priest "Mục Sư" in Vietnamese wherever the role is spelled out', () => {
+    expect(dictionaries.vi['role.priest.name']).toBe('Mục Sư');
+    const mentions = ['role.priest.script', 'night.bigBadWolfRule', 'debuff.hint', 'rebalance.bigBadWolf.desc'] as const;
+    for (const key of mentions) expect(dictionaries.vi[key]).toContain('Mục Sư');
+    expect(Object.values(dictionaries.vi).some((text) => /linh mục|thầy tu|cha xứ/i.test(text))).toBe(false);
+  });
+});
+
+describe('v1.2.0 Leprechaun shifts the attack onto a Werewolf', () => {
+  // The pack attacks p2; its left neighbour (next seat clockwise) is a wolf, p3.
+  const deck = (wolf: RoleId): RoleId[] => ['villager', 'villager', 'villager', wolf, 'leprechaun', 'bodyguard', 'villager', 'werewolf', 'villager'];
+  const shifted = (wolf: RoleId, house: Partial<RebalanceRules> = {}, a: Partial<GameState['nightActions']> = {}) =>
+    withActions(game(deck(wolf), house), { wolfTargets: ['p2'], leprechaunMove: 'left', ...a });
+
+  it('kills the Werewolf on the victim’s left and spares the victim', () => {
+    const after = rules.resolveNight(shifted('werewolf'));
+    expect([alive(after, 'p2'), alive(after, 'p3')]).toEqual([true, false]);
+    expect(after.players[3].eliminated?.cause).toBe('wolves');
+    expect(after.lastReport?.deaths.map((d) => d.playerId)).toEqual(['p3']);
+  });
+
+  it('lets the usual saves protect that Werewolf', () => {
+    expect(alive(rules.resolveNight(shifted('werewolf', {}, { bodyguardTarget: 'p3' })), 'p3')).toBe(true);
+  });
+
+  it('fires the dead wolf’s own rule: a Wolf Cub enrages the pack', () => {
+    const after = rules.resolveNight(shifted('wolfCub'));
+    expect(alive(after, 'p3')).toBe(false);
+    expect(after.modifiers.wolvesDoubleKill).toBe(true);
+  });
+
+  it('kills a Big Bad Wolf hit by his own pack, while his strike still lands', () => {
+    const after = rules.resolveNight(shifted('bigBadWolf', { bigBadWolf: true }, { bigBadWolfTarget: 'p1' }));
+    expect(['p2', 'p3', 'p1'].map((id) => alive(after, id))).toEqual([true, false, false]);
+  });
+});
+
+describe('v1.2.0 role descriptions', () => {
+  it('stay short enough for the card’s three lines, in both languages', () => {
+    const isDesc = (key: string) => key.startsWith('role.') && (key.endsWith('.desc') || key.endsWith('.descRebalanced'));
+    for (const lang of ['en', 'vi'] as const) {
+      const long = Object.entries(dictionaries[lang]).filter(([key, text]) => isDesc(key) && [...text].length > 100);
+      expect(long).toEqual([]);
+    }
+  });
+});
+
+describe('v1.2.0 wolf-team descriptions', () => {
+  it('say whether each Werewolf-team role wakes with the pack', () => {
+    const wolfTeam = (Object.keys(ROLES) as RoleId[]).filter((id) => ROLES[id].faction === 'werewolf');
+    expect(wolfTeam).toContain('sorceress');
+    for (const id of wolfTeam) {
+      for (const key of [`role.${id}.desc`, `role.${id}.descRebalanced`]) {
+        const en = (dictionaries.en as Record<string, string>)[key];
+        const vi = (dictionaries.vi as Record<string, string>)[key];
+        if (en === undefined) continue;
+        expect(en.toLowerCase(), key).toContain('wake');
+        expect(vi.toLowerCase(), key).toContain('thức dậy');
+      }
+    }
+  });
+});
+
+describe('v1.2.0 night-1 setup, the Hooker and the Witch', () => {
+  it('holds every night-1 setup call until its picks are made', () => {
+    const s = game(['werewolf', 'cupid', 'doppelganger', 'virginiaWoolf', 'direWolf', 'villager', 'villager', 'villager']);
+    const setup = rules.buildNightSteps(s).filter((x) => x.group === 1 && x.kind === 'targets');
+    expect(setup.map((x) => x.action).sort()).toEqual(['cupidLink', 'direWolfCompanion', 'doppelgangerCopy', 'virginiaFear']);
+    expect(setup.every((x) => rules.setupIncomplete(s, x))).toBe(true);
+    const cupid = setup.find((x) => x.action === 'cupidLink')!;
+    expect(rules.setupIncomplete(withActions(s, { cupidTargets: ['p5'] }), cupid)).toBe(true);
+    const done = withActions(s, { cupidTargets: ['p5', 'p6'], doppelgangerTarget: 'p5', virginiaTarget: 'p6', direWolfTarget: 'p7' });
+    expect(setup.some((x) => rules.setupIncomplete(done, x))).toBe(false);
+    // Every other call may still be skipped.
+    expect(rules.buildNightSteps(s).filter((x) => x.group !== 1).some((x) => rules.setupIncomplete(s, x))).toBe(false);
+  });
+
+  it('still shows the Witch a seduced pack’s victim, and her heal is wasted', () => {
+    const s = withActions(game(['werewolf', 'hooker', 'witch', 'villager', 'villager', 'villager']), { wolfTargets: ['p3'], hookerTarget: 'p0' });
+    expect(rules.effectiveWolfTargets(s)).toEqual([]);
+    expect(rules.witchVictims(s)).toEqual(['p3']);
+    const witch = rules.buildNightSteps(s).find((x) => x.action === 'witchPotion')!;
+    expect(rules.eligibleTargets(s, witch, 'save').map((p) => p.id)).toEqual(['p3']);
+    const after = rules.resolveNight(withActions(s, { witchSaveTarget: 'p3' }));
+    expect(alive(after, 'p3')).toBe(true);
+    expect(after.modifiers.witchHealUsed).toBe(true);
+    // Nobody was really saved: the attack never happened.
+    expect(after.lastReport?.saved).toEqual([]);
+  });
+
+  it('wastes a seduced Witch’s potions: no heal, no poison, both spent', () => {
+    const s = withActions(game(['werewolf', 'hooker', 'witch', 'villager', 'villager', 'villager', 'villager']), {
+      wolfTargets: ['p3'],
+      hookerTarget: 'p2',
+      witchSaveTarget: 'p3',
+      witchKillTarget: 'p4',
+    });
+    // She sees the victim as usual: nothing tells her she was seduced.
+    expect(rules.witchVictims(s)).toEqual(['p3']);
+    const after = rules.resolveNight(s);
+    expect([alive(after, 'p3'), alive(after, 'p4')]).toEqual([false, true]);
+    expect([after.modifiers.witchHealUsed, after.modifiers.witchKillUsed]).toEqual([true, true]);
+  });
+});
+
+describe('v1.2.0 death links on the board', () => {
+  it('lists Virginia Woolf’s and the Dire Wolf’s links once night 1 is resolved, pointing at whoever dies along', () => {
+    const s = withActions(game(['direWolf', 'werewolf', 'virginiaWoolf', 'villager', 'villager', 'villager', 'villager']), {
+      virginiaTarget: 'p3',
+      direWolfTarget: 'p4',
+    });
+    expect(rules.deathLinks(s)).toEqual([]);
+    const after = rules.resolveNight(s);
+    expect(rules.deathLinks(after)).toEqual([
+      { kind: 'virginia', from: 'p2', to: 'p3' },
+      { kind: 'direWolf', from: 'p4', to: 'p0' },
+    ]);
+    // The links really work that way round.
+    expect(alive(rules.moderatorEliminate(after, 'p2'), 'p3')).toBe(false);
+    expect(alive(rules.moderatorEliminate(after, 'p4'), 'p0')).toBe(false);
   });
 });

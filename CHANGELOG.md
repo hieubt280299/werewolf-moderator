@@ -3,6 +3,61 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - Unreleased
+
+Implements [`UPDATE_v1.2.0.md`](UPDATE_v1.2.0.md).
+
+### Added
+- **Continue with Google** on the sign-in screen (Firebase mode).
+  - A first Google sign-in creates a profile at once. The display name comes from the Google account; stats and role pools start empty.
+  - The Google window opens as a popup. It switches to a full-page redirect when the popup is blocked, or in the installed home-screen app.
+  - `vercel.json` proxies Firebase's sign-in helper (`/__/auth`), so redirects keep working in browsers that block third-party storage. Setup steps are in the README.
+- **One profile per email.** Signing in with Google using a username account's email opens that same account: same decks, history, stats and settings.
+  - Google addresses (@gmail.com, Workspace) merge automatically.
+  - Any other address asks once for the account's password, then links Google to it.
+- **Sign-in methods** in Profile & settings:
+  - Connect or disconnect Google.
+  - Add username & password to an account made with Google.
+  - Verify your email.
+  - Disconnecting Google is refused while it is the only way to sign in. Connecting is refused if that Google account already has its own profile.
+  - While a Google account with the same address as the recovery email is linked, **Change verification email** is hidden, and the Account section says to disconnect Google first. The Firebase store refuses the change as well. A linked Google account with a different address doesn't lock the email.
+  - **Connect Google** is refused while a recovery-email change waits for confirmation. Opening that link later would move the account off the Google address. The same applies to linking Google after a password sign-in: the moderator is signed in, Google stays unlinked, and the app says why. A new **Cancel change** next to "Waiting for confirmation" clears a pending change that will never be confirmed.
+- **Email verification.** New sign-ups get a verification email.
+  - If Google replaced an unverified account's password, the app offers once to set a new one, so the username keeps working.
+- **Kill debuffs** (rebalanced Big Bad Wolf). Each victim carries `WolfpackKill` and/or `BBWKill`:
+  - The Bodyguard and the Witch's Healing Potion lift only `WolfpackKill`.
+  - Only the Priest's (Mục Sư) blessing lifts `BBWKill`, and it lifts every debuff.
+  - A victim with both, saved by the Bodyguard or Witch, still dies. The timeline notes that the Big Bad Wolf's strike couldn't be stopped.
+- **Tonight's wolf attacks** panel at the Big Bad Wolf's and Leprechaun's calls (moderator only). It lists each victim's debuffs, what has lifted them so far, and the result at dawn: dies, survives, turns, or wounded.
+  - The Witch's call warns the moderator when a victim she can heal was also struck by the Big Bad Wolf.
+
+### Changed
+- **The rebalanced Big Bad Wolf's strike is unhealable.** The Bodyguard no longer stops it; the Witch still can't. Only the Priest's blessing does.
+- **The pack's kill and the Big Bad Wolf's strike can stack on one player**, through the Leprechaun moving the pack's kill onto the strike's target. The Big Bad Wolf still strikes only a neighbour of a pack target, never the target itself. On a Wolf Cub night, a neighbour of either target.
+  - Seducing the Big Bad Wolf cancels both attacks. Seducing another Werewolf cancels only the pack's, so a stacked victim still dies.
+  - For a Cursed or a Tough Guy, a stack is one wolf attack: the Cursed turns once, the Tough Guy is wounded once.
+  - A Diseased killed by the strike (even when the Bodyguard or Witch lifted the pack's kill) makes the pack **and** the Big Bad Wolf skip the next night, as when he is seduced. The rules engine drops any wolf target set on a skipped night, and the Big Bad Wolf's call says his strike is off too.
+- **The Leprechaun plays blind.** They are no longer shown the Werewolves' target. They point left, point right, or shake their head.
+  - Everyone faces the middle of the table, so left means one seat clockwise and right one seat counter-clockwise. Dead players are skipped.
+  - The move shifts every pack target alike: both victims on a Wolf Cub night or with the standard Big Bad Wolf.
+  - It can land on a Werewolf or on the Leprechaun themselves.
+  - The call shows **Left / No move / Right** buttons, and the moderator sees where each attack lands.
+  - The reworked Tanner still takes the Leprechaun down when the move lands on them.
+  - The timeline records the direction and who the attack landed on, or that there was nothing to move.
+  - A night saved before this update restarts the Leprechaun's call with no move.
+- **The Witch heals one player only**, even when two were attacked. Her call says so when there are two victims.
+- **Night-1 setup can't be skipped.** Until the Cupid, Doppelgänger, Virginia Woolf and Dire Wolf calls have their picks, Next and Finish night stay off and later calls can't be jumped to. Every other call can still be passed.
+- **The Witch still sees a seduced pack's victims.** An empty list would tell her the Hooker found a wolf. Healing one spends the potion for nothing. A seduced Witch already gets no effect from either potion, and both are spent; tests now cover this.
+- **The Doppelgänger is never called aloud.** When her target dies, the next night's script tells the moderator to silently tap her shoulder and show her the new role, the same way a bitten Cursed is woken. A spoken call would tell the table her target had died.
+- The Witch's call reminds the moderator to call her even after both potions are used.
+- **The seat map shows the Lovers**, as the list does: a purple heart badge on each lover's portrait, and a dashed purple line across the table joining their seats. The line turns with the table and dims once both lovers are dead. This works on the board and in the night script's player choices. Screen readers hear "Lover" with the seat.
+- **Virginia Woolf's and the Dire Wolf's links are shown**, in the list and on the seat map.
+  - In the list, the board's tiles and the player sheet get a chip on both ends: "Takes {name} along" on the player whose death drags the other down, "Dies with {name}" on the one who dies along. The chip is in the linking role's colour.
+  - On the seat map, a dotted arrow crosses the table towards whoever dies along, with a link badge on both portraits. Each kind of link has its own line, so a pair joined twice still shows both. The arrows dim once either end is dead.
+  - Like the Lovers, the links appear once night 1 is resolved and stay after the deaths. A Doppelgänger who becomes Virginia Woolf or the Dire Wolf carries the link too.
+- **Shorter role descriptions** in both languages. 38 descriptions ran past the card's three lines and were cut off; every description now fits in about 90 characters, with the same rules. Every Werewolf-team role says whether it wakes with the pack: the Sorceress and the Minion don't, Fang Face does only on night 1 and as the last wolf, and a turned Cursed does. A test keeps new descriptions under 100 characters, and another checks the wolf-team wake wording in both languages.
+- Firestore rules: an account made with Google may set its username once.
+
 ## [1.1.1] - Unreleased
 
 ### Changed

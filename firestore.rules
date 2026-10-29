@@ -1,7 +1,8 @@
 rules_version = '2';
 
 // Werewolf Gamemaster — every document under users/{uid} is private to its owner.
-// usernames/{username} maps a username to its account's sign-in email (the recovery email).
+// usernames/{username} maps a username to its account's sign-in email (the recovery email,
+// or the Google address for an account made with Google).
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner(uid) {
@@ -24,13 +25,23 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
+      // An account made with Google has no username (''). It may claim one once, in the same
+      // batch that creates its usernames/{username} entry.
+      function claimsUsername() {
+        let name = request.resource.data.get('username', '');
+        return resource.data.get('username', '') == ''
+          && name is string
+          && name.matches('^[a-z0-9._-]{3,20}$')
+          && getAfter(/databases/$(database)/documents/usernames/$(name)).data.uid == uid;
+      }
+
       allow read, delete: if isOwner(uid);
-      // Profile: at most 10 saved role pools; the username can't be changed after sign-up.
+      // Profile: at most 10 saved role pools; a username can't be changed once it is set.
       allow create: if isOwner(uid)
         && request.resource.data.get('pools', []).size() <= 10;
       allow update: if isOwner(uid)
         && request.resource.data.get('pools', []).size() <= 10
-        && request.resource.data.username == resource.data.username;
+        && (request.resource.data.get('username', '') == resource.data.get('username', '') || claimsUsername());
 
       // Finished games and the in-progress game.
       match /games/{gameId} {

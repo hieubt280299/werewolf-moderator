@@ -1,5 +1,6 @@
 import { MoonStar } from 'lucide-react';
 import { lazy, startTransition, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { AccountPrompts } from './components/auth/AccountPrompts';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { EmailActionScreen } from './components/auth/EmailActionScreen';
 import { DashboardHome } from './components/dashboard/DashboardHome';
@@ -107,6 +108,7 @@ function Shell() {
         </Suspense>
       </main>
       <ProfileSettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AccountPrompts />
     </HouseRulesProvider>
   );
 }
@@ -130,7 +132,7 @@ function Gate() {
     );
   }
   if (link?.mode === 'resetPassword') return <AuthScreen resetLink={link.oobCode} onResetDone={linkDone} />;
-  if (link) return <EmailActionScreen oobCode={link.oobCode} onDone={linkDone} />;
+  if (link) return <EmailActionScreen mode={link.mode} oobCode={link.oobCode} onDone={linkDone} />;
   if (status === 'signedOut' || !user) return <AuthScreen />;
   // Keyed by uid so switching accounts gets a fresh, per-user game state.
   return (

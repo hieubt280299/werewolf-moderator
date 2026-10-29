@@ -24,4 +24,6 @@ export const STORAGE_KEYS = {
   boardView: 'wwgm:board-view:v1',
   /** Seat map orientation, in degrees, so it stays aligned with the moderator's seat. */
   seatRotation: 'wwgm:seat-rotation:v1',
+  /** Accounts (uids) whose "set a password again" prompt was dismissed on this device. */
+  restorePasswordDismissed: 'wwgm:restore-password-dismissed:v1',
 } as const;

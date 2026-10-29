@@ -2,7 +2,8 @@ import { HeartPulse, Skull } from 'lucide-react';
 import type { Player } from '../../@types/game';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { StatusBadges } from '../shared/PlayerToken';
+import { deathLinks } from '../../utils/gameRules';
+import { linkBadges, StatusBadges } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
 import { Button, Sheet } from '../shared/ui';
 
@@ -28,7 +29,7 @@ export function PlayerSheet({ player, onClose }: { player: Player | null; onClos
               })}
             </p>
           )}
-          <StatusBadges player={player} />
+          <StatusBadges player={player} links={linkBadges(engine.state.players, deathLinks(engine.state)).get(player.id)} />
           <div className="w-full">
             {player.alive ? (
               <Button

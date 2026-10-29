@@ -4,7 +4,7 @@ import { memo } from 'react';
 import type { Player } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { StatusBadges } from '../shared/PlayerToken';
+import { StatusBadges, type LinkBadge } from '../shared/PlayerToken';
 import { toneAccentFill, TONES } from '../shared/tones';
 import { RoleBadge } from '../shared/ui';
 
@@ -14,6 +14,8 @@ interface PlayerTileProps {
   shielded?: boolean;
   /** Died in the phase that just ended: the label to show ("Died last night"). */
   diedLabel?: string;
+  /** Death links (Virginia Woolf, Dire Wolf); keep the array stable so the memo holds. */
+  links?: readonly LinkBadge[];
   /** Stable callback (receives the player id), so the memo holds across board updates. */
   onInspect: (playerId: string) => void;
 }
@@ -21,7 +23,7 @@ interface PlayerTileProps {
 const RESTING = '0 10px 30px -8px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.08)';
 
 /** Player block for the dashboard grid: faction edge, character badge and illuminated statuses. */
-export const PlayerTile = memo(function PlayerTile({ player, shielded, diedLabel, onInspect }: PlayerTileProps) {
+export const PlayerTile = memo(function PlayerTile({ player, shielded, diedLabel, links, onInspect }: PlayerTileProps) {
   const { t } = useI18n();
   const tone = TONES[ROLES[player.roleId].cardTone];
   const s = player.status;
@@ -63,7 +65,7 @@ export const PlayerTile = memo(function PlayerTile({ player, shielded, diedLabel
         </div>
         {shielded && player.alive && <Shield className="h-4 w-4 shrink-0 text-village" />}
       </div>
-      <StatusBadges player={player} diedLabel={diedLabel} />
+      <StatusBadges player={player} diedLabel={diedLabel} links={links} />
     </button>
   );
 });

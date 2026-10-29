@@ -1,15 +1,16 @@
 import { CheckCircle2, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import type { AuthActionLink } from '../../@types/auth';
 import { useAuth } from '../../context/AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
 import { Button } from '../shared/ui';
 import { describeAuthError } from './authErrors';
 
 /**
- * Lands an emailed Firebase account link other than a password reset — typically the
- * confirmation sent to a new recovery email.
+ * Lands an emailed Firebase account link other than a password reset — the confirmation
+ * sent to a new recovery email, or (v1.2.0) the email verification sent at sign-up.
  */
-export function EmailActionScreen({ oobCode, onDone }: { oobCode: string; onDone: () => void }) {
+export function EmailActionScreen({ mode, oobCode, onDone }: { mode?: AuthActionLink['mode']; oobCode: string; onDone: () => void }) {
   const { t } = useI18n();
   const { applyEmailAction } = useAuth();
   const [result, setResult] = useState<{ ok: true } | { ok: false; error: string } | null>(null);
@@ -36,7 +37,8 @@ export function EmailActionScreen({ oobCode, onDone }: { oobCode: string; onDone
         {result?.ok && (
           <>
             <CheckCircle2 className="mx-auto h-10 w-10 text-village" />
-            <p className="text-bone">{t('action.emailConfirmed')}</p>
+            {/* Verifying keeps the session; changing the email signs the account out. */}
+            <p className="text-bone">{mode === 'verifyEmail' ? t('action.emailVerified') : t('action.emailConfirmed')}</p>
           </>
         )}
         {result && !result.ok && (

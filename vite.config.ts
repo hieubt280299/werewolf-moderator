@@ -31,6 +31,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         navigateFallback: 'index.html',
+        // Firebase's sign-in helper pages (proxied to firebaseapp.com, see vercel.json) must reach
+        // the network: serving the app shell there would break Google sign-in.
+        navigateFallbackDenylist: [/^\/__\//],
         cleanupOutdatedCaches: true,
         // Fonts are bundled, split into unicode-range subsets. Cache the subsets a device actually
         // uses on first load (hashed file names, so cache-first is safe) rather than precaching all.
