@@ -23,8 +23,9 @@ import { dictionaries } from '../i18n/translations';
  * Night call order (lower wakes first), in five strict blocks:
  *   1–9   night 1 only, setup: Cupid (then the Lovers meet), Doppelgänger, Virginia Woolf,
  *         Masons, Dire Wolf's companion
- *   10–19 transformations & delayed roles: Doppelgänger (when her target died), Drunk
- *         (night 3). A bitten Cursed has no call: they wake silently with the pack.
+ *   10–19 transformations & delayed roles: Doppelgänger (when her target died; silently
+ *         tapped awake, never called aloud), Drunk (night 3). A bitten Cursed has no call:
+ *         they are silently tapped to wake with the pack.
  *   20–29 protection & distraction: Hooker, Bodyguard, Priest
  *   30–39 threats: Vampires → Werewolves (then the Big Bad Wolf's own strike) → Minion /
  *         Sorceress

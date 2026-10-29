@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Check, CircleDot, LayoutGrid, LocateFixed, Lock, RotateCcw, RotateCw, Shield, Skull } from 'lucide-react';
+import { Check, CircleDot, Heart, LayoutGrid, Link2, LocateFixed, Lock, RotateCcw, RotateCw, Shield, Skull } from 'lucide-react';
 import {
   memo,
   useCallback,
@@ -16,8 +16,16 @@ import type { Player } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { seatRotation, type BoardView } from '../../hooks/useSeatMapPrefs';
 import { useI18n } from '../../i18n/I18nContext';
+import type { DeathLink } from '../../utils/gameRules';
+import { LINK_TONE, linkBadges } from '../shared/PlayerToken';
 import { toneAccentFill, TONES, type Tone } from '../shared/tones';
 import { Button, RoleBadge } from '../shared/ui';
+
+/** A death link's line colour: the role that made it. */
+const linkColor = (kind: DeathLink['kind']) => {
+  const tone = TONES[LINK_TONE[kind]];
+  return tone.split ? tone.split[1].accent : tone.accent;
+};
 
 export type SeatAccent = 'village' | 'wolf' | 'vampire' | 'cult';
 
@@ -46,6 +54,8 @@ interface SeatMapProps {
   accent?: SeatAccent;
   /** Why a seat can't be picked, by player id (shown with the seat). */
   notes?: Readonly<Record<string, string>>;
+  /** Death links (Virginia Woolf, Dire Wolf), drawn as arrows towards whoever dies along. */
+  links?: readonly DeathLink[];
   /** Text in the middle of the table. */
   centerLabel?: string;
   /** Turning tips under the buttons; left out where space is tight. */
@@ -150,6 +160,7 @@ export const SeatMap = memo(function SeatMap({
   selected,
   accent = 'village',
   notes,
+  links,
   centerLabel,
   showHint = true,
   className = 'max-w-[560px]',
@@ -254,6 +265,23 @@ export const SeatMap = memo(function SeatMap({
   const half = size / 2;
   const tableRadius = layout ? Math.max(24, layout.inner - nodeHeight(layout.width) / 2 - 8) : 0;
   const seated = [...players].sort((a, b) => a.seat - b.seat);
+  // Cupid's Lovers, joined across the table (the list marks them with a "Lover" chip).
+  const lovers = seated.filter((p) => p.status.lover);
+  const loverAngles = lovers.length === 2 ? lovers.map((p) => seatAngle(p.seat, seats)) : null;
+  const loverRadius = tableRadius - 9;
+  // Virginia Woolf's and the Dire Wolf's links: each kind on its own chord, so a pair joined
+  // twice still shows both lines.
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const linkLines = (links ?? []).flatMap((l, i) => {
+    const from = byId.get(l.from);
+    const to = byId.get(l.to);
+    if (!from || !to) return [];
+    const r = tableRadius - (l.kind === 'virginia' ? 16 : 23);
+    const a = seatAngle(from.seat, seats);
+    const b = seatAngle(to.seat, seats);
+    return [{ key: `${l.kind}-${i}`, kind: l.kind, x1: half + Math.cos(a) * r, y1: half + Math.sin(a) * r, x2: half + Math.cos(b) * r, y2: half + Math.sin(b) * r, live: from.alive && to.alive }];
+  });
+  const badges = linkBadges(players, links ?? []);
 
   return (
     <div className="space-y-3">
@@ -286,6 +314,11 @@ export const SeatMap = memo(function SeatMap({
                 <stop offset="0%" stopColor="#1A1D26" />
                 <stop offset="100%" stopColor="#0B0C11" />
               </radialGradient>
+              {(['virginia', 'direWolf'] as const).map((kind) => (
+                <marker key={kind} id={`seat-link-${kind}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill={linkColor(kind)} />
+                </marker>
+              ))}
             </defs>
             <g className={SETTLE} style={{ transform: 'rotate(var(--seat-rot))', transformOrigin: `${half}px ${half}px` }}>
               <circle cx={half} cy={half} r={layout.outer} fill="none" stroke="rgba(255,255,255,0.06)" strokeDasharray="2 6" />
@@ -311,6 +344,35 @@ export const SeatMap = memo(function SeatMap({
                   />
                 );
               })}
+              {loverAngles && (
+                <line
+                  x1={half + Math.cos(loverAngles[0]) * loverRadius}
+                  y1={half + Math.sin(loverAngles[0]) * loverRadius}
+                  x2={half + Math.cos(loverAngles[1]) * loverRadius}
+                  y2={half + Math.sin(loverAngles[1]) * loverRadius}
+                  stroke={TONES.vampire.accent}
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  strokeLinecap="round"
+                  opacity={lovers.some((p) => p.alive) ? 0.8 : 0.3}
+                />
+              )}
+              {/* Death links point at whoever dies along; dimmed once either end is gone. */}
+              {linkLines.map((l) => (
+                <line
+                  key={l.key}
+                  x1={l.x1}
+                  y1={l.y1}
+                  x2={l.x2}
+                  y2={l.y2}
+                  stroke={linkColor(l.kind)}
+                  strokeWidth={2}
+                  strokeDasharray="1 4"
+                  strokeLinecap="round"
+                  markerEnd={`url(#seat-link-${l.kind})`}
+                  opacity={l.live ? 0.85 : 0.3}
+                />
+              ))}
             </g>
           </svg>
         )}
@@ -330,6 +392,11 @@ export const SeatMap = memo(function SeatMap({
               selected={!!selected?.includes(p.id)}
               accent={accent}
               note={notes?.[p.id]}
+              linkColor={badges.has(p.id) ? linkColor(badges.get(p.id)![0].kind) : undefined}
+              linkLabel={badges
+                .get(p.id)
+                ?.map((b) => t(b.diesWith ? 'status.diesWith' : 'status.takesAlong', { name: b.partner }))
+                .join(', ')}
               onSelect={onSelect}
             />
           ))}
@@ -374,6 +441,10 @@ interface SeatNodeProps {
   selected: boolean;
   accent: SeatAccent;
   note?: string;
+  /** Colour of the seat's death-link badge (Virginia Woolf, Dire Wolf), if it has one. */
+  linkColor?: string;
+  /** The seat's death links, read out with it ("Dies with An"). */
+  linkLabel?: string;
   onSelect: (playerId: string) => void;
 }
 
@@ -390,6 +461,8 @@ const SeatNode = memo(function SeatNode({
   selected,
   accent,
   note,
+  linkColor: linkTint,
+  linkLabel,
   onSelect,
 }: SeatNodeProps) {
   const { t } = useI18n();
@@ -400,7 +473,9 @@ const SeatNode = memo(function SeatNode({
   const nameSize = clamp(width * 0.14, 9, 13);
   const roleSize = clamp(width * 0.115, 8, 11);
   const seatSize = Math.round(clamp(width * 0.22, 14, 20));
-  const label = t('seatMap.seat', { seat: player.seat + 1, name: player.name, role: roleName });
+  const lover = player.status.lover;
+  const seatLabel = t('seatMap.seat', { seat: player.seat + 1, name: player.name, role: roleName });
+  const label = [seatLabel, lover && t('status.lover'), linkLabel].filter(Boolean).join(', ');
   // A fresh death keeps its colours and is ringed in red; earlier deaths fade to grey.
   const faded = !player.alive && !fresh;
 
@@ -467,6 +542,16 @@ const SeatNode = memo(function SeatNode({
             />
           )}
           {shielded && player.alive && <Shield aria-hidden className="absolute -right-1 -top-1 h-3.5 w-3.5 text-village" />}
+          {lover && (
+            <span aria-hidden className="absolute -bottom-1 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-ink/85">
+              <Heart className="h-2.5 w-2.5 fill-current text-vampire" />
+            </span>
+          )}
+          {linkTint && (
+            <span aria-hidden className="absolute -bottom-1 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-ink/85">
+              <Link2 className="h-2.5 w-2.5" style={{ color: linkTint }} />
+            </span>
+          )}
         </span>
         <span
           className={clsx('mt-0.5 block w-full truncate font-semibold leading-tight text-bone text-shadow-crisp', !player.alive && 'line-through')}

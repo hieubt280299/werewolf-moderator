@@ -189,6 +189,12 @@ export interface Player {
   eliminated?: Elimination;
 }
 
+/**
+ * A direction round the table. Everyone faces the middle, so a player's left neighbour is the
+ * next seat clockwise, and their right neighbour the next seat counter-clockwise.
+ */
+export type LeprechaunMove = 'left' | 'right';
+
 export interface NightActions {
   wolfTargets: string[];
   seerTarget: string | null;
@@ -203,8 +209,11 @@ export interface NightActions {
   direWolfTarget: string | null;
   doppelgangerTarget: string | null;
   virginiaTarget: string | null;
-  /** Leprechaun moves the wolves' (first) target to this adjacent player. */
-  leprechaunTarget: string | null;
+  /**
+   * The Leprechaun's blind move (v1.2.0): every pack target shifts one seat this way, or stays
+   * when null. They never see who the Werewolves chose.
+   */
+  leprechaunMove: LeprechaunMove | null;
   auraSeerTarget: string | null;
   piTarget: string | null;
   priestTarget: string | null;
@@ -217,7 +226,7 @@ export interface NightActions {
   hookerTarget: string | null;
   /** House rule: dies with the Hunter if the Hunter dies tonight. */
   hunterTarget: string | null;
-  /** House rule: the Big Bad Wolf's second victim, seated next to the pack's target. */
+  /** House rule: the Big Bad Wolf's own victim, seated next to one of the pack's targets. */
   bigBadWolfTarget: string | null;
 }
 
@@ -244,7 +253,7 @@ export interface NightStep {
   /** Role is in the deck but dead — call it anyway so the table can't deduce it. */
   ghost: boolean;
   /** How the moderator records the step. */
-  kind: 'targets' | 'info' | 'role' | 'toggle';
+  kind: 'targets' | 'info' | 'role' | 'toggle' | 'direction';
   /** Wolves' turn: bitten Cursed who wake with the pack for the first time tonight. */
   joining?: string[];
   /** Why this step is suppressed or special, if it is. */

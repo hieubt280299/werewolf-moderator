@@ -6,8 +6,9 @@ import { useGameEngine } from '../../hooks/useGameEngine';
 import { useListMotion } from '../../hooks/useListMotion';
 import { useBoardView } from '../../hooks/useSeatMapPrefs';
 import { useI18n } from '../../i18n/I18nContext';
-import { freshDeaths } from '../../utils/gameRules';
+import { deathLinks, freshDeaths } from '../../utils/gameRules';
 import { BoardViewSwitch, SeatMap } from '../dashboard/SeatMap';
+import { linkBadges } from '../shared/PlayerToken';
 import { Button, Chip, SectionTitle } from '../shared/ui';
 import { TimelinePanel } from './TimelineView';
 import { DawnReport } from './DawnReport';
@@ -52,6 +53,9 @@ export function ModeratorDashboard() {
   const shieldedId = isNight ? state.nightActions.bodyguardTarget : null;
   const fresh = useMemo(() => freshDeaths(state), [state]);
   const diedLabel = fresh ? t(fresh.phase === 'night' ? 'status.diedNight' : 'status.diedDay') : undefined;
+  // Virginia Woolf's and the Dire Wolf's links, on the tiles and round the table.
+  const links = useMemo(() => deathLinks(state), [state.players, state.modifiers]);
+  const badges = useMemo(() => linkBadges(state.players, links), [state.players, links]);
 
   return (
     <div
@@ -137,6 +141,7 @@ export function ModeratorDashboard() {
                     player={p}
                     shielded={p.id === shieldedId}
                     diedLabel={fresh?.ids.has(p.id) ? diedLabel : undefined}
+                    links={badges.get(p.id)}
                     onInspect={inspect}
                   />
                 ))}
@@ -146,6 +151,7 @@ export function ModeratorDashboard() {
                 players={state.players}
                 shieldedId={shieldedId}
                 freshIds={fresh?.ids}
+                links={links}
                 onSelect={inspect}
                 centerLabel={t('dash.alive', { alive: alive.length, total: state.players.length })}
               />
