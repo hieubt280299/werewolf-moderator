@@ -5,7 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { isActiveGame, useGame } from '../../context/GameContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useI18n } from '../../i18n/I18nContext';
+import { emailLockedByGoogle } from '../../services/profileStore';
 import { describeAuthError } from '../auth/authErrors';
+import { GoogleMark } from '../auth/GoogleButton';
 import { RebalancesSection } from '../settings/RebalancesSection';
 import { SignInMethodsSection } from '../settings/SignInMethodsSection';
 import { LanguageToggle } from '../shared/LanguageToggle';
@@ -48,7 +50,11 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
   const emailSection = useRef<HTMLDivElement>(null);
   // Both forms ask for the current password, which an account made with Google may not have.
   const hasPassword = auth.mode !== 'firebase' || !!auth.user?.providers?.includes('password');
+  // Google sign-in shares this email with the account: it stays until Google is disconnected.
+  const emailLocked = emailLockedByGoogle(auth.user);
   const username = auth.user?.username;
+  const showPasswordButton = !pwOpen;
+  const showEmailButton = !emailOpen && !emailLocked;
 
   useEffect(() => {
     if (pwOpen) pwSection.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -73,6 +79,16 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
     setNewEmail('');
     setEmailPassword('');
     setEmailOpen(false);
+  };
+
+  const cancelEmailChange = async (email: string) => {
+    if (!window.confirm(t('profile.cancelPendingConfirm', { email }))) return;
+    try {
+      await auth.cancelEmailChange();
+      setEmailMsg({ ok: true, text: t('profile.pendingCancelled') });
+    } catch (err) {
+      setEmailMsg({ ok: false, text: describeAuthError(err, t) });
+    }
   };
 
   const changeEmail = async (e: FormEvent) => {
@@ -137,8 +153,28 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
           ) : (
             <p className="text-xs text-ember">{t('profile.noEmail')}</p>
           )}
+          {/* Why there's no Change verification email button below. */}
+          {hasPassword && emailLocked && (
+            <p className="mt-1 flex items-start gap-1.5 text-xs text-bone-dim">
+              <GoogleMark className="mt-px h-3.5 w-3.5 shrink-0" /> {t('profile.emailLocked')}
+            </p>
+          )}
           {auth.profile?.pendingRecoveryEmail && (
-            <p className="mt-1 break-all text-xs text-bone-dim">{t('profile.pendingEmail', { email: auth.profile.pendingRecoveryEmail })}</p>
+            <p className="mt-1 break-all text-xs text-bone-dim">
+              {t('profile.pendingEmail', { email: auth.profile.pendingRecoveryEmail })}
+              {auth.mode === 'firebase' && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => void cancelEmailChange(auth.profile?.pendingRecoveryEmail ?? '')}
+                    className="font-semibold text-village underline-offset-2 hover:underline"
+                  >
+                    {t('profile.cancelPending')}
+                  </button>
+                </>
+              )}
+            </p>
           )}
         </div>
       </Section>
@@ -204,7 +240,7 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
-      {emailOpen && (
+      {emailOpen && !emailLocked && (
         <div ref={emailSection}>
           <Section title={t('profile.email')}>
             <form onSubmit={changeEmail} className="space-y-3">
@@ -244,16 +280,20 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
 
       <div className="space-y-3 pt-2">
         {pwMsg?.ok && <p className="text-center text-xs text-village">{pwMsg.text}</p>}
-        {emailMsg?.ok && <p className="text-center text-xs text-village">{emailMsg.text}</p>}
-        {/* Account security: password and recovery email side by side. */}
-        {hasPassword && (!pwOpen || !emailOpen) && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {!pwOpen && (
+        {/* Errors show in the open email form; cancelling a pending change reports here. */}
+        {emailMsg && (emailMsg.ok || !emailOpen) && (
+          <p className={clsx('text-center text-xs', emailMsg.ok ? 'text-village' : 'text-wolf-bright')}>{emailMsg.text}</p>
+        )}
+        {/* Account security: password and recovery email side by side. The email one is
+            hidden while Google shares the address (the Account section says why). */}
+        {hasPassword && (showPasswordButton || showEmailButton) && (
+          <div className={clsx('grid grid-cols-1 gap-3', showPasswordButton && showEmailButton && 'sm:grid-cols-2')}>
+            {showPasswordButton && (
               <Button block onClick={openPassword} icon={<KeyRound className="h-4 w-4" />}>
                 {t('profile.password')}
               </Button>
             )}
-            {!emailOpen && (
+            {showEmailButton && (
               <Button block onClick={openEmail} icon={<Mail className="h-4 w-4" />}>
                 {t('profile.email')}
               </Button>

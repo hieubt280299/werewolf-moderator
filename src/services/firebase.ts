@@ -44,6 +44,7 @@ import {
   assertEmail,
   assertPassword,
   AuthError,
+  emailLockedByGoogle,
   EMPTY_STATS,
   maskEmail,
   newProfile,
@@ -132,7 +133,21 @@ export function createFirebaseStore(): ProfileStore {
   };
 
   const language = () => readJSON<Language>(STORAGE_KEYS.language, 'vi');
-  const google = createGoogleAuth(auth, language, track);
+
+  /**
+   * The signed-in account's unconfirmed recovery email, as last loaded or set. Google isn't
+   * linked while one is pending: opening its link later would move the account off the address
+   * Google was linked with. Kept in memory so Connect can check it without a network call
+   * before the popup (an await there costs the popup its tap and browsers block it).
+   */
+  let pendingEmail: string | null = null;
+  /** Already confirmed (the account switched to it) counts as no longer pending. */
+  const pendingChange = (user: User, pending: string | null | undefined) => !!pending && pending !== user.email;
+  const google = createGoogleAuth(auth, language, track, async (user) => {
+    // Linking after a password sign-in: this account's profile isn't loaded yet, so read it.
+    const data = (await getDoc(userDoc(user.uid))).data() as Partial<UserProfile> | undefined;
+    if (pendingChange(user, data?.pendingRecoveryEmail)) throw new AuthError('emailChangePending');
+  });
 
   const lookup = async (username: string): Promise<UsernameEntry | null> => {
     const snap = await getDoc(usernameDoc(username));
@@ -198,7 +213,20 @@ export function createFirebaseStore(): ProfileStore {
       resumeGoogleRedirect: () => wrap(() => google.resumeRedirect()),
       linkPendingGoogle: (password) => wrap(() => google.linkPending(password)),
       cancelPendingGoogle: () => google.cancelPending(),
-      connectGoogle: () => wrap(() => google.connect()),
+      connectGoogle: () =>
+        wrap(() => {
+          if (auth.currentUser && pendingChange(auth.currentUser, pendingEmail)) throw new AuthError('emailChangePending');
+          return google.connect();
+        }),
+
+      cancelEmailChange: () =>
+        wrap(async () => {
+          const user = requireUser();
+          await updateDoc(userDoc(user.uid), { pendingRecoveryEmail: null, updatedAt: serverTimestamp() });
+          pendingEmail = null;
+          // usernames/{username}.pendingEmail stays as a sign-in fallback: the link already sent
+          // still works until it expires, and if it is opened the username must still sign in.
+        }),
       disconnectGoogle: () => wrap(() => google.disconnect()),
 
       addPasswordSignIn: (password, rawUsername) =>
@@ -287,7 +315,11 @@ export function createFirebaseStore(): ProfileStore {
         throw failure;
       }),
 
-    signOut: () => wrap(() => signOut(auth)),
+    signOut: () =>
+      wrap(async () => {
+        pendingEmail = null;
+        await signOut(auth);
+      }),
 
     changePassword: (current, next) =>
       wrap(async () => {
@@ -300,6 +332,8 @@ export function createFirebaseStore(): ProfileStore {
       wrap(async () => {
         const email = normalizeEmail(rawEmail);
         assertEmail(email);
+        // The email Google sign-in shares with this account stays put while Google is linked.
+        if (auth.currentUser && emailLockedByGoogle(accountOf(auth.currentUser))) throw new AuthError('emailLockedByGoogle');
         const user = await reauthenticate(current);
         if (email === user.email) return { email, pending: false };
         // Firebase switches the account's email only once the link sent to the new address is opened.
@@ -307,6 +341,7 @@ export function createFirebaseStore(): ProfileStore {
         const username = ((await getDoc(userDoc(user.uid))).data() as Partial<UserProfile> | undefined)?.username;
         if (username) await setDoc(usernameDoc(username), { uid: user.uid, email: user.email, pendingEmail: email });
         await updateDoc(userDoc(user.uid), { pendingRecoveryEmail: email, updatedAt: serverTimestamp() });
+        pendingEmail = email;
         return { email, pending: true };
       }),
 
@@ -367,13 +402,16 @@ export function createFirebaseStore(): ProfileStore {
             pools: data.pools ?? [],
             stats: { ...EMPTY_STATS, ...data.stats },
           } as UserProfile;
-          return syncRecoveryEmail(user.uid, profile.username, profile);
+          const synced = await syncRecoveryEmail(user.uid, profile.username, profile);
+          pendingEmail = synced.pendingRecoveryEmail ?? null;
+          return synced;
         }
         // A first Google sign-in (named after the Google profile, empty stats and pools), or an
         // account whose profile doc is missing (e.g. sign-up interrupted) — create it.
         const email = auth.currentUser?.email ?? null;
         const fresh = newProfile(user, auth.currentUser?.displayName ?? undefined, isLegacyEmail(email) ? null : email);
         await setDoc(userDoc(user.uid), { ...clean(fresh), updatedAt: serverTimestamp() });
+        pendingEmail = null;
         return fresh;
       }),
 

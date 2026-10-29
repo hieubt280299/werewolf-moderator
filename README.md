@@ -78,6 +78,9 @@ How it behaves:
   - Connect or disconnect Google. Disconnecting is refused while Google is the only way to sign in.
   - Add username & password to an account made with Google.
   - A different Google address can be connected here. Connecting is refused if that Google account already has its own profile.
+  - While Google is linked with the same address as the recovery email, that email can't be changed. Disconnect Google first.
+  - While a recovery-email change waits for confirmation, Google can't be connected. Open the link, or use *Cancel change* in the Account section.
+  - Both checks run in the app. Firestore rules can't enforce them, because email changes and provider links are Firebase Auth calls.
 
 **Data layout**
 

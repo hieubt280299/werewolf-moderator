@@ -106,7 +106,12 @@ const isStandalone = () =>
 export const providersOf = (user: User): SignInProvider[] =>
   user.providerData.flatMap((p): SignInProvider[] => (p.providerId === 'password' ? ['password'] : p.providerId === GOOGLE_PROVIDER_ID ? ['google'] : []));
 
-export const accountOf = (user: User): AccountInfo => ({ providers: providersOf(user), email: user.email, emailVerified: user.emailVerified });
+export const accountOf = (user: User): AccountInfo => ({
+  providers: providersOf(user),
+  email: user.email,
+  emailVerified: user.emailVerified,
+  googleEmail: user.providerData.find((p) => p.providerId === GOOGLE_PROVIDER_ID)?.email ?? null,
+});
 
 export interface GoogleAuthService {
   signIn(): Promise<GoogleOutcome>;
@@ -122,8 +127,15 @@ export interface GoogleAuthService {
 /**
  * @param language the app's language, so Google's account chooser matches it.
  * @param track wraps account changes that profile loads should wait for (see firebase.ts).
+ * @param beforeLink checks the account just signed in to by password before Google is linked
+ *   to it; throwing leaves the moderator signed in, with Google not linked.
  */
-export function createGoogleAuth(auth: Auth, language: () => string, track: <T>(work: Promise<T>) => Promise<T>): GoogleAuthService {
+export function createGoogleAuth(
+  auth: Auth,
+  language: () => string,
+  track: <T>(work: Promise<T>) => Promise<T>,
+  beforeLink: (user: User) => Promise<void> = async () => undefined,
+): GoogleAuthService {
   /** The Google credential waiting for the existing account's password. */
   let pending: { credential: OAuthCredential; email: string } | null = null;
 
@@ -207,6 +219,12 @@ export function createGoogleAuth(auth: Auth, language: () => string, track: <T>(
             ({ user } = await signInWithEmailAndPassword(auth, email, password));
           } catch (err) {
             throw CREDENTIAL_ERRORS.has(codeOf(err)) ? new AuthError('wrongPassword') : mapAuthError(err);
+          }
+          try {
+            await beforeLink(user);
+          } catch (err) {
+            pending = null;
+            throw mapAuthError(err);
           }
           try {
             await linkWithCredential(user, credential);

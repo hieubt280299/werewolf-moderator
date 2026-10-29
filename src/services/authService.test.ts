@@ -2,8 +2,8 @@ import { FirebaseError } from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
 import type { Auth, User } from 'firebase/auth';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createGoogleAuth, mapAuthError, providersOf } from './authService';
-import { AuthError } from './profileStore';
+import { accountOf, createGoogleAuth, mapAuthError, providersOf } from './authService';
+import { AuthError, emailLockedByGoogle } from './profileStore';
 
 vi.mock('firebase/auth', () => {
   class GoogleAuthProvider {
@@ -31,7 +31,12 @@ const fb = vi.mocked(firebaseAuth);
 const user = (providers: string[], email = 'mod@example.com') =>
   ({ uid: 'u1', email, emailVerified: false, providerData: providers.map((providerId) => ({ providerId })) }) as unknown as User;
 
-function setup({ standalone = false, authDomain = 'proj.firebaseapp.com', currentUser = null as User | null } = {}) {
+function setup({
+  standalone = false,
+  authDomain = 'proj.firebaseapp.com',
+  currentUser = null as User | null,
+  beforeLink = undefined as ((user: User) => Promise<void>) | undefined,
+} = {}) {
   const store = new Map<string, string>();
   vi.stubGlobal('sessionStorage', {
     getItem: (k: string) => store.get(k) ?? null,
@@ -41,7 +46,7 @@ function setup({ standalone = false, authDomain = 'proj.firebaseapp.com', curren
   vi.stubGlobal('window', { location: { host: 'app.example.com' }, matchMedia: () => ({ matches: standalone }) });
   vi.stubGlobal('navigator', {});
   const auth = { currentUser, app: { options: { authDomain } }, languageCode: null } as unknown as Auth;
-  return { auth, google: createGoogleAuth(auth, () => 'vi', (work) => work), redirected: () => store.size > 0 };
+  return { auth, google: createGoogleAuth(auth, () => 'vi', (work) => work, beforeLink), redirected: () => store.size > 0 };
 }
 
 const accountExists = () =>
@@ -123,6 +128,19 @@ describe('account linking', () => {
     await expect(google.linkPending('right1')).resolves.toBeUndefined();
   });
 
+  it('signs in but leaves Google unlinked when the account refuses the link (pending email change)', async () => {
+    const { google } = setup({ beforeLink: () => Promise.reject(new AuthError('emailChangePending')) });
+    fb.signInWithPopup.mockRejectedValue(accountExists());
+    vi.mocked(firebaseAuth.GoogleAuthProvider.credentialFromError).mockReturnValue({} as never);
+    await google.signIn();
+    fb.signInWithEmailAndPassword.mockResolvedValue({ user: user(['password']) } as never);
+    await expect(google.linkPending('secret1')).rejects.toMatchObject({ code: 'emailChangePending' });
+    expect(fb.signInWithEmailAndPassword).toHaveBeenCalledTimes(1);
+    expect(fb.linkWithCredential).not.toHaveBeenCalled();
+    // The Google credential is dropped: there's nothing left to retry.
+    await expect(google.linkPending('secret1')).rejects.toMatchObject({ code: 'generic' });
+  });
+
   it('picks the link-up prompt out of a redirect that came back with the conflict', async () => {
     const { google } = setup();
     fb.signInWithPopup.mockRejectedValue(new FirebaseError('auth/popup-blocked', 'blocked'));
@@ -162,5 +180,20 @@ describe('helpers', () => {
     expect(providersOf(user(['password', 'google.com', 'phone']))).toEqual(['password', 'google']);
     expect(mapAuthError(new FirebaseError('auth/unauthorized-domain', 'x')).code).toBe('unauthorizedDomain');
     expect(mapAuthError(new FirebaseError('auth/something-new', 'x')).code).toBe('generic');
+  });
+
+  it('locks the recovery email only while a Google account with the same address is linked', () => {
+    const linked = (googleEmail: string, providers = ['password', 'google.com']) =>
+      ({
+        email: 'mod@gmail.com',
+        emailVerified: true,
+        providerData: providers.map((providerId) => ({ providerId, email: providerId === 'google.com' ? googleEmail : 'mod@gmail.com' })),
+      }) as unknown as User;
+    expect(accountOf(linked('mod@gmail.com')).googleEmail).toBe('mod@gmail.com');
+    expect(emailLockedByGoogle(accountOf(linked('Mod@Gmail.com')))).toBe(true);
+    // A different Google address, or Google disconnected: the email can change.
+    expect(emailLockedByGoogle(accountOf(linked('other@gmail.com')))).toBe(false);
+    expect(emailLockedByGoogle(accountOf(linked('mod@gmail.com', ['password'])))).toBe(false);
+    expect(emailLockedByGoogle(null)).toBe(false);
   });
 });

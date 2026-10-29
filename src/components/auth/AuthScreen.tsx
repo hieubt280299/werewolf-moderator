@@ -34,12 +34,12 @@ export function AuthScreen({ resetLink, onResetDone }: AuthScreenProps = {}) {
   const [googleBusy, setGoogleBusy] = useState(false);
 
   // A Google redirect that failed comes back here: show why.
-  const { redirectNotice, dismissRedirectNotice } = auth;
+  const { accountNotice, dismissAccountNotice } = auth;
   useEffect(() => {
-    if (redirectNotice?.kind !== 'error') return;
-    setError(describeAuthError(redirectNotice.error, t));
-    dismissRedirectNotice();
-  }, [redirectNotice, dismissRedirectNotice, t]);
+    if (accountNotice?.kind !== 'error') return;
+    setError(describeAuthError(accountNotice.error, t));
+    dismissAccountNotice();
+  }, [accountNotice, dismissAccountNotice, t]);
 
   const google = async () => {
     setError(null);

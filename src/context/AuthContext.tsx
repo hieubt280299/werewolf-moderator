@@ -13,8 +13,13 @@ import { AuthError, getProfileStore, type CloudAccounts, type ProfileStore } fro
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
 
-/** The result of a Google redirect that finished as the app loaded, shown until dismissed. */
-export type RedirectNotice = { kind: 'connected' } | { kind: 'error'; error: unknown };
+/**
+ * An account outcome to show until dismissed:
+ * - `connected` / `error`: a Google redirect that finished as the app loaded;
+ * - `notLinked`: signed in by password to link Google, but the link was refused (e.g. a
+ *   recovery-email change is pending). Shown once the app is up, never on the sign-in screen.
+ */
+export type AccountNotice = { kind: 'connected' } | { kind: 'error'; error: unknown } | { kind: 'notLinked'; error: unknown };
 
 interface AuthValue {
   status: Status;
@@ -32,13 +37,15 @@ interface AuthValue {
   pendingGoogle: { email: string } | null;
   linkPendingGoogle: (password: string) => Promise<void>;
   cancelPendingGoogle: () => void;
+  /** Refused while a recovery-email change waits for confirmation (cancelEmailChange). */
   connectGoogle: () => Promise<GoogleOutcome>;
   disconnectGoogle: () => Promise<void>;
+  cancelEmailChange: () => Promise<void>;
   /** Username + password for an account made with Google (or just a password, if it has a username). */
   addPasswordSignIn: (password: string, username?: string) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
-  redirectNotice: RedirectNotice | null;
-  dismissRedirectNotice: () => void;
+  accountNotice: AccountNotice | null;
+  dismissAccountNotice: () => void;
   signIn: (username: string, password: string) => Promise<void>;
   /** The recovery email is required: it's where password resets are sent. */
   signUp: (username: string, password: string, displayName: string, recoveryEmail: string) => Promise<void>;
@@ -75,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   profileRef.current = profile;
   const [pendingGoogle, setPendingGoogle] = useState<{ email: string } | null>(null);
   const [googleResuming, setGoogleResuming] = useState(false);
-  const [redirectNotice, setRedirectNotice] = useState<RedirectNotice | null>(null);
+  const [accountNotice, setAccountNotice] = useState<AccountNotice | null>(null);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -108,9 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .resumeGoogleRedirect()
           .then((outcome) => {
             if (outcome?.status === 'needsPassword') setPendingGoogle({ email: outcome.email });
-            if (outcome?.status === 'done' && outcome.mode === 'link') setRedirectNotice({ kind: 'connected' });
+            if (outcome?.status === 'done' && outcome.mode === 'link') setAccountNotice({ kind: 'connected' });
           })
-          .catch((error: unknown) => setRedirectNotice({ kind: 'error', error }))
+          .catch((error: unknown) => setAccountNotice({ kind: 'error', error }))
           .finally(() => setGoogleResuming(false));
       }
     });
@@ -168,7 +175,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       pendingGoogle,
       linkPendingGoogle: async (password) => {
-        await requireCloud().linkPendingGoogle(password);
+        try {
+          await requireCloud().linkPendingGoogle(password);
+        } catch (err) {
+          if (!(err instanceof AuthError && err.code === 'emailChangePending')) throw err;
+          // Signed in, but Google stays unlinked: the app opens and says why.
+          setAccountNotice({ kind: 'notLinked', error: err });
+        }
         setPendingGoogle(null);
         refreshAccount();
       },
@@ -187,6 +200,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await requireCloud().disconnectGoogle();
         refreshAccount();
       },
+      cancelEmailChange: async () => {
+        await requireCloud().cancelEmailChange();
+        setProfile((p) => (p ? { ...p, pendingRecoveryEmail: null } : p));
+      },
       addPasswordSignIn: async (password, username) => {
         const claimed = await requireCloud().addPasswordSignIn(password, username);
         setProfile((p) => (p ? { ...p, username: claimed } : p));
@@ -194,8 +211,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshAccount();
       },
       sendVerificationEmail: () => requireCloud().sendVerificationEmail(),
-      redirectNotice,
-      dismissRedirectNotice: () => setRedirectNotice(null),
+      accountNotice,
+      dismissAccountNotice: () => setAccountNotice(null),
       signIn: (u, p) => requireStore().signIn(u, p),
       signUp: (u, p, name, email) => requireStore().signUp(u, p, name, email),
       signOut: () => requireStore().signOut(),
@@ -232,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       listGames: async () => (profileRef.current ? requireStore().listGames(profileRef.current.uid) : []),
     }),
-    [status, store, user, profile, requireStore, patchProfile, requireCloud, refreshAccount, pendingGoogle, googleResuming, redirectNotice],
+    [status, store, user, profile, requireStore, patchProfile, requireCloud, refreshAccount, pendingGoogle, googleResuming, accountNotice],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

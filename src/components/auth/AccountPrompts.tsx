@@ -11,10 +11,11 @@ import { describeAuthError } from './authErrors';
  * Account notices over the signed-in app (Firebase, v1.2.0):
  * - Google replaced an unverified account's password: offer, once per device, to set one
  *   again so the username keeps working;
- * - connecting Google by redirect finished (or failed) while the app reloaded.
+ * - connecting Google by redirect finished (or failed) while the app reloaded, or linking it
+ *   after a password sign-in was refused.
  */
 export function AccountPrompts() {
-  const { mode, user, profile, redirectNotice } = useAuth();
+  const { mode, user, profile, accountNotice } = useAuth();
   const [dismissed, setDismissed] = useState(() => readJSON<string[]>(STORAGE_KEYS.restorePasswordDismissed, []));
 
   const lostPassword =
@@ -27,7 +28,7 @@ export function AccountPrompts() {
     setDismissed(next);
   };
 
-  if (redirectNotice) return <RedirectNoticeSheet />;
+  if (accountNotice) return <AccountNoticeSheet />;
   return <RestorePasswordSheet open={lostPassword} username={profile?.username ?? ''} onClose={dismiss} />;
 }
 
@@ -84,16 +85,16 @@ function RestorePasswordSheet({ open, username, onClose }: { open: boolean; user
   );
 }
 
-function RedirectNoticeSheet() {
+function AccountNoticeSheet() {
   const { t } = useI18n();
-  const { redirectNotice, dismissRedirectNotice } = useAuth();
-  const ok = redirectNotice?.kind === 'connected';
+  const { accountNotice, dismissAccountNotice } = useAuth();
+  const ok = accountNotice?.kind === 'connected';
   return (
-    <Sheet open={!!redirectNotice} onClose={dismissRedirectNotice} title={t('signin.google')} closeLabel={t('action.continue')}>
+    <Sheet open={!!accountNotice} onClose={dismissAccountNotice} title={t('signin.google')} closeLabel={t('action.continue')}>
       <div className="space-y-4 pb-6 text-center">
         {ok ? <CheckCircle2 className="mx-auto h-10 w-10 text-village" /> : <TriangleAlert className="mx-auto h-10 w-10 text-wolf-bright" />}
-        <p className="text-bone">{redirectNotice?.kind === 'error' ? describeAuthError(redirectNotice.error, t) : t('signin.connected')}</p>
-        <Button variant="village" block onClick={dismissRedirectNotice}>
+        <p className="text-bone">{!accountNotice || ok ? t('signin.connected') : describeAuthError(accountNotice.error, t)}</p>
+        <Button variant="village" block onClick={dismissAccountNotice}>
           {t('action.continue')}
         </Button>
       </div>

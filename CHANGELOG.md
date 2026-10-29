@@ -20,6 +20,8 @@ Implements [`UPDATE_v1.2.0.md`](UPDATE_v1.2.0.md).
   - Add username & password to an account made with Google.
   - Verify your email.
   - Disconnecting Google is refused while it is the only way to sign in. Connecting is refused if that Google account already has its own profile.
+  - While a Google account with the same address as the recovery email is linked, **Change verification email** is hidden, and the Account section says to disconnect Google first. The Firebase store refuses the change as well. A linked Google account with a different address doesn't lock the email.
+  - **Connect Google** is refused while a recovery-email change waits for confirmation. Opening that link later would move the account off the Google address. The same applies to linking Google after a password sign-in: the moderator is signed in, Google stays unlinked, and the app says why. A new **Cancel change** next to "Waiting for confirmation" clears a pending change that will never be confirmed.
 - **Email verification.** New sign-ups get a verification email.
   - If Google replaced an unverified account's password, the app offers once to set a new one, so the username keeps working.
 - **Kill debuffs** (rebalanced Big Bad Wolf). Each victim carries `WolfpackKill` and/or `BBWKill`:

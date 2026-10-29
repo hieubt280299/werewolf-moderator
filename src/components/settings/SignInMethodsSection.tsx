@@ -33,6 +33,8 @@ export function SignInMethodsSection() {
   const username = auth.profile?.username ?? '';
   const email = auth.user.email ?? '';
   const passwordReady = hasPassword && !!username;
+  // Linking now would let the pending change's link move the account off the Google address.
+  const pendingEmail = auth.profile?.pendingRecoveryEmail && auth.profile.pendingRecoveryEmail !== email ? auth.profile.pendingRecoveryEmail : null;
 
   const run = async (kind: Exclude<Busy, null>, fn: () => Promise<string | null>) => {
     setBusy(kind);
@@ -100,13 +102,14 @@ export function SignInMethodsSection() {
               {t('signin.disconnect')}
             </Button>
           ) : (
-            <Button size="sm" variant="village" onClick={() => void connect()} disabled={!!busy}>
+            <Button size="sm" variant="village" onClick={() => void connect()} disabled={!!busy || !!pendingEmail}>
               {t('signin.connect')}
             </Button>
           )
         }
       />
       {hasGoogle && !passwordReady && <p className="-mt-1 pl-8 text-[11px] text-bone-faint">{t('signin.onlyGoogle')}</p>}
+      {!hasGoogle && pendingEmail && <p className="-mt-1 pl-8 text-[11px] text-bone-faint">{t('signin.pendingBlocks', { email: pendingEmail })}</p>}
 
       <MethodRow
         icon={<KeyRound className="h-5 w-5 text-village" />}

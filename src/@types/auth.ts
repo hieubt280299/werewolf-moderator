@@ -22,6 +22,8 @@ export interface SessionUser {
   /** Firebase: the account's email (the recovery email, or the Google address). */
   email?: string | null;
   emailVerified?: boolean;
+  /** Firebase: the address of the linked Google account, if one is linked. */
+  googleEmail?: string | null;
 }
 
 /**
@@ -107,4 +109,8 @@ export type AuthErrorCode =
   /** The account already has this sign-in method. */
   | 'alreadyLinked'
   /** Firebase wants a fresh sign-in before this change. */
-  | 'recentLogin';
+  | 'recentLogin'
+  /** The recovery email is also the linked Google address: disconnect Google to change it. */
+  | 'emailLockedByGoogle'
+  /** A recovery-email change waits for confirmation: finish or cancel it before linking Google. */
+  | 'emailChangePending';

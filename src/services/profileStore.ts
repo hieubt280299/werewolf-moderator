@@ -4,7 +4,15 @@ import type { GameRecord, GameState, LifetimeStats, RolePool, UserProfile, WinTe
 export type { AuthErrorCode } from '../@types/auth';
 
 /** The signed-in account's sign-in methods and email, as Firebase knows them right now. */
-export type AccountInfo = Pick<SessionUser, 'providers' | 'email' | 'emailVerified'>;
+export type AccountInfo = Pick<SessionUser, 'providers' | 'email' | 'emailVerified' | 'googleEmail'>;
+
+/**
+ * True while the account's email (its recovery email) is also the address of its linked
+ * Google account. That shared email is what joins the two sign-ins, so it can't be changed
+ * until Google is disconnected. A Google account with a different address doesn't lock it.
+ */
+export const emailLockedByGoogle = (a: AccountInfo | null | undefined): boolean =>
+  !!a?.providers?.includes('google') && !!a.email && !!a.googleEmail && a.email.toLowerCase() === a.googleEmail.toLowerCase();
 
 /** Firebase only (v1.2.0): Google sign-in and managing how an account signs in. */
 export interface CloudAccounts {
@@ -15,8 +23,10 @@ export interface CloudAccounts {
   /** After `needsPassword`: signs in to the account that owns the email and links Google to it. */
   linkPendingGoogle(password: string): Promise<void>;
   cancelPendingGoogle(): void;
-  /** Links Google to the signed-in account. */
+  /** Links Google to the signed-in account. Refused while a recovery-email change is pending. */
   connectGoogle(): Promise<GoogleOutcome>;
+  /** Stops waiting for a pending recovery-email change, so Google can be connected. */
+  cancelEmailChange(): Promise<void>;
   /** Refused when Google is the account's only way to sign in. */
   disconnectGoogle(): Promise<void>;
   /**
