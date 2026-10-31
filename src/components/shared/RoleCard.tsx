@@ -1,8 +1,8 @@
 import clsx from 'clsx';
-import { Skull } from 'lucide-react';
+import { Scale, Skull, Sparkles, type LucideIcon } from 'lucide-react';
 import { memo, type CSSProperties, type ReactNode } from 'react';
 import type { RoleId } from '../../@types/game';
-import { roleDescKey, useHouseRules } from '../../context/HouseRulesContext';
+import { isRebalanced, roleDescKey, useHouseRules } from '../../context/HouseRulesContext';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
 import { dictionaries } from '../../i18n/translations';
@@ -19,6 +19,15 @@ const WIDTHS: Record<CardSize, string> = {
 };
 
 const RESTING_SHADOW = '0 10px 30px -8px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.08)';
+
+/** Tag text size per card size; the smallest cards show the tag's icon only. */
+const TAG_TEXT: Record<CardSize, string | null> = { xs: null, sm: '8.5cqw', md: '7cqw', lg: '5.5cqw' };
+
+interface CardTag {
+  label: string;
+  Icon: LucideIcon;
+  tone: string;
+}
 
 interface RoleCardProps {
   roleId: RoleId;
@@ -68,6 +77,12 @@ export const RoleCard = memo(function RoleCard({
   const longest = Math.max(...words.map((w) => w.length));
   const withText = showText ?? (size === 'md' || size === 'lg');
   const weight = role.weight > 0 ? `+${role.weight}` : role.weight < 0 ? `−${Math.abs(role.weight)}` : '0';
+  // Not a printed Ultimate Werewolf card, or changed by one of this game's house rules.
+  const tags: CardTag[] = [
+    ...(role.custom ? [{ label: t('card.custom'), Icon: Sparkles, tone: 'border-ember/70 text-ember' }] : []),
+    ...(isRebalanced(roleId, houseRules) ? [{ label: t('card.rebalanced'), Icon: Scale, tone: 'border-bone/50 text-bone' }] : []),
+  ];
+  const tagText = TAG_TEXT[size];
 
   const titleStyle: CSSProperties = {
     writingMode: 'vertical-rl',
@@ -85,7 +100,7 @@ export const RoleCard = memo(function RoleCard({
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      aria-label={ariaLabel ?? localName}
+      aria-label={ariaLabel ?? [localName, ...tags.map((tag) => tag.label)].join(', ')}
       aria-pressed={onClick ? selected : undefined}
       className={clsx(
         'relative isolate block shrink-0 overflow-hidden rounded-[7%/5%] bg-ink text-left',
@@ -176,6 +191,23 @@ export const RoleCard = memo(function RoleCard({
           </span>
         )}
       </div>
+
+      {/* Tags sit just above the plate's low left corner, clear of the title and of overlays at the top. */}
+      {tags.length > 0 && (
+        <div className="absolute flex flex-col items-start gap-[1.5cqw]" style={{ left: '4%', bottom: withText ? '31%' : '18.5%' }}>
+          {tags.map(({ label, Icon, tone: tagTone }) => (
+            <span
+              key={label}
+              title={label}
+              className={clsx('flex items-center rounded-full border bg-ink/80 font-display font-semibold uppercase leading-none', tagTone)}
+              style={tagText ? { gap: '1.4cqw', padding: '1.4cqw 2.8cqw', fontSize: tagText, letterSpacing: '0.04em' } : { padding: '2.5cqw' }}
+            >
+              <Icon aria-hidden style={tagText ? { width: '1.1em', height: '1.1em' } : { width: '13cqw', height: '13cqw' }} />
+              {tagText ? label : <span className="sr-only">{label}</span>}
+            </span>
+          ))}
+        </div>
+      )}
 
       {dead && (
         <div className="absolute inset-0 flex items-center justify-center bg-ink/40">

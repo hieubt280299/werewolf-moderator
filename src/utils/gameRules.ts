@@ -183,18 +183,24 @@ const INFO_ACTIONS = new Set<NightActionKind>(['masonMeet', 'minionMeet']);
 /**
  * Builds tonight's wake-up order (see NIGHT_ORDER): night-1 setup → transformations →
  * protection & distraction → threats → everyone else. Roles whose holders are all dead stay
- * in the script as "ghost" calls so the table can't infer who died.
+ * in the script as "ghost" calls so the table can't infer who died; with full pool calls, so
+ * do the Role Pool's roles nobody was dealt (marked `undealt`).
  */
 export function buildNightSteps(s: GameState): NightStep[] {
   const alive = alivePlayers(s.players);
   const firstNight = s.round === 1;
   const m = s.modifiers;
   const rules = rulesOf(s);
-  // Roles in play: the dealt deck plus anything someone has become (Drunk, Doppelgänger…).
-  const inPlay = new Set<RoleId>([...s.deck, ...alive.map((p) => p.roleId)]);
+  // Roles in play: the dealt deck plus anything someone has become (Drunk, Doppelgänger…), and
+  // the whole Role Pool with full pool calls.
+  const inPlay = new Set<RoleId>([...s.deck, ...alive.map((p) => p.roleId), ...(s.fullPoolCalls ? s.setup.pool : [])]);
   // The Drunk keeps their call on night 3 after sobering up mid-script.
   const holders = (roleId: RoleId) =>
     roleId === 'drunk' ? alive.filter((p) => isSoberingDrunk(s, p)).map((p) => p.id) : alive.filter((p) => p.roleId === roleId).map((p) => p.id);
+  // Whether anyone, dead or alive, was dealt or became this role: if not, its ghost call is
+  // for an undealt pool role rather than for eliminated players.
+  const everHeld = (test: (p: Player) => boolean) => s.players.some(test);
+  const heldRole = (roleId: RoleId) => everHeld((p) => p.roleId === roleId || p.originalRoleId === roleId);
   const steps: NightStep[] = [];
   const push = (step: Omit<NightStep, 'group'>) => steps.push({ ...step, group: nightGroup(step.action) });
 
@@ -228,6 +234,7 @@ export function buildNightSteps(s: GameState): NightStep[] {
       actors: actors.map((p) => p.id),
       targetCount: wolves.length === 0 || skip || onlyFruitBrute ? 0 : m.wolvesDoubleKill || bigBad ? 2 : 1,
       ghost: wolves.length === 0,
+      undealt: wolves.length === 0 && !everHeld(isWolfPlayer),
       joining: waking('cursed'),
       note: skip ? 'wolvesSkip' : onlyFruitBrute ? 'fruitBrute' : m.wolvesDoubleKill ? 'wolvesDouble' : bigBad ? 'bigBadWolf' : undefined,
     });
@@ -241,21 +248,24 @@ export function buildNightSteps(s: GameState): NightStep[] {
         actors: bbw,
         targetCount: bbw.length > 0 && !skip ? 1 : 0,
         ghost: bbw.length === 0,
+        undealt: bbw.length === 0 && !heldRole('bigBadWolf'),
         note: skip ? 'wolvesSkip' : undefined,
       });
     }
   }
 
   // Night 1: after Cupid, the Lovers wake to see each other's role. Who they are is read from
-  // tonight's pick when the call is shown.
+  // tonight's pick when the call is shown. Without a Cupid (an undealt pool role), it's a ghost call.
   if (firstNight && inPlay.has('cupid')) {
-    push({ id: 'loversMeet', roleId: 'cupid', action: 'loversMeet', kind: 'info', actors: [], targetCount: 0, ghost: false });
+    const ghost = holders('cupid').length === 0;
+    push({ id: 'loversMeet', roleId: 'cupid', action: 'loversMeet', kind: 'info', actors: [], targetCount: 0, ghost, undealt: ghost && !heldRole('cupid') });
   }
 
   // House rule: the Hunter links to a player each night.
   if (rules.hunter && inPlay.has('hunter')) {
     const hunters = holders('hunter');
-    push({ id: 'hunterLink', roleId: 'hunter', action: 'hunterLink', kind: 'targets', actors: hunters, targetCount: hunters.length > 0 ? 1 : 0, ghost: hunters.length === 0 });
+    const ghost = hunters.length === 0;
+    push({ id: 'hunterLink', roleId: 'hunter', action: 'hunterLink', kind: 'targets', actors: hunters, targetCount: ghost ? 0 : 1, ghost, undealt: ghost && !heldRole('hunter') });
   }
 
   for (const roleId of inPlay) {
@@ -289,6 +299,7 @@ export function buildNightSteps(s: GameState): NightStep[] {
       actors,
       targetCount: !active || kind === 'info' ? 0 : action === 'cupidLink' ? 2 : 1,
       ghost: actors.length === 0,
+      undealt: actors.length === 0 && !heldRole(roleId),
       note: noPotions ? 'noPotions' : used ? 'used' : undefined,
     });
   }
@@ -451,12 +462,13 @@ export function eligibleTargets(s: GameState, step: NightStep, witchMode: WitchM
     case 'hookerSeduce':
       // Each player can be seduced only once per game.
       return others.filter((p) => !s.modifiers.hookerVisited.includes(p.id));
+    case 'oldHagBanish':
+      return others.filter((p) => p.id !== s.modifiers.oldHagLastTarget);
     case 'seerInspect':
     case 'sorceressInspect':
     case 'spellcasterSilence':
     case 'auraInspect':
     case 'piInspect':
-    case 'oldHagBanish':
     case 'direWolfCompanion':
     case 'doppelgangerCopy':
     case 'virginiaFear':
@@ -680,7 +692,7 @@ export type WinCheck = Pick<GameState, 'players'> & Partial<Pick<GameState, 'mod
 
 /**
  * Whether a team can still change the outcome without a vote: a power that kills, or one
- * that moves players between teams. Day votes are not counted — every team has those.
+ * that moves players between teams. Day votes are weighed apart (see eliminatingVotes).
  */
 export function teamPowers(members: readonly Player[], g: WinCheck): { kill: boolean; change: boolean } {
   const m = g.modifiers;
@@ -714,13 +726,22 @@ export function teamPowers(members: readonly Player[], g: WinCheck): { kill: boo
  *   living player — they win at once;
  * - only one team is left — it wins;
  * - exactly two teams are left, one of them the Village:
- *   - the Village has no kill power left and is strictly outnumbered — the other team wins;
- *   - neither team can kill or change anyone's team, and they are equal in number — a draw.
+ *   - neither team can kill or change anyone's team, and both can cast the same number of
+ *     eliminating votes — a draw;
+ *   - the Village has no kill power left and can't cast more eliminating votes than the
+ *     other team — the other team wins.
+ *
+ * Eliminating votes are what a team can put toward a day elimination: the Mayor's count
+ * twice and the Pacifist has none (see eliminatingVotes). Someone the Old Hag sent away has
+ * none today, but is back tomorrow. So if the other team can kill, today's votes decide, as it
+ * can kill that player tonight. If it can't, nothing changes overnight, and a result only
+ * stands if it holds both today and once they're back.
  *
  * Otherwise play goes on. Teams are counted among the living: lovers of a mixed Couple count
- * as the Couple, the Lone Wolf counts with the Werewolves (it still only wins as the last
- * player alive), only the Cult Leader counts as the Cult (recruits keep their team), and a
- * Tanner under the standard rules doesn't hold the game open.
+ * as the Couple, the Lone Wolf counts with the Werewolves (it only wins as the last player
+ * alive, or against one last Villager who can't fight back), only the Cult Leader counts as
+ * the Cult (recruits keep their team), and a Tanner under the standard rules doesn't hold the
+ * game open.
  */
 export function evaluateWinner(g: WinCheck): WinResult | null {
   const { players } = g;
@@ -762,7 +783,8 @@ export function evaluateWinner(g: WinCheck): WinResult | null {
   const win = (winner: WinTeam, members: readonly Player[]): WinResult | null => {
     if (winner === 'couple') return { team: 'couple', winnerIds: lovers.map((p) => p.id) };
     if (winner === 'cult') return { team: 'cult', winnerIds: members.map((p) => p.id) };
-    // A Lone Wolf left without the pack keeps hunting: it only wins as the last one alive.
+    // A Lone Wolf left without the pack keeps hunting: it only wins as the last one alive, or
+    // against one last Villager (below).
     if (winner === 'werewolf' && members.some((p) => p.roleId === 'loneWolf') && !members.some((p) => isWolfPlayer(p) && p.roleId !== 'loneWolf')) {
       return null;
     }
@@ -781,10 +803,26 @@ export function evaluateWinner(g: WinCheck): WinResult | null {
   const [other, others] = [...teams].find(([t]) => t !== 'village')!;
   const v = teamPowers(village, g);
   const o = teamPowers(others, g);
-  // The Village can't kill any more and is outvoted: it has lost.
-  if (!v.kill && village.length < others.length) return win(other, others);
-  // Nobody can kill or turn anyone, and every vote ties: a draw.
-  if (!v.kill && !v.change && !o.kill && !o.change && village.length === others.length) return draw;
+  const verdict = (count: (p: Player) => number): 'draw' | 'lost' | null => {
+    const votes = (members: readonly Player[]) => members.reduce((sum, p) => sum + count(p), 0);
+    const villageVotes = votes(village);
+    const otherVotes = votes(others);
+    // Nobody can kill or turn anyone, and every vote ties: a draw.
+    if (!v.kill && !v.change && !o.kill && !o.change && villageVotes === otherVotes) return 'draw';
+    // The Village can't kill any more and can't outvote the other team: it has lost.
+    return !v.kill && villageVotes <= otherVotes ? 'lost' : null;
+  };
+  const today = verdict(votesToday);
+  const outcome = o.kill || today === verdict(eliminatingVotes) ? today : null;
+  if (outcome === 'draw') return draw;
+  if (outcome === 'lost') {
+    // A Lone Wolf facing one last Villager who can't turn anyone either wins alone.
+    const [lone] = others;
+    if (others.length === 1 && lone.roleId === 'loneWolf' && village.length === 1 && !v.change) {
+      return { team: 'loneWolf', winnerIds: [lone.id] };
+    }
+    return win(other, others);
+  }
   return null;
 }
 
@@ -995,6 +1033,8 @@ export function resolveNight(state: GameState): GameState {
     exiled.status.banished = true;
     report.banished = exiled.id;
   }
+  // Only a player who really left is off limits tomorrow night: not after a seduced Old Hag.
+  m.oldHagLastTarget = exiled?.alive ? exiled.id : null;
   const recruit = cancelled.has('cultRecruit') ? undefined : findPlayer(s, a.cultTarget);
   if (recruit?.alive) {
     recruit.status.inCult = true;
@@ -1105,6 +1145,15 @@ export function startDay(state: GameState): GameState {
 /** Mayor's vote counts twice. */
 export const voteWeight = (p: Player): number => (p.roleId === 'mayor' ? 2 : 1);
 
+/** What a player can add to a vote to eliminate: the Pacifist never votes for one. */
+export const eliminatingVotes = (p: Player): number => (p.roleId === 'pacifist' ? 0 : voteWeight(p));
+
+/** The same for today: someone the Old Hag sent away can't vote until they're back. */
+export const votesToday = (p: Player): number => (p.status.banished ? 0 : eliminatingVotes(p));
+
+/** A Prince who hasn't been revealed yet: a vote can't eliminate him. */
+export const unrevealedPrince = (p: Player): boolean => p.roleId === 'prince' && !p.status.princeRevealed;
+
 export interface FreshDeaths {
   /** The phase that just ended. */
   phase: 'night' | 'day';
@@ -1177,7 +1226,19 @@ export const votesNeeded = (s: GameState): number => Math.floor(eligibleVoters(s
 export const canNominate = (s: GameState): boolean =>
   s.phase === 'day' && s.dayStep !== 'closed' && s.nominations.length === 0 && (s.executionsLeft ?? 1) > 0;
 
-/** First nomination of the day also collects any Vampire victims. */
+/** Spends one of the day's eliminations on this player; the day ends with the last one. */
+function spendElimination(s: GameState, playerId: string) {
+  s.executedToday = playerId;
+  s.executionsLeft = Math.max(0, (s.executionsLeft ?? 1) - 1);
+  // Troublemaker days allow a second elimination.
+  s.dayStep = s.executionsLeft > 0 ? 'voting' : 'closed';
+}
+
+/**
+ * First nomination of the day also collects any Vampire victims. Nominating a Prince who
+ * hasn't been revealed reveals him at once, with no vote, since a vote can't eliminate him. It
+ * still uses up the day's elimination, so the day ends (unless the Troublemaker allowed two).
+ */
 export function nominate(state: GameState, accusedId: string): GameState {
   if (!canNominate(state)) return state;
   const s = clone(state);
@@ -1187,12 +1248,18 @@ export function nominate(state: GameState, accusedId: string): GameState {
       if (p.alive && p.status.vampireMarked) killPlayer(s, p.id, 'vampire', 'day');
     }
   }
+  s.dayStep = 'voting';
   const accused = findPlayer(s, accusedId);
   if (accused?.alive && !accused.status.banished) {
-    // Logged once the accusation ends (elimination, Prince reveal or withdrawal), with its voters.
-    s.nominations.push({ id: createId('nom'), accusedId, voters: normalizeVoters(s, { accusedId }, []) });
+    if (unrevealedPrince(accused)) {
+      accused.status.princeRevealed = true;
+      pushLog(s, 'log.princeNominated', { name: accused.name, role: 'prince' });
+      spendElimination(s, accused.id);
+    } else {
+      // Logged once the accusation ends (elimination or withdrawal), with its voters.
+      s.nominations.push({ id: createId('nom'), accusedId, voters: normalizeVoters(s, { accusedId }, []) });
+    }
   }
-  s.dayStep = 'voting';
   return finalize(s);
 }
 
@@ -1223,17 +1290,16 @@ export function executeNomination(state: GameState, nominationId: string): GameS
   const nom = s.nominations.find((n) => n.id === nominationId);
   const accused = findPlayer(s, nom?.accusedId);
   if (!nom || !accused?.alive) return state;
-  if (accused.roleId === 'prince' && !accused.status.princeRevealed) {
+  // Someone who became the Prince while accused (a Doppelgänger whose target just died) is
+  // revealed by the vote instead.
+  if (unrevealedPrince(accused)) {
     accused.status.princeRevealed = true;
     logVote(s, 'log.princeRevealed', { name: accused.name, role: 'prince' }, votersOf(s, nom));
   } else {
     killPlayer(s, accused.id, 'vote', 'day', undefined, votersOf(s, nom));
   }
-  s.executedToday = accused.id;
-  s.executionsLeft = Math.max(0, (s.executionsLeft ?? 1) - 1);
   s.nominations = s.nominations.filter((n) => n.id !== nominationId);
-  // Troublemaker days allow a second elimination.
-  s.dayStep = s.executionsLeft > 0 ? 'voting' : 'closed';
+  spendElimination(s, accused.id);
   return finalize(s);
 }
 

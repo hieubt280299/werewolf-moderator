@@ -14,6 +14,7 @@ import {
   Heart,
   Info,
   Lock,
+  PawPrint,
   ShieldOff,
   Sunrise,
   Swords,
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { LeprechaunMove, NightActionField, NightActionKind, NightStep, NightTargetListField, Player, RoleId } from '../../@types/game';
-import { ROLES } from '../../data/roles';
+import { roleFaction, ROLES } from '../../data/roles';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useNightSequence } from '../../hooks/useNightSequence';
 import { useBoardView } from '../../hooks/useSeatMapPrefs';
@@ -32,6 +33,7 @@ import { BoardViewSwitch, SeatMap, type SeatAccent } from '../dashboard/SeatMap'
 import { PlayerToken } from '../shared/PlayerToken';
 import { RoleCard } from '../shared/RoleCard';
 import { LoversReveal } from './LoversReveal';
+import { SilentNoticeButton } from './SilentNotificationModal';
 import { Button, Chip, Sheet } from '../shared/ui';
 
 const SINGLE_FIELD: Partial<Record<NightActionKind, NightActionField>> = {
@@ -208,21 +210,22 @@ function StepView({ step }: { step: NightStep }) {
 
   return (
     <div className="space-y-4">
-      <p className="font-display text-[11px] uppercase tracking-grimoire text-village/70">{t(`night.group.${step.group}`)}</p>
+      <p className="font-display text-[11px] tracking-wide text-village/70">{t(`night.group.${step.group}`)}</p>
       <div className="flex gap-4">
-        <RoleCard roleId={step.roleId} size="sm" dead={step.ghost} showWeight={false} />
+        {/* An undealt role is dimmed, not marked dead: nobody was eliminated. */}
+        <RoleCard roleId={step.roleId} size="sm" dead={step.ghost && !step.undealt} muted={step.undealt} showWeight={false} />
         <div className="min-w-0 flex-1 space-y-2">
-          <h3 className="text-xl text-bone text-shadow-crisp">{roleName}</h3>
+          <h3 className="text-xl uppercase tracking-grimoire text-bone text-shadow-crisp">{roleName}</h3>
           {script && <p className="text-base leading-relaxed text-bone/85">“{script}”</p>}
           {actors.length > 0 && (
-            <p className="text-xs uppercase tracking-wide text-village/80">
-              {t('night.wakes')}: <span className="normal-case text-bone-dim">{actors.map((a) => a.name).join(', ')}</span>
+            <p className="text-xs font-medium text-village/80">
+              {t('night.wakes')}: <span className="font-normal text-bone-dim">{actors.map((a) => a.name).join(', ')}</span>
             </p>
           )}
         </div>
       </div>
 
-      {step.ghost && <Notice icon={<Ghost className="h-4 w-4" />}>{t('night.ghost')}</Notice>}
+      {step.ghost && <Notice icon={<Ghost className="h-4 w-4" />}>{t(step.undealt ? 'night.ghostUndealt' : 'night.ghost')}</Notice>}
       {silent && !step.ghost && (
         <Notice tone="ember" icon={<Hand className="h-4 w-4" />}>
           {t('night.silentTap', { names: actors.map((a) => a.name).join(', ') })}
@@ -232,6 +235,14 @@ function StepView({ step }: { step: NightStep }) {
       {step.note === 'wolvesDouble' && !step.ghost && <Notice tone="wolf">{t('night.wolvesDouble')}</Notice>}
       {!!step.joining?.length && !step.ghost && (
         <Notice tone="wolf">{t('night.cursedJoins', { names: step.joining.map((id) => byId.get(id)?.name ?? '?').join(', ') })}</Notice>
+      )}
+      {/* Told without a word, so the table can't hear it: the pack's second kill, a bitten Cursed's new side.
+          (After eating the Diseased the pack isn't told anything: their kill just fails.) */}
+      {step.action === 'wolfKill' && !step.ghost && step.note === 'wolvesDouble' && (
+        <SilentNoticeButton notice={{ audience: t('silent.audience.wolves'), message: t('silent.wolvesDouble'), Icon: PawPrint, faction: 'werewolf' }} />
+      )}
+      {!!step.joining?.length && !step.ghost && (
+        <SilentNoticeButton notice={{ audience: t('silent.audience.cursed'), message: t('silent.cursedJoins'), faction: 'werewolf', roleId: 'werewolf' }} />
       )}
       {step.note === 'noPotions' && !step.ghost && <Notice>{t('night.noPotions')}</Notice>}
       {step.note === 'bigBadWolf' && !step.ghost && <Notice tone="wolf">{t('night.bigBadWolf')}</Notice>}
@@ -288,12 +299,14 @@ function TargetPicker({ step }: { step: NightStep }) {
     : field
       ? [state.nightActions[field]].filter((x): x is string => !!x)
       : [];
-  // Shown but locked, so the restriction is visible: the Bodyguard's last protégé, and
-  // everyone the Hooker has already seduced.
+  // Shown but locked, so the restriction is visible: the Bodyguard's last protégé, the Old Hag's
+  // last exile, and everyone the Hooker has already seduced.
   const lastProtected = step.action === 'bodyguardProtect' ? state.modifiers.bodyguardLastTarget : null;
+  const lastExiled = step.action === 'oldHagBanish' ? state.modifiers.oldHagLastTarget : null;
   const visited = step.action === 'hookerSeduce' ? state.modifiers.hookerVisited : [];
   const locked = new Map<string, string>(visited.map((id) => [id, t('night.alreadySeduced')]));
   if (lastProtected) locked.set(lastProtected, t('night.lastProtected'));
+  if (lastExiled) locked.set(lastExiled, t('night.lastExiled'));
   const candidates = [...targets, ...state.players.filter((p) => locked.has(p.id) && p.alive && !step.actors.includes(p.id))];
 
   const toggle = (id: string) => {
@@ -349,7 +362,7 @@ function PlayerPicker({ label, candidates, selected, accent, locked, onToggle }:
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">{label}</p>
+        <p className="flex items-center gap-2 text-xs font-medium text-bone-dim">{label}</p>
         <BoardViewSwitch view={view} onChange={setView} />
       </div>
       {candidates.length === 0 ? (
@@ -417,7 +430,7 @@ function WitchPanel({ step }: { step: NightStep }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">
+        <p className="mb-2 flex items-center gap-2 text-xs font-medium text-bone-dim">
           <FlaskConical className="h-3.5 w-3.5 text-village" /> {t('night.witchVictims')} · {t('night.witchSave')}
           {witchHealUsed && <span className="text-bone-faint">({t('night.witchUsed')})</span>}
         </p>
@@ -449,7 +462,7 @@ function WitchPanel({ step }: { step: NightStep }) {
         )}
       </div>
       {witchKillUsed ? (
-        <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">
+        <p className="flex items-center gap-2 text-xs font-medium text-bone-dim">
           <FlaskConical className="h-3.5 w-3.5 text-wolf-bright" /> {t('night.witchKill')}
           <span className="text-bone-faint">({t('night.witchUsed')})</span>
         </p>
@@ -499,7 +512,7 @@ function SorceressResult({ playerId }: { playerId: string }) {
   const hit = !!inspection('sorceressInspect', playerId);
   return (
     <ResultBanner wolf={hit} key={playerId}>
-      <span className={clsx('font-display text-2xl font-bold uppercase tracking-grimoire', hit ? 'text-wolf-bright' : 'text-bone')}>
+      <span className={clsx('font-display text-2xl font-bold tracking-wide', hit ? 'text-wolf-bright' : 'text-bone')}>
         {hit ? t('night.sorceressYes', { name: p.name }) : t('night.sorceressNo', { name: p.name })}
       </span>
     </ResultBanner>
@@ -537,20 +550,30 @@ function Notice({ children, icon, tone = 'village' }: { children: ReactNode; ico
 
 function InfoPanel({ step }: { step: NightStep }) {
   const { t } = useI18n();
-  const { alive, byId } = useGameEngine();
+  const { state, alive, byId } = useGameEngine();
   if (step.action === 'loversMeet') return <LoversPanel />;
   if (step.action === 'doppelgangerAwaken') {
     // Woken to learn the role they changed into: show it to them.
     const woken = step.actors.map((id) => byId.get(id)).filter((p): p is Player => !!p);
     return (
       <div className="space-y-3">
-        <p className="text-xs uppercase tracking-wide text-bone-dim">{t('night.doppelgangerShow')}</p>
+        <p className="text-xs font-medium text-bone-dim">{t('night.doppelgangerShow')}</p>
         {woken.map((p) => (
-          <div key={p.id} className="flex items-center gap-3">
-            <RoleCard roleId={p.roleId} size="sm" showWeight={false} />
-            <div className="min-w-0 flex-1">
-              <PlayerToken player={p} accent={ROLES[p.roleId].isWolf ? 'wolf' : 'village'} selected />
+          <div key={p.id} className="space-y-3">
+            <div className="flex items-center gap-3">
+              <RoleCard roleId={p.roleId} size="sm" showWeight={false} />
+              <div className="min-w-0 flex-1">
+                <PlayerToken player={p} accent={ROLES[p.roleId].isWolf ? 'wolf' : 'village'} selected />
+              </div>
             </div>
+            <SilentNoticeButton
+              notice={{
+                audience: t('silent.audience.doppelganger'),
+                message: t('silent.newRole', { role: t(`role.${p.roleId}.name`) }),
+                faction: roleFaction(p.roleId, state.rules),
+                roleId: p.roleId,
+              }}
+            />
           </div>
         ))}
       </div>
@@ -561,7 +584,7 @@ function InfoPanel({ step }: { step: NightStep }) {
   const shown = minion ? alive.filter((p) => ROLES[p.roleId].isWolf) : alive.filter((p) => step.actors.includes(p.id));
   return (
     <div>
-      <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">{minion ? t('night.minionSees') : t('night.masons')}</p>
+      <p className="mb-2 text-xs font-medium text-bone-dim">{minion ? t('night.minionSees') : t('night.masons')}</p>
       <div className="grid grid-cols-2 gap-2">
         {shown.map((p) => (
           <PlayerToken key={p.id} player={p} accent={minion ? 'wolf' : 'village'} selected />
@@ -628,7 +651,7 @@ function LeprechaunPanel({ seduced }: { seduced: boolean }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs uppercase tracking-wide text-bone-dim">{t('night.leprechaunPick')}</p>
+      <p className="text-xs font-medium text-bone-dim">{t('night.leprechaunPick')}</p>
       <div className="grid grid-cols-3 gap-2">
         {MOVES.map(({ move, label, hint }) => {
           const on = chosen === move;
@@ -645,14 +668,14 @@ function LeprechaunPanel({ seduced }: { seduced: boolean }) {
               )}
             >
               <Icon className="h-5 w-5" />
-              <span className="font-display text-sm uppercase tracking-grimoire">{t(label)}</span>
+              <span className="font-display text-sm tracking-wide">{t(label)}</span>
               {hint && <span className="text-[10px] leading-tight text-bone-faint">{t(hint)}</span>}
             </button>
           );
         })}
       </div>
       <div className="space-y-1.5 rounded-xl border border-panel-edge bg-panel-2/60 p-3">
-        <p className="text-[11px] uppercase tracking-wide text-bone-faint">{t('night.leprechaunResult')}</p>
+        <p className="text-[11px] font-medium text-bone-faint">{t('night.leprechaunResult')}</p>
         {targets.length === 0 ? (
           <p className="text-sm text-bone-faint">{t('night.leprechaunNoAttack')}</p>
         ) : (
@@ -714,7 +737,7 @@ function KillDebuffPanel() {
   if (debuffs.length === 0) return null;
   return (
     <div className="space-y-2.5 rounded-xl border border-wolf/30 bg-wolf/5 p-3">
-      <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-bone-dim">
+      <p className="flex items-center gap-2 text-xs font-medium text-bone-dim">
         <Swords className="h-3.5 w-3.5 text-wolf-bright" /> {t('debuff.title')}
       </p>
       <ul className="space-y-2.5">
@@ -760,7 +783,7 @@ function TroublemakerToggle({ step }: { step: NightStep }) {
       aria-pressed={on}
       onClick={() => engine.setNightAction('troublemakerActor', on ? null : (step.actors[0] ?? null))}
       className={clsx(
-        'press flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border font-display uppercase tracking-grimoire',
+        'press flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border font-display tracking-wide',
         on ? 'border-ember bg-ember/15 text-bone shadow-inner-ember' : 'border-panel-edge bg-panel-2 text-bone-dim',
       )}
     >
@@ -777,7 +800,7 @@ function DrunkRolePicker() {
   const options = drunkRoleOptions(engine.state.rules);
   return (
     <div>
-      <p className="mb-2 text-xs uppercase tracking-wide text-bone-dim">{t('night.drunkPick')}</p>
+      <p className="mb-2 text-xs font-medium text-bone-dim">{t('night.drunkPick')}</p>
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
         {options.map((id: RoleId) => (
           <RoleCard
@@ -804,7 +827,7 @@ function AuraResult({ playerId }: { playerId: string }) {
   const special = !!inspection('auraInspect', playerId);
   return (
     <ResultBanner wolf={special} key={playerId}>
-      <span className={clsx('font-display text-xl font-bold uppercase tracking-grimoire', special ? 'text-wolf-bright' : 'text-village')}>
+      <span className={clsx('font-display text-xl font-bold tracking-wide', special ? 'text-wolf-bright' : 'text-village')}>
         {special ? t('night.auraSpecial', { name: p.name }) : t('night.auraOrdinary', { name: p.name })}
       </span>
     </ResultBanner>
@@ -820,7 +843,7 @@ function PiResult({ playerId }: { playerId: string }) {
   const found = !!inspection('piInspect', playerId);
   return (
     <ResultBanner wolf={found} key={playerId}>
-      <span className={clsx('font-display text-xl font-bold uppercase tracking-grimoire', found ? 'text-wolf-bright' : 'text-village')}>
+      <span className={clsx('font-display text-xl font-bold tracking-wide', found ? 'text-wolf-bright' : 'text-village')}>
         {found ? t('night.piYes', { name: p.name }) : t('night.piNo', { name: p.name })}
       </span>
     </ResultBanner>

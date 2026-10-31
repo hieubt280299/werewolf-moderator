@@ -27,7 +27,7 @@ export function RoleDetailSheet({ roleId, onClose, count, onAdjust, addBlocked =
   const wakes = !!role?.nightAction || (roleId === 'hunter' && houseRules.hunter);
 
   return (
-    <Sheet open={!!roleId} onClose={onClose} title={roleId ? t(`role.${roleId}.name`) : ''} closeLabel={t('settings.close')}>
+    <Sheet open={!!roleId} onClose={onClose} title={roleId ? <span className="uppercase tracking-grimoire">{t(`role.${roleId}.name`)}</span> : ''} closeLabel={t('settings.close')}>
       {role && roleId && (
         <div className="flex flex-col items-center gap-4 pb-6">
           <RoleCard roleId={roleId} size="lg" showText={false} className="animate-pop" />
@@ -65,7 +65,7 @@ export function RoleDetailSheet({ roleId, onClose, count, onAdjust, addBlocked =
               <StepperButton label="−" onClick={() => onAdjust(-1)} disabled={count === 0}>
                 <Minus className="h-5 w-5" />
               </StepperButton>
-              <span className="font-display text-sm uppercase tracking-grimoire text-bone-dim">
+              <span className="font-display text-sm tracking-wide text-bone-dim">
                 {t('card.inDeck')}: <span className="text-lg text-bone">{count}</span>
               </span>
               <StepperButton label="+" onClick={() => onAdjust(1)} disabled={count >= role.maxCopies || addBlocked}>

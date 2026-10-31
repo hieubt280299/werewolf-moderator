@@ -3,6 +3,55 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - Unreleased
+
+Implements [`UPDATE_v1.3.0.md`](UPDATE_v1.3.0.md).
+
+### Added
+- **Card tags.** The Hooker's card is tagged **Custom**: it's the one role that isn't an Ultimate Werewolf card. The Hunter, Witch, Big Bad Wolf and Tanner cards are tagged **Rebalanced** while their house rule is on: in a game, the rules it was dealt with; otherwise, the moderator's current settings. The smallest cards show only the tag's icon.
+- **Silent notices.** A full-screen message for the players the moderator turns the screen toward. Nothing is said aloud, so the rest of the table learns nothing. The night script offers one:
+  - At the Werewolves' call on a Wolf Cub night ("choose TWO victims tonight").
+  - For a bitten Cursed waking with the pack for the first time: "You're a Werewolf now", with the Werewolf card.
+  - For the Doppelgänger woken to see her new role: the card and its name.
+- **Seat changes** in the Players step:
+  - Drag a seat number onto another seat to swap the two players (press and hold on a phone), or tap two seat numbers in turn.
+  - A new button on each seat adds an empty seat right after it, and everyone after moves one seat along.
+- **Duplicate names check.** When two players share a name, Next on the Players step asks to confirm they are different players. Case, extra spaces and how accents were typed don't count as differences. The seats with a shared name are outlined.
+- **Full pool calls.** A new toggle on the Deck step: "Call all roles in selected pool during the night". When it's on, the night script calls every night role in the Role Pool, dealt or not. A role nobody was dealt is a ghost call, so listening players can't tell which roles are in play.
+  - The toggle is remembered on the device. Each game keeps the setting it was dealt with.
+  - Without a dealt Cupid, the Lovers' call is a ghost call too.
+  - Ghost calls now say which kind they are. A role nobody was dealt reads "Nobody was dealt this role", and its card is dimmed. A role whose holders were all eliminated reads "Everyone with this role has been eliminated", and its card shows the skull, as before.
+
+### Changed
+- **Hooker:** balance weight +7 → +3.
+- **The Old Hag can't send the same player away two nights in a row.** Last night's player is shown locked at her call ("Sent away last night"), and her card says so. A night with no exile frees everyone, and a player a seduced Old Hag pointed at stays free, since they never left.
+- **The Werewolves aren't told that the Diseased made them sick.** The night after they eat the Diseased, they wake and choose a victim as usual, and the kill simply fails. The note at their call, and at the Big Bad Wolf's, now tells the moderator not to tell them.
+- **The Prince is revealed when nominated.** His card is shown to the table and no vote is held.
+  - The reveal uses up the day's elimination, so the day ends with no one eliminated. On a Troublemaker day, one elimination is left.
+  - A revealed Prince who is nominated on a later day faces a normal vote.
+  - The timeline reads "{name} (Prince) was nominated and revealed — no vote was held".
+  - A Prince bitten by a Vampire still falls at the first accusation instead.
+- **Win checks count eliminating votes, not players.** The Mayor's vote counts 2, the Pacifist's 0, everyone else's 1.
+  - The other team wins once the Village has no kill power left and has as many votes as the other team, or fewer. A tie now ends the game; before, the Village had to be outnumbered. A Mayor holds off one wolf, but not two.
+  - A draw needs both conditions: neither side can kill or change anyone's team, and both sides have exactly the same number of votes.
+  - A player the Old Hag sent away has no vote that day, and isn't counted in the majority. The win check allows for them coming back the next day:
+    - If the other team can kill, that day's votes decide, because it can kill the returning player that night. Three Villagers with one away, against two wolves, lose at dawn.
+    - If the other team can't kill, nothing changes overnight, so a result only stands if it holds both that day and once the player is back. A lone Fruit Brute against two Villagers with one away is not a draw, because the next day the Village can vote it out.
+    - A wolf sent away gives the Village its chance: two Villagers against two wolves play on that day.
+- **The Lone Wolf** still wins as the last player alive. It now also wins against one last Villager who:
+  - has no kill power
+  - can't change teams (not the Drunk before night 3, not a Doppelgänger with a target)
+  - can't outvote the Lone Wolf (not the Mayor)
+- **Auto-balance:**
+  - Any deck within ±1 of the experience target is accepted, e.g. −1 to +1 for Standard. It no longer aims for the exact target, so decks vary more. The balance meter's "Balanced" range is unchanged (±2).
+  - It won't deal the last game's deck again. At least 10% of the cards change: 1 card up to 10 players, 2 up to 20, 3 up to 30. The deck still stays within ±1. Only a pool that allows no other balanced deck can repeat it.
+  - The last game's cards are remembered through New Game, Rematch and Start new game from lineup.
+  - A very small pool may still miss ±1 rather than break the rule of fewer than half Villagers. Six beginners with only beginner roles, for example, can't get below +4.
+- **Typography:** ALL CAPS is now limited to role names and titles, status tags (chips, phase markers, card tags, kill outcomes) and the game result. Headings, buttons, labels, toggles and night-script prompts are in sentence case.
+- **Header buttons:**
+  - The back arrow is now a **Home** button, a house icon with "Home" beside it on wider screens. It always returns to the hub, even from a game started from History. The browser's Back button still goes to the previous screen.
+  - During a game, **Undo** shows its name next to the icon.
+
 ## [1.2.0] - Unreleased
 
 Implements [`UPDATE_v1.2.0.md`](UPDATE_v1.2.0.md).

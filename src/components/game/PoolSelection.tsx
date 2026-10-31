@@ -51,7 +51,7 @@ export function PoolSelection({ pool, poolId, onChange }: PoolSelectionProps) {
       </div>
 
       <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3">
-        <span className="whitespace-nowrap font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: pool.length })}</span>
+        <span className="whitespace-nowrap font-display text-sm tracking-wide text-bone">{t('pools.selected', { count: pool.length })}</span>
         <div className="flex-1" />
         <Button
           size="sm"
@@ -94,7 +94,7 @@ function SavedPoolButton({ pool, selected, onClick }: { pool: RolePool; selected
       )}
     >
       <span className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold uppercase tracking-grimoire text-bone">{pool.name}</span>
+        <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold tracking-wide text-bone">{pool.name}</span>
         {selected && <Check className="h-4 w-4 text-village" />}
       </span>
       <span className="flex -space-x-2">
@@ -187,7 +187,7 @@ function SavePoolSheet({
     <Sheet open={open} onClose={onClose} title={t('pools.save')} closeLabel={t('settings.close')}>
       <div className="space-y-4 pb-5">
         <label className="block">
-          <span className="mb-1.5 block font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('pools.name')}</span>
+          <span className="mb-1.5 block font-display text-xs tracking-wide text-bone-dim">{t('pools.name')}</span>
           <input
             autoFocus
             value={name}
@@ -200,7 +200,7 @@ function SavePoolSheet({
         <div role="radiogroup" className="space-y-2">
           {option('new', t('pools.saveAsNew'), full)}
           {full && <p className="text-xs text-bone-faint">{t('pools.limit', { max: MAX_POOLS })}</p>}
-          {pools.length > 0 && <p className="pt-1 font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('pools.overwrite')}</p>}
+          {pools.length > 0 && <p className="pt-1 font-display text-xs tracking-wide text-bone-dim">{t('pools.overwrite')}</p>}
           {pools.map((p) => option(p.id, p.name))}
         </div>
         {error && <p className="text-xs text-wolf-bright">{error}</p>}

@@ -1,12 +1,13 @@
 import clsx from 'clsx';
 import { DoorOpen, Droplet, Gavel, Ghost, Pause, Play, RotateCcw, Swords, Timer, Undo2, VolumeX } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Nomination } from '../../@types/game';
+import type { Nomination, Player } from '../../@types/game';
 import { useListMotion } from '../../hooks/useListMotion';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useI18n } from '../../i18n/I18nContext';
-import { dayCascadeDeaths } from '../../utils/gameRules';
+import { dayCascadeDeaths, unrevealedPrince } from '../../utils/gameRules';
 import { PlayerToken } from '../shared/PlayerToken';
+import { RoleCard } from '../shared/RoleCard';
 import { Tooltip } from '../shared/Tooltip';
 import { Button, Chip, SectionTitle, Sheet } from '../shared/ui';
 
@@ -16,6 +17,10 @@ export function VotingPanel() {
   const engine = useGameEngine();
   const { state, alive, byId } = engine;
   const [nominating, setNominating] = useState(false);
+  // The Prince revealed by his nomination, shown to the table (kept while the sheet closes).
+  const [princeId, setPrinceId] = useState<string | null>(null);
+  const [showPrince, setShowPrince] = useState(false);
+  const prince = byId.get(princeId ?? '');
   const listRef = useListMotion<HTMLDivElement>(220);
 
   const silenced = alive.filter((p) => p.status.silenced);
@@ -80,7 +85,7 @@ export function VotingPanel() {
         </>
       ) : (
         <div className="panel border border-ember/30 p-4 text-center">
-          <p className="font-display text-lg uppercase tracking-grimoire text-bone">{t('day.closed')}</p>
+          <p className="font-display text-lg tracking-wide text-bone">{t('day.closed')}</p>
           {executed && (
             <p className="mt-1 text-bone-dim">
               {executed.alive ? t('day.princeSaved', { name: executed.name }) : t('day.executed', { name: executed.name })}
@@ -92,8 +97,41 @@ export function VotingPanel() {
         </div>
       )}
 
-      <NominateSheet open={nominating} onClose={() => setNominating(false)} />
+      <NominateSheet
+        open={nominating}
+        onClose={() => setNominating(false)}
+        onPrince={(id) => {
+          setPrinceId(id);
+          setShowPrince(true);
+        }}
+      />
+      {/* Only once the rules engine has revealed him (a Vampire's bite may have taken him first). */}
+      <PrinceReveal prince={prince ?? null} open={showPrince && !!prince?.alive && prince.status.princeRevealed} onClose={() => setShowPrince(false)} />
     </div>
+  );
+}
+
+/**
+ * Nominating the hidden Prince reveals his card to the table instead of holding a vote. It uses
+ * up the day's elimination: the day ends, unless the Troublemaker allowed a second one.
+ */
+function PrinceReveal({ prince, open, onClose }: { prince: Player | null; open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
+  const { state } = useGameEngine();
+  const dayOver = state.dayStep === 'closed';
+  return (
+    <Sheet open={open} onClose={onClose} tone="day" title={t('day.princeTitle')} closeLabel={t('settings.close')}>
+      {prince && (
+        <div className="flex flex-col items-center gap-4 pb-4 text-center">
+          <RoleCard roleId="prince" size="lg" className="animate-pop" />
+          <p className="font-display text-2xl font-bold text-bone text-shadow-crisp">{prince.name}</p>
+          <p className="text-bone-dim">{t(dayOver ? 'day.princeNominated' : 'day.princeNominatedMore', { name: prince.name })}</p>
+          <Button variant="ember" block onClick={onClose}>
+            {t('day.princeContinue')}
+          </Button>
+        </div>
+      )}
+    </Sheet>
   );
 }
 
@@ -119,8 +157,8 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
       <div className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide text-bone-dim">{t('day.accused')}</p>
-            <p className="font-display text-2xl font-bold uppercase tracking-grimoire text-bone text-shadow-crisp">{accused.name}</p>
+            <p className="text-xs font-medium text-bone-dim">{t('day.accused')}</p>
+            <p className="font-display text-2xl font-bold tracking-wide text-bone text-shadow-crisp">{accused.name}</p>
           </div>
           <div className="text-right">
             <p className={clsx('font-display text-2xl font-bold', majority ? 'text-wolf-bright' : 'text-bone')}>
@@ -207,7 +245,7 @@ function NominationCard({ nomination }: { nomination: Nomination }) {
   );
 }
 
-function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+function NominateSheet({ open, onClose, onPrince }: { open: boolean; onClose: () => void; onPrince: (playerId: string) => void }) {
   const { t } = useI18n();
   const engine = useGameEngine();
   const [accused, setAccused] = useState<string | null>(null);
@@ -218,7 +256,10 @@ function NominateSheet({ open, onClose }: { open: boolean; onClose: () => void }
 
   const confirm = () => {
     if (!accused) return;
+    const player = engine.byId.get(accused);
     engine.nominate(accused);
+    // A hidden Prince is revealed rather than put to the vote.
+    if (player && unrevealedPrince(player)) onPrince(player.id);
     onClose();
   };
 

@@ -128,7 +128,7 @@ export function SignInMethodsSection() {
 
       {adding && (
         <form onSubmit={add} className="space-y-3 border-t border-panel-edge pt-3">
-          <p className="font-display text-xs uppercase tracking-grimoire text-bone">{username ? t('signin.setPassword') : t('signin.addTitle')}</p>
+          <p className="font-display text-xs tracking-wide text-bone">{username ? t('signin.setPassword') : t('signin.addTitle')}</p>
           <p className="text-xs text-bone-dim">{t('signin.addHint', { email })}</p>
           {!username && (
             <TextField
@@ -185,7 +185,7 @@ function MethodRow({ icon, name, status, on, action }: { icon: ReactNode; name: 
     <div className="flex items-center gap-3">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block font-display text-sm uppercase tracking-grimoire text-bone">{name}</span>
+        <span className="block font-display text-sm tracking-wide text-bone">{name}</span>
         <span className={clsx('block truncate text-xs', on ? 'text-village' : 'text-bone-faint')}>{status}</span>
       </span>
       {action}

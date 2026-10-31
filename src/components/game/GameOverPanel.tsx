@@ -38,7 +38,7 @@ export function GameOverPanel({ winner }: { winner: WinResult }) {
         }}
       >
         <Trophy className="mx-auto mb-2 h-10 w-10 text-bone" style={{ filter: tone ? `drop-shadow(0 0 10px ${tone.glow})` : undefined }} />
-        <h2 className="text-3xl text-bone text-shadow-title sm:text-4xl">{t(`win.${winner.team}`)}</h2>
+        <h2 className="text-3xl uppercase tracking-grimoire text-bone text-shadow-title sm:text-4xl">{t(`win.${winner.team}`)}</h2>
       </div>
 
       <div>

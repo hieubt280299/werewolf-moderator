@@ -29,7 +29,7 @@ export function Button({ variant = 'ghost', icon, block, size = 'md', className,
     <button
       type={type}
       className={clsx(
-        'press inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold uppercase tracking-grimoire text-shadow-crisp disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none',
+        'press inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold tracking-wide text-shadow-crisp disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none',
         size === 'sm' && 'min-h-9 px-3 text-xs',
         size === 'md' && 'min-h-11 px-4 text-sm',
         size === 'lg' && 'min-h-14 px-6 text-base',
@@ -191,7 +191,7 @@ export function RoleBadge({ roleId, size = 40, dead, className }: { roleId: Role
 export function TextField({ label, hint, className, ...rest }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return (
     <label className={clsx('block', className)}>
-      <span className="mb-1.5 block font-display text-xs uppercase tracking-grimoire text-bone-dim">{label}</span>
+      <span className="mb-1.5 block font-display text-xs tracking-wide text-bone-dim">{label}</span>
       <input
         className="min-h-12 w-full rounded-xl border border-panel-edge bg-ink px-3 text-base text-bone placeholder:text-bone-faint focus:border-village focus:outline-none"
         {...rest}
@@ -218,7 +218,7 @@ export function Toggle({ checked, mixed = false, onChange, label, hint, classNam
     // the sheet's outer box, and focusing it on tap scrolls the whole sheet off its content.
     <label className={clsx('relative flex cursor-pointer items-start justify-between gap-4', className)}>
       <span className="min-w-0">
-        <span className="block font-display text-sm uppercase tracking-grimoire text-bone">{label}</span>
+        <span className="block font-display text-sm tracking-wide text-bone">{label}</span>
         {hint && <span className="block text-xs text-bone-dim">{hint}</span>}
       </span>
       <input

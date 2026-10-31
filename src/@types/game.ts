@@ -128,6 +128,8 @@ export interface Role {
   maxCopies: number;
   difficulty: Difficulty;
   abilities: RoleAbility[];
+  /** Not an Ultimate Werewolf card: a role made for this app (the Hooker). */
+  custom: boolean;
 }
 
 export type Phase = 'setup' | 'night' | 'dawn' | 'day' | 'gameOver';
@@ -250,8 +252,10 @@ export interface NightStep {
   actors: string[];
   /** How many targets the step expects (wolves: 0, 1 or 2). */
   targetCount: number;
-  /** Role is in the deck but dead — call it anyway so the table can't deduce it. */
+  /** Nobody alive holds the role — call it anyway so the table can't deduce it. */
   ghost: boolean;
+  /** A ghost call for a role nobody was dealt (full pool calls), not one whose holders are all dead. */
+  undealt?: boolean;
   /** How the moderator records the step. */
   kind: 'targets' | 'info' | 'role' | 'toggle' | 'direction';
   /** Wolves' turn: bitten Cursed who wake with the pack for the first time tonight. */
@@ -318,6 +322,8 @@ export interface GameModifiers {
   wolvesDoubleKill: boolean;
   /** Bodyguard can't protect the same player two nights running. */
   bodyguardLastTarget: string | null;
+  /** Old Hag can't send the same player away two nights running. */
+  oldHagLastTarget: string | null;
   witchHealUsed: boolean;
   witchKillUsed: boolean;
   /** Vampire victims already collected this day. */
@@ -374,6 +380,8 @@ export interface SetupDraft {
   /** Wizard step and deal board, saved so leaving the screen (or reloading) keeps your place. */
   step?: 'players' | 'pool' | 'deck' | 'deal';
   deal?: { slots: (RoleId | null)[]; tray: RoleId[] } | null;
+  /** The cards of the last game played, which auto-balance won't deal again unchanged. */
+  previousDeck?: RoleId[];
 }
 
 export interface GameState {
@@ -403,6 +411,11 @@ export interface GameState {
    * games dealt afterwards.
    */
   rules: RebalanceRules;
+  /**
+   * Full pool calls, frozen when the cards were dealt: the night script calls every role in
+   * the Role Pool, dealt or not, so the table can't tell which roles are in play.
+   */
+  fullPoolCalls: boolean;
   /** Set once the finished game has been written to the moderator's history. */
   recordedAt?: number | null;
   createdAt: number;
@@ -418,6 +431,8 @@ export interface BalanceOptions {
   wolfCount?: number;
   /** House rules (the reworked Tanner is a Villager, so no extra team). */
   rules?: Partial<RebalanceRules> | null;
+  /** The last game's cards: the new deck must differ from them by at least 10% of the seats. */
+  previousDeck?: readonly RoleId[];
   /** Deterministic RNG for tests. */
   random?: () => number;
 }

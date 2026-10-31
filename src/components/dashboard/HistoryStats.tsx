@@ -55,7 +55,7 @@ export function HistoryStats({ onNavigate }: { onNavigate: (view: View) => void 
             <StatCard label={t('history.otherWins')} value={stats.otherWins} className="text-vampire" />
           </div>
           <div className="panel p-4">
-            <p className="mb-2 font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('history.split')}</p>
+            <p className="mb-2 font-display text-xs tracking-wide text-bone-dim">{t('history.split')}</p>
             <div className="flex h-3 overflow-hidden rounded-full bg-panel-edge">
               {shares.map((s) => (
                 <span key={s.key} className={SHARE_STYLE[s.key].bar} style={{ width: `${s.total ? (s.wins / s.total) * 100 : 0}%` }} />
@@ -122,7 +122,7 @@ function StatCard({ label, value, className }: { label: string; value: number; c
   return (
     <div className="panel p-3 text-center">
       <p className={clsx('font-display text-3xl font-bold text-bone', className)}>{value}</p>
-      <p className="mt-0.5 text-[11px] uppercase leading-tight tracking-wide text-bone-dim">{label}</p>
+      <p className="mt-0.5 text-[11px] font-medium leading-tight text-bone-dim">{label}</p>
     </div>
   );
 }

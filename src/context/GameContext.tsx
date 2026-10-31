@@ -32,8 +32,8 @@ import { useAuth } from './AuthContext';
 
 export type GameAction =
   | { type: 'UPDATE_SETUP'; patch: Partial<SetupDraft> }
-  /** `rules` are the moderator's house rules at deal time, frozen for this game. */
-  | { type: 'START_GAME'; players: Player[]; rules: RebalanceRules }
+  /** `rules` (house rules) and `fullPoolCalls` are the moderator's settings at deal time, frozen for this game. */
+  | { type: 'START_GAME'; players: Player[]; rules: RebalanceRules; fullPoolCalls?: boolean }
   | { type: 'START_NIGHT' }
   | { type: 'SET_NIGHT_STEP'; index: number }
   | { type: 'SET_NIGHT_ACTION'; field: NightActionField; value: string | null }
@@ -78,6 +78,7 @@ const DEFAULT_MODIFIERS: GameModifiers = {
   wolvesSkipNextNight: false,
   wolvesDoubleKill: false,
   bodyguardLastTarget: null,
+  oldHagLastTarget: null,
   witchHealUsed: false,
   witchKillUsed: false,
   vampireTriggeredToday: false,
@@ -121,6 +122,7 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
       ...setup,
     },
     rules: { ...NO_REBALANCES },
+    fullPoolCalls: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -144,6 +146,7 @@ export function normalizeGameState(s: GameState): GameState {
     executionsLeft: s.executionsLeft ?? 1,
     // Games dealt before house rules existed play by the standard rules.
     rules: { ...NO_REBALANCES, ...s.rules },
+    fullPoolCalls: s.fullPoolCalls ?? false,
     nightActions: { ...rules.emptyNightActions(), ...nightActions },
     modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
     lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
@@ -153,6 +156,9 @@ export function normalizeGameState(s: GameState): GameState {
 }
 
 const samePool = (a: readonly RoleId[], b: readonly RoleId[]) => a.length === b.length && a.every((id) => b.includes(id));
+
+/** The cards of the last game played (or carried over from it), for auto-balance to vary from. */
+const lastDeck = (s: GameState): RoleId[] | undefined => (s.deck.length > 0 ? s.deck : s.setup.previousDeck);
 
 /**
  * Night picks that depend on the wolves' victim go stale when it changes: the Witch's heal
@@ -181,6 +187,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const started: GameState = {
         ...createInitialState(state.setup),
         rules: { ...NO_REBALANCES, ...action.rules },
+        fullPoolCalls: !!action.fullPoolCalls,
         players: action.players,
         deck: action.players.map((p) => p.originalRoleId),
         log: [{ id: createId('log'), round: 0, phase: 'setup', key: 'log.gameStarted', params: { count: action.players.length } }],
@@ -227,14 +234,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         experience: state.setup.experience,
         poolId: state.setup.poolId,
         poolName: state.setup.poolName,
+        previousDeck: lastDeck(state),
         ...checkLineup(lineupOf(state.players, state.setup.pool), action.rules),
       });
     case 'NEW_GAME':
-      // The same table usually plays again: keep the names as typed, the experience and the pool.
-      return createInitialState({ names: state.setup.names, experience: state.setup.experience, pool: state.setup.pool });
+      // The same table usually plays again: keep the names as typed, the experience and the pool
+      // (and the last game's cards, so auto-balance deals something new).
+      return createInitialState({ names: state.setup.names, experience: state.setup.experience, pool: state.setup.pool, previousDeck: lastDeck(state) });
     case 'LOAD_LINEUP':
       // Nothing of the current game carries over (deaths, night picks, timeline) but the experience.
-      return createInitialState({ experience: state.setup.experience, ...action.setup });
+      return createInitialState({ experience: state.setup.experience, previousDeck: lastDeck(state), ...action.setup });
     case 'HYDRATE':
       return normalizeGameState(action.state);
     case 'MARK_RECORDED':

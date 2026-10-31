@@ -1,4 +1,4 @@
-import { ArrowLeft, MoonStar, Undo2, UserRound } from 'lucide-react';
+import { House, MoonStar, Undo2, UserRound } from 'lucide-react';
 import type { View } from '../../App';
 import { useAuth } from '../../context/AuthContext';
 import { useGameEngine } from '../../hooks/useGameEngine';
@@ -12,13 +12,13 @@ const TITLES: Record<Exclude<View, 'home'>, 'hub.newGame' | 'hub.pools' | 'hub.h
 
 interface AppHeaderProps {
   view: View;
-  /** Returns to the previous screen (not always home). */
-  onBack: () => void;
+  /** Returns to the hub. (The browser's Back still returns to the previous screen.) */
+  onHome: () => void;
   /** Opens the settings modal over the current screen. */
   onOpenSettings: () => void;
 }
 
-export function AppHeader({ view, onBack, onOpenSettings }: AppHeaderProps) {
+export function AppHeader({ view, onHome, onOpenSettings }: AppHeaderProps) {
   const { t } = useI18n();
   const { profile } = useAuth();
   const { state, canUndo, undo } = useGameEngine();
@@ -33,12 +33,19 @@ export function AppHeader({ view, onBack, onOpenSettings }: AppHeaderProps) {
             <MoonStar className="h-5 w-5 text-wolf" />
           </span>
         ) : (
-          <button type="button" onClick={onBack} aria-label={t('setup.back')} className="press rounded-full p-2.5 text-bone-dim hover:text-bone">
-            <ArrowLeft className="h-5 w-5" />
+          <button
+            type="button"
+            onClick={onHome}
+            aria-label={t('hub.home')}
+            title={t('hub.home')}
+            className="press flex items-center gap-1.5 rounded-full p-2.5 text-bone-dim hover:text-bone"
+          >
+            <House className="h-5 w-5" />
+            <span className="hidden text-xs sm:inline">{t('hub.home')}</span>
           </button>
         )}
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate font-display text-base font-bold uppercase tracking-grimoire text-bone">{t('app.title')}</p>
+          <p className="truncate font-display text-base font-bold tracking-wide text-bone">{t('app.title')}</p>
           <p className="truncate text-[11px] text-bone-faint">{subtitle}</p>
         </div>
         {inGame && (
@@ -46,11 +53,10 @@ export function AppHeader({ view, onBack, onOpenSettings }: AppHeaderProps) {
             type="button"
             onClick={undo}
             disabled={!canUndo}
-            aria-label={t('settings.undo')}
-            title={t('settings.undo')}
-            className="press rounded-full p-2.5 text-bone-dim hover:text-bone disabled:opacity-30"
+            className="press flex items-center gap-1.5 rounded-full border border-panel-edge px-3 py-1.5 text-xs text-bone-dim hover:text-bone disabled:opacity-30"
           >
-            <Undo2 className="h-5 w-5" />
+            <Undo2 className="h-4 w-4" />
+            {t('settings.undo')}
           </button>
         )}
         <button

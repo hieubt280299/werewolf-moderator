@@ -16,7 +16,7 @@
     overscroll-behavior-y: none;
   }
   h1, h2, h3, h4 {
-    @apply font-display font-bold uppercase tracking-grimoire;
+    @apply font-display font-bold tracking-wide;
   }
   button {
     touch-action: manipulation;

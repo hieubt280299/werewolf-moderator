@@ -83,13 +83,14 @@ interface Spec {
   firstNightOnly?: boolean;
   maxCopies?: number;
   abilities?: RoleAbility[];
+  custom?: boolean;
 }
 
 const SPECS: Record<RoleId, Spec> = {
   // --- Village ---------------------------------------------------------------
   villager: { faction: 'village', weight: 1, difficulty: 1, maxCopies: 30 },
   seer: { faction: 'village', weight: 7, difficulty: 1, nightAction: 'seerInspect', abilities: ['info'] },
-  hooker: { faction: 'village', weight: 7, difficulty: 2, nightAction: 'hookerSeduce', abilities: ['protect'] },
+  hooker: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'hookerSeduce', abilities: ['protect'], custom: true },
   apprenticeSeer: { faction: 'village', weight: 4, difficulty: 2, abilities: ['info'] },
   auraSeer: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'auraInspect', abilities: ['info'] },
   pi: { faction: 'village', weight: 3, difficulty: 2, nightAction: 'piInspect', abilities: ['info'] },
@@ -153,6 +154,7 @@ export const ROLES: Record<RoleId, Role> = Object.fromEntries(
       firstNightOnly: spec.firstNightOnly,
       maxCopies: spec.maxCopies ?? 1,
       abilities: spec.abilities ?? [],
+      custom: spec.custom ?? false,
     } satisfies Role,
   ]),
 ) as Record<RoleId, Role>;

@@ -50,7 +50,7 @@ export function TimelineView({ log, className }: { log: readonly GameLogEntry[];
             >
               <Icon className="h-3 w-3" />
             </span>
-            <p className={clsx('mb-1.5 font-display text-xs uppercase tracking-grimoire', night ? 'text-village' : phase === 'day' ? 'text-ember' : 'text-bone-dim')}>
+            <p className={clsx('mb-1.5 font-display text-xs tracking-wide', night ? 'text-village' : phase === 'day' ? 'text-ember' : 'text-bone-dim')}>
               {group.label}
             </p>
             <ul className="space-y-1">
@@ -66,7 +66,7 @@ export function TimelineView({ log, className }: { log: readonly GameLogEntry[];
                           className="font-semibold text-bone underline decoration-dotted underline-offset-2"
                           content={
                             <>
-                              <p className="mb-1 font-display uppercase tracking-grimoire text-bone-dim">{t(part.peopleTitle ?? 'log.votersTitle')}</p>
+                              <p className="mb-1 font-display tracking-wide text-bone-dim">{t(part.peopleTitle ?? 'log.votersTitle')}</p>
                               <ul className="space-y-0.5">
                                 {part.people.map((p, j) => (
                                   <li key={j}>
@@ -105,7 +105,7 @@ export function TimelinePanel({ log }: { log: readonly GameLogEntry[] }) {
   const { t } = useI18n();
   return (
     <details className="panel group mt-5 overflow-hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-display text-sm uppercase tracking-grimoire text-bone-dim">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-display text-sm tracking-wide text-bone-dim">
         <span className="flex items-center gap-2">
           <ScrollText className="h-4 w-4" /> {t('dash.log')}
         </span>
