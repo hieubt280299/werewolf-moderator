@@ -119,7 +119,7 @@ export function AuthScreen({ resetLink, onResetDone }: AuthScreenProps = {}) {
                 <GoogleButton busy={googleBusy || auth.googleResuming} disabled={busy || auth.status === 'loading'} onClick={() => void google()}>
                   {auth.googleResuming ? t('auth.googleResuming') : t('auth.google')}
                 </GoogleButton>
-                <div className="flex items-center gap-3 text-[11px] uppercase tracking-grimoire text-bone-faint" aria-hidden>
+                <div className="flex items-center gap-3 text-xs text-bone-faint" aria-hidden>
                   <span className="h-px flex-1 bg-panel-edge" />
                   {t('auth.orUsername')}
                   <span className="h-px flex-1 bg-panel-edge" />

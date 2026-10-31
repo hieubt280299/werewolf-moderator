@@ -96,7 +96,7 @@ export function RoleGrid(props: RoleGridProps) {
                   <button
                     type="button"
                     onClick={() => toggleSection(roles, sectionAllOn)}
-                    className="press ml-auto flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 font-display text-xs uppercase tracking-grimoire text-bone-dim hover:text-bone"
+                    className="press ml-auto flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 font-display text-xs tracking-wide text-bone-dim hover:text-bone"
                   >
                     {sectionAllOn ? <X className="h-3.5 w-3.5" /> : <CheckCheck className="h-3.5 w-3.5" />}
                     {t(sectionAllOn ? `pools.deselectSection.${section.id}` : `pools.selectSection.${section.id}`)}
@@ -174,7 +174,7 @@ const RoleGridItem = memo(function RoleGridItem(props: RoleGridItemProps) {
           aria-label={t(`role.${id}.name`)}
           onClick={() => props.onToggle(id)}
           className={clsx(
-            'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold uppercase tracking-wide',
+            'flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold',
             props.locked ? 'cursor-not-allowed' : 'press',
             on ? 'border-village bg-village/15 text-bone shadow-inner-village' : 'border-panel-edge bg-panel-2 text-bone-faint',
           )}

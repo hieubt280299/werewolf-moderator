@@ -402,7 +402,7 @@ export const SeatMap = memo(function SeatMap({
           ))}
 
         {centerLabel && (
-          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center font-display text-xs uppercase tracking-grimoire text-bone-dim">
+          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center font-display text-xs tracking-wide text-bone-dim">
             {centerLabel}
           </span>
         )}
@@ -583,7 +583,7 @@ export function BoardViewSwitch({ view, onChange }: { view: BoardView; onChange:
           title={t(`board.${v}`)}
           onClick={() => onChange(v)}
           className={clsx(
-            'press flex min-h-8 items-center gap-1 rounded-md px-2 font-display text-[11px] uppercase tracking-wide',
+            'press flex min-h-8 items-center gap-1 rounded-md px-2 font-display text-[11px] tracking-wide',
             view === v ? 'bg-village/20 text-village shadow-inner-village' : 'text-bone-dim hover:text-bone',
           )}
         >

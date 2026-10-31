@@ -109,7 +109,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: key
       <p className={clsx('font-display text-3xl font-bold', tone ? STAT_TONE[tone].text : 'text-bone')}>
         {value}
       </p>
-      <p className="mt-0.5 text-[11px] uppercase leading-tight tracking-wide text-bone-dim">{label}</p>
+      <p className="mt-0.5 text-[11px] font-medium leading-tight text-bone-dim">{label}</p>
     </div>
   );
 }
@@ -160,7 +160,7 @@ function HubTile({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block font-display text-lg font-semibold uppercase tracking-grimoire text-bone text-shadow-crisp">{title}</span>
+        <span className="block font-display text-lg font-semibold tracking-wide text-bone text-shadow-crisp">{title}</span>
         {hint && <span className="block truncate text-sm text-bone-dim">{hint}</span>}
       </span>
       {art && (

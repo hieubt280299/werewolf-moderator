@@ -36,7 +36,7 @@ export function DawnReport({ report }: { report: NightReport }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-ember">
+        <p className="mb-2 flex items-center gap-2 text-xs font-medium text-ember">
           <Megaphone className="h-3.5 w-3.5" /> {t('dawn.announce')}
         </p>
         <ul className="space-y-2">
@@ -86,7 +86,7 @@ export function DawnReport({ report }: { report: NightReport }) {
 
       {secrets.length > 0 && (
         <div>
-          <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-bone-faint">
+          <p className="mb-2 flex items-center gap-2 text-xs font-medium text-bone-faint">
             <EyeOff className="h-3.5 w-3.5" /> {t('dawn.secret')}
           </p>
           <ul className="space-y-1.5">

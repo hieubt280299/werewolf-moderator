@@ -38,6 +38,12 @@ export const EXPERIENCE_TARGET: Record<ExperienceLevel, number> = {
 /** Within this distance of the target a deck is called balanced. */
 export const BALANCE_TOLERANCE = 2;
 
+/** Auto-balance deals any deck within this distance of the target (e.g. −1 to +1 for 0). */
+export const AUTO_BALANCE_TOLERANCE = 1;
+
+/** Percent of the seats an auto-balanced deck must change from the last game's (at least one card). */
+export const MIN_DECK_CHANGE_PERCENT = 10;
+
 export const MIN_PLAYERS = 5;
 export const MAX_PLAYERS = 30;
 
@@ -110,6 +116,22 @@ export function countRoles(deck: readonly RoleId[]): Partial<Record<RoleId, numb
 export function sortDeck(deck: readonly RoleId[]): RoleId[] {
   return [...deck].sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
 }
+
+/** How many of `deck`'s cards `previous` doesn't have (copies counted): 0 for the same deck. */
+export function deckChanges(deck: readonly RoleId[], previous: readonly RoleId[]): number {
+  const left = countRoles(previous);
+  let kept = 0;
+  for (const id of deck) {
+    if ((left[id] ?? 0) > 0) {
+      left[id]! -= 1;
+      kept += 1;
+    }
+  }
+  return deck.length - kept;
+}
+
+/** Cards an auto-balanced deck must change from the last game's: 10% of the seats, at least one. */
+export const minDeckChanges = (playerCount: number): number => Math.max(1, Math.ceil((playerCount * MIN_DECK_CHANGE_PERCENT) / 100));
 
 export interface DeckIssue {
   key: string;
@@ -230,9 +252,10 @@ export function deckMixGaps(deck: readonly RoleId[], rules?: Partial<RebalanceRu
 
 /**
  * Generates a deck of `playerCount` roles drawn from `pool` whose weight sum lands within
- * tolerance of the experience target, then fills as much of DECK_MIX as the pool allows
- * (tier by tier), then gets closer to the target and uses more of the selected special
- * roles. Greedy seed + hill-climb; deterministic with `random`.
+ * AUTO_BALANCE_TOLERANCE of the experience target (every sum in that range is as good), and
+ * that changes at least 10% of the seats from `previousDeck`, the last game's cards. Then it
+ * fills as much of DECK_MIX as the pool allows (tier by tier), then uses more of the selected
+ * special roles. Greedy seed + hill-climb; deterministic with `random`.
  */
 export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   const random = options.random ?? secureRandom;
@@ -275,23 +298,28 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   seed.push(...prioritized.slice(0, specials));
   while (seed.length < n) seed.push('villager');
 
+  const previous = options.previousDeck ?? [];
+  const changesNeeded = previous.length > 0 ? minDeckChanges(n) : 0;
+
   const score = (deck: RoleId[]): number => {
     const balance = Math.abs(calculateBalance(deck) - target);
     // The Seer anchors the village's information game, so dropping it costs extra.
     const missing = specialPool.reduce((n, id) => n + (deck.includes(id) ? 0 : id === 'seer' ? 4 : 1), 0);
     const villagers = deck.filter((id) => id === 'villager').length;
     const overCap = Math.max(0, villagers - villagerCap);
+    const tooFamiliar = Math.max(0, changesNeeded - deckChanges(deck, previous));
     const [mix1, mix2, mix3] = deckMixGaps(deck, options.rules);
     // Each term outweighs everything after it: the villager cap (only exceeded if the pool
-    // is too small), a balanced deck, the DECK_MIX tiers, closeness to the target, then
-    // more of the pool and fewer Villagers.
+    // is too small), a balanced deck (any sum within tolerance), enough change from the last
+    // game's deck (only missed if the pool allows no other balanced deck), the DECK_MIX tiers,
+    // then more of the pool and fewer Villagers.
     return (
       overCap * 1e5 +
-      Math.max(0, balance - BALANCE_TOLERANCE) * 1e4 +
+      Math.max(0, balance - AUTO_BALANCE_TOLERANCE) * 1e4 +
+      tooFamiliar * 3000 +
       mix1 * 1000 +
       mix2 * 100 +
       mix3 * 10 +
-      balance * 2 +
       missing * 0.1 +
       villagers * 0.001
     );
@@ -337,6 +365,36 @@ export function generateBalancedDeck(options: BalanceOptions): RoleId[] {
   }
 
   return sortDeck(best);
+}
+
+// ---------------------------------------------------------------------------
+// Players step: seats and names
+// ---------------------------------------------------------------------------
+
+/** Two seats trade players. */
+export function swapSeats<T>(seats: readonly T[], a: number, b: number): T[] {
+  const out = [...seats];
+  if (a !== b && a in out && b in out) [out[a], out[b]] = [out[b], out[a]];
+  return out;
+}
+
+/** A new, empty seat right after seat `index`: everyone after it moves one seat along. */
+export const insertSeat = (names: readonly string[], index: number): string[] => [...names.slice(0, index + 1), '', ...names.slice(index + 1)];
+
+/** A name as compared for duplicates: case, spacing and Unicode composition aside. */
+export const nameKey = (name: string): string => name.trim().replace(/\s+/g, ' ').normalize('NFC').toLocaleLowerCase();
+
+/** Names typed for more than one player, each as first typed. */
+export function duplicateNames(names: readonly string[]): string[] {
+  const seen = new Map<string, { name: string; count: number }>();
+  for (const name of names) {
+    const key = nameKey(name);
+    if (!key) continue;
+    const entry = seen.get(key) ?? { name: name.trim(), count: 0 };
+    entry.count += 1;
+    seen.set(key, entry);
+  }
+  return [...seen.values()].filter((e) => e.count > 1).map((e) => e.name);
 }
 
 // ---------------------------------------------------------------------------

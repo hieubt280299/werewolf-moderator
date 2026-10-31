@@ -115,7 +115,7 @@ export function RoleDealPicker({ names, deck, deal, onChange }: RoleDealPickerPr
 
         <Tray roles={trayRoles} counts={trayCounts} selected={selected} onTap={tap} />
 
-        <p className="font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('deal.assigned', { count: filled, total: names.length })}</p>
+        <p className="font-display text-xs tracking-wide text-bone-dim">{t('deal.assigned', { count: filled, total: names.length })}</p>
         <ul className="grid gap-3 sm:grid-cols-2">
           {names.map((name, index) => (
             <Seat
@@ -194,7 +194,7 @@ function Tray({
         isOver ? 'border-village/60 shadow-inner-village' : 'border-panel-edge',
       )}
     >
-      <p className="mb-2 font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('deal.tray')}</p>
+      <p className="mb-2 font-display text-xs tracking-wide text-bone-dim">{t('deal.tray')}</p>
       {roles.length === 0 ? (
         <p className="py-6 text-center text-sm text-bone-faint">{t('deal.trayEmpty')}</p>
       ) : (

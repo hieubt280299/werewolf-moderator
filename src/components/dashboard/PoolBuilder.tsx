@@ -43,7 +43,7 @@ export function PoolBuilder() {
     return (
       <div className="mx-auto max-w-3xl space-y-5 px-4 pb-28 pt-4">
         <label className="block animate-step-in">
-          <span className="mb-1.5 block font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('pools.name')}</span>
+          <span className="mb-1.5 block font-display text-xs tracking-wide text-bone-dim">{t('pools.name')}</span>
           <input
             value={draft.name}
             maxLength={40}
@@ -53,7 +53,7 @@ export function PoolBuilder() {
           />
         </label>
         <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center gap-2 border-y border-panel-edge bg-ink/95 px-4 py-3">
-          <span className="whitespace-nowrap font-display text-sm uppercase tracking-grimoire text-bone">{t('pools.selected', { count: draft.roles.length })}</span>
+          <span className="whitespace-nowrap font-display text-sm tracking-wide text-bone">{t('pools.selected', { count: draft.roles.length })}</span>
           <div className="flex-1" />
           <Button
             size="sm"
@@ -93,7 +93,7 @@ export function PoolBuilder() {
         {pools.map((pool) => (
           <li key={pool.id} className="panel flex animate-step-in items-center gap-3 border border-panel-edge p-3">
             <div className="min-w-0 flex-1 space-y-2">
-              <p className="truncate font-display text-base font-semibold uppercase tracking-grimoire text-bone">{pool.name}</p>
+              <p className="truncate font-display text-base font-semibold tracking-wide text-bone">{pool.name}</p>
               <div className="flex flex-wrap gap-1">
                 {pool.roles.map((r) => (
                   <RoleBadge key={r} roleId={r} size={28} />

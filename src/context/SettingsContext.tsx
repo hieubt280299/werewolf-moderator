@@ -4,13 +4,15 @@ import { readJSON, STORAGE_KEYS, writeJSON } from '../utils/storage';
 
 export interface Settings {
   sfx: boolean;
+  /** Call every role in the Role Pool at night, dealt or not (frozen into each game when dealt). */
+  fullPoolCalls: boolean;
 }
 
 interface SettingsValue extends Settings {
   update: (patch: Partial<Settings>) => void;
 }
 
-const DEFAULTS: Settings = { sfx: true };
+const DEFAULTS: Settings = { sfx: true, fullPoolCalls: false };
 const SettingsContext = createContext<SettingsValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {

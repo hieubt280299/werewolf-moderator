@@ -145,7 +145,7 @@ function ProfileSettings({ onDone }: { onDone: () => void }) {
           {auth.mode === 'firebase' ? t('profile.storageCloud') : t('profile.storageLocal')}
         </p>
         <div className="border-t border-panel-edge pt-3 text-sm">
-          <p className="font-display text-xs uppercase tracking-grimoire text-bone-dim">{t('profile.currentEmail')}</p>
+          <p className="font-display text-xs tracking-wide text-bone-dim">{t('profile.currentEmail')}</p>
           {auth.profile?.recoveryEmail ? (
             <p className="flex items-center gap-1.5 break-all text-bone">
               <Mail className="h-3.5 w-3.5 shrink-0 text-village" /> {auth.profile.recoveryEmail}

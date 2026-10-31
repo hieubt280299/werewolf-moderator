@@ -46,8 +46,8 @@ interface NavState {
 }
 
 /**
- * Screen navigation backed by the History API: the header's Back arrow, the browser
- * Back button and the Android back gesture all return to the previous screen.
+ * Screen navigation backed by the History API: the browser Back button and the Android back
+ * gesture return to the previous screen, and the header's Home button unwinds to the hub.
  */
 function useViewHistory() {
   const [nav, setNav] = useState<NavState>({ view: 'home', depth: 0 });
@@ -78,18 +78,20 @@ function useViewHistory() {
     window.scrollTo({ top: 0 });
   }, []);
 
-  const back = useCallback(() => {
-    if (nav.depth > 0) window.history.back();
+  // Steps back through this app's own entries rather than pushing a new one, so Back from the
+  // hub doesn't return to the screen just left.
+  const home = useCallback(() => {
+    if (nav.depth > 0) window.history.go(-nav.depth);
     else navigate('home');
   }, [nav.depth, navigate]);
 
-  return { view: nav.view, navigate, back };
+  return { view: nav.view, navigate, home };
 }
 
 function Shell() {
   const { state } = useGame();
   const { profile } = useAuth();
-  const { view, navigate, back } = useViewHistory();
+  const { view, navigate, home } = useViewHistory();
   // Settings is a modal on top of the current screen, not a screen of its own.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
@@ -98,7 +100,7 @@ function Shell() {
   return (
     // Cards describe roles as the dealt game plays them; before dealing, as the next game will.
     <HouseRulesProvider rules={state.phase === 'setup' ? profile?.rebalances : state.rules}>
-      <AppHeader view={view} onBack={back} onOpenSettings={openSettings} />
+      <AppHeader view={view} onHome={home} onOpenSettings={openSettings} />
       <main>
         <Suspense fallback={<div className="min-h-[calc(100svh-3.5rem)]" />}>
           {view === 'home' && <DashboardHome onNavigate={navigate} onOpenSettings={openSettings} />}

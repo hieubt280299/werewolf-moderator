@@ -55,9 +55,9 @@ export function useGameEngine() {
 
   const commands = useMemo(
     () => ({
-      /** Deals the game; `rules` (house rules at this moment) are frozen for its whole length. */
-      startGame: (players: Player[], rules: RebalanceRules = NO_REBALANCES) => {
-        dispatch({ type: 'START_GAME', players, rules });
+      /** Deals the game; `rules` (house rules) and full pool calls are frozen for its whole length. */
+      startGame: (players: Player[], rules: RebalanceRules = NO_REBALANCES, fullPoolCalls = false) => {
+        dispatch({ type: 'START_GAME', players, rules, fullPoolCalls });
         playCue('sleep');
       },
       startNight: () => {

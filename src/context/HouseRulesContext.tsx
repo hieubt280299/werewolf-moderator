@@ -21,6 +21,9 @@ export const useHouseRules = (): RebalanceRules => useContext(HouseRulesContext)
 
 const isRebalanceId = (id: RoleId): id is RoleId & RebalanceId => (REBALANCE_IDS as readonly string[]).includes(id);
 
+/** True when a house rule changes how this role plays. */
+export const isRebalanced = (roleId: RoleId, rules: RebalanceRules): boolean => isRebalanceId(roleId) && rules[roleId];
+
 /** The role's rules text: its rebalanced version when that house rule is on. */
 export const roleDescKey = (roleId: RoleId, rules: RebalanceRules): TranslationKey =>
   isRebalanceId(roleId) && rules[roleId] ? `role.${roleId}.descRebalanced` : `role.${roleId}.desc`;

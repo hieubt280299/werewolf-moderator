@@ -125,7 +125,7 @@ function RecordBlock<T>({
   return (
     <div className="panel border border-panel-edge p-3">
       <div className="mb-2.5">
-        <p className="flex items-center gap-1.5 font-display text-xs uppercase tracking-grimoire text-bone-dim">
+        <p className="flex items-center gap-1.5 font-display text-xs tracking-wide text-bone-dim">
           <span className="shrink-0 text-ember">{icon}</span>
           {title}
         </p>
