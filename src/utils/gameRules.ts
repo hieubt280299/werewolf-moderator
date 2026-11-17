@@ -1,9 +1,15 @@
 import {
   NO_REBALANCES,
   type EliminationCause,
+  type Feat,
+  type FeatKind,
+  type FeatRelation,
+  type FeatSource,
   type GameLogEntry,
+  type GameModifiers,
   type GameState,
   type LeprechaunMove,
+  type NightActionField,
   type NightActionKind,
   type NightActions,
   type NightReport,
@@ -48,6 +54,27 @@ export const emptyNightActions = (): NightActions => ({
   hookerTarget: null,
   hunterTarget: null,
   bigBadWolfTarget: null,
+});
+
+/** A game's modifiers before anything has happened. */
+export const emptyModifiers = (): GameModifiers => ({
+  wolvesSkipNextNight: false,
+  wolvesDoubleKill: false,
+  bodyguardLastTarget: null,
+  oldHagLastTarget: null,
+  witchHealUsed: false,
+  witchKillUsed: false,
+  vampireTriggeredToday: false,
+  direWolfCompanion: null,
+  doppelgangerTarget: null,
+  virginiaTarget: null,
+  priestUsed: false,
+  piUsed: false,
+  troublemakerUsed: false,
+  extraExecution: false,
+  tannerWinner: null,
+  hookerVisited: [],
+  pendingAwakenings: [],
 });
 
 export const emptyReport = (round: number): NightReport => ({
@@ -587,6 +614,131 @@ export function inspectionResult(s: GameState, action: InspectAction, targetId: 
 }
 
 // ---------------------------------------------------------------------------
+// Feats (v1.4.0) — scored plays, recorded as they happen (points: utils/scoring)
+// ---------------------------------------------------------------------------
+
+/**
+ * The side a player is playing for right now: the lovers of a mixed couple play for the
+ * Couple, and the Lone Wolf hunts with the Werewolves.
+ */
+export function sideOf(g: Pick<GameState, 'players'> & Partial<Pick<GameState, 'rules'>>, p: Player): WinTeam {
+  const rules = rulesOf(g);
+  if (p.status.lover) {
+    const lovers = g.players.filter((x) => x.status.lover);
+    if (lovers.length === 2 && roleWinTeam(lovers[0].roleId, rules) !== roleWinTeam(lovers[1].roleId, rules)) return 'couple';
+  }
+  const team = roleWinTeam(p.roleId, rules);
+  return team === 'loneWolf' ? 'werewolf' : team;
+}
+
+/**
+ * Whom a play is against: a teammate, an enemy, or the standard Tanner (who wins by being
+ * eliminated, so taking him out is never good for anyone else).
+ */
+export function relationOf(g: Pick<GameState, 'players'> & Partial<Pick<GameState, 'rules'>>, actor: Player, target: Player): FeatRelation {
+  if (actor.id === target.id) return 'ally';
+  const side = sideOf(g, target);
+  if (side === 'tanner') return 'tanner';
+  return sideOf(g, actor) === side ? 'ally' : 'enemy';
+}
+
+const featPhase = (s: GameState): Feat['phase'] => (s.phase === 'day' ? 'day' : 'night');
+
+/** A feat for `actor` about `target`, stamped with the current round and phase. */
+function featFor(s: GameState, kind: FeatKind, actor: Player, target?: Player, extra: Partial<Feat> = {}): Feat {
+  return {
+    kind,
+    round: s.round,
+    phase: featPhase(s),
+    playerId: actor.id,
+    actorRole: actor.roleId,
+    ...(target ? { targetId: target.id, targetRole: target.roleId, against: relationOf(s, actor, target) } : {}),
+    ...extra,
+  };
+}
+
+function pushFeats(s: GameState, feats: readonly Feat[]) {
+  (s.feats ??= []).push(...feats);
+}
+
+/**
+ * Credit for taking `target` out (or turning them): one feat per player behind the power. A
+ * pack or a Vampire team shares it. Built before the death, while roles are as they were.
+ */
+function creditFeats(s: GameState, by: readonly Player[], target: Player, via: FeatSource, kind: 'kill' | 'convert' = 'kill'): Feat[] {
+  const shared = by.length > 1 ? { shared: by.length } : {};
+  return by.map((actor) => featFor(s, kind, actor, target, { via, ...shared }));
+}
+
+/** Who stands behind a night death, for the credit. */
+interface KillCredit {
+  by: Player[];
+  via: FeatSource;
+}
+
+/** Living holders of a role. */
+const holdersOf = (s: GameState, roleId: RoleId): Player[] => alivePlayers(s.players).filter((p) => p.roleId === roleId);
+
+const SHIELD_ROLE: Record<DebuffShield, RoleId> = { hooker: 'hooker', priest: 'priest', bodyguard: 'bodyguard', witch: 'witch' };
+
+/** Whether an inspection exposed an enemy or cleared a teammate (or neither: no points). */
+function intelVerdict(s: GameState, action: InspectAction, actor: Player, target: Player): 'found' | 'cleared' | null {
+  const against = relationOf(s, actor, target);
+  switch (action) {
+    case 'seerInspect': {
+      const wolf = seerResult(target) === 'werewolf';
+      return wolf && against === 'enemy' ? 'found' : !wolf && against === 'ally' ? 'cleared' : null;
+    }
+    case 'auraInspect': {
+      const special = auraResult(target);
+      return special && against === 'enemy' ? 'found' : !special && against === 'ally' ? 'cleared' : null;
+    }
+    case 'piInspect': {
+      const area = [target, ...neighbors(s.players, target.id)];
+      if (piResult(s, target.id)) {
+        return area.some((x) => seerResult(x) === 'werewolf' && relationOf(s, actor, x) === 'enemy') ? 'found' : null;
+      }
+      return area.every((x) => relationOf(s, actor, x) === 'ally') ? 'cleared' : null;
+    }
+    case 'sorceressInspect':
+      return sorceressResult(target) && against === 'enemy' ? 'found' : null;
+  }
+}
+
+const INTEL: { action: InspectAction; roleId: RoleId; via: FeatSource; field: NightActionField }[] = [
+  { action: 'seerInspect', roleId: 'seer', via: 'seer', field: 'seerTarget' },
+  { action: 'auraInspect', roleId: 'auraSeer', via: 'auraSeer', field: 'auraSeerTarget' },
+  { action: 'piInspect', roleId: 'pi', via: 'pi', field: 'piTarget' },
+  { action: 'sorceressInspect', roleId: 'sorceress', via: 'sorceress', field: 'sorceressTarget' },
+];
+
+/** Tonight's inspections that told their holder something true and useful. A seduced inspector was misled, so earns nothing. */
+function recordIntel(s: GameState) {
+  for (const { action, roleId, via, field } of INTEL) {
+    const target = findPlayer(s, s.nightActions[field]);
+    if (!target || actionSeduced(s, action)) continue;
+    for (const actor of holdersOf(s, roleId)) {
+      const verdict = intelVerdict(s, action, actor, target);
+      if (verdict) pushFeats(s, [featFor(s, 'intel', actor, target, { via, found: verdict === 'found' })]);
+    }
+  }
+}
+
+/** Whoever exposed this player as an enemy sees it pay off when they're eliminated (once each). */
+function recordPayoffs(s: GameState, p: Player) {
+  const feats = s.feats ?? [];
+  const exposers = new Set(feats.filter((f) => f.kind === 'intel' && f.found && f.against === 'enemy' && f.targetId === p.id).map((f) => f.playerId));
+  for (const f of feats) if (f.kind === 'payoff' && f.targetId === p.id) exposers.delete(f.playerId);
+  pushFeats(
+    s,
+    [...exposers].flatMap((id) => {
+      const actor = findPlayer(s, id);
+      return actor ? [featFor(s, 'payoff', actor, p, { against: 'enemy' })] : [];
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Eliminations & win checks
 // ---------------------------------------------------------------------------
 
@@ -609,6 +761,8 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
   p.status.woundedRound = null;
   sink?.push({ playerId: p.id, cause });
   logVote(s, `log.eliminated.${cause}`, { name: p.name, role: p.roleId }, voters);
+  // A moderator's elimination is a ruling, not something the exposer brought about.
+  if (cause !== 'moderator') recordPayoffs(s, p);
 
   if (p.roleId === 'wolfCub') {
     s.modifiers.wolvesDoubleKill = true;
@@ -651,14 +805,18 @@ function killPlayer(s: GameState, id: string, cause: EliminationCause, when: 'ni
     const dire = s.players.find((x) => x.alive && x.roleId === 'direWolf');
     if (dire) killPlayer(s, dire.id, 'linked', when, sink);
   }
-  if (p.roleId === 'virginiaWoolf' && s.modifiers.virginiaTarget) {
-    killPlayer(s, s.modifiers.virginiaTarget, 'linked', when, sink);
-  }
+  // Virginia Woolf and the Hunter's night link chose their player: the death is theirs.
+  const takeDown = (targetId: string, via: FeatSource) => {
+    const target = findPlayer(s, targetId);
+    const credit = target?.alive ? creditFeats(s, [p], target, via) : [];
+    if (killPlayer(s, targetId, 'linked', when, sink)) pushFeats(s, credit);
+  };
+  if (p.roleId === 'virginiaWoolf' && s.modifiers.virginiaTarget) takeDown(s.modifiers.virginiaTarget, 'virginia');
   // House rule: a Hunter dying at night takes their aimed-at player — unless seduced tonight,
   // or the Priest blessed that player.
   const link = s.nightActions.hunterTarget;
   if (p.roleId === 'hunter' && rules.hunter && s.phase === 'night' && link && s.nightActions.hookerTarget !== p.id && link !== blessedPlayer(s)) {
-    killPlayer(s, link, 'linked', when, sink);
+    takeDown(link, 'hunterLink');
   }
   return true;
 }
@@ -872,6 +1030,14 @@ export function resolveNight(state: GameState): GameState {
   const report = emptyReport(s.round);
 
   logNightActions(s);
+  // Who stands behind tonight's attacks, for the credit: the wolves who hunted (as the night
+  // script woke them), the Big Bad Wolf's own strike, and the Leprechaun's blind move.
+  const pack = (buildNightSteps(s).find((x) => x.action === 'wolfKill')?.actors ?? []).flatMap((id) => findPlayer(s, id) ?? []);
+  const attackers: Record<KillDebuff, KillCredit> = {
+    wolfpackKill: { by: pack, via: 'pack' },
+    bbwKill: { by: holdersOf(s, 'bigBadWolf'), via: 'bigBadWolf' },
+  };
+  const leprechauns: KillCredit = { by: holdersOf(s, 'leprechaun'), via: 'leprechaun' };
 
   // Seductions are fixed before anything changes roles tonight (a seduced Cursed who turns
   // doesn't retroactively spoil the pack's kill).
@@ -893,11 +1059,18 @@ export function resolveNight(state: GameState): GameState {
   // A seduced Witch's potions are spent with no effect.
   const witchKill = cancelled.has('witchPotion') ? null : a.witchKillTarget;
 
-  const dying: { playerId: string; cause: EliminationCause }[] = [];
+  const dying: { playerId: string; cause: EliminationCause; credit?: KillCredit }[] = [];
   const willDie = (id: string) => dying.some((d) => d.playerId === id);
-  const doom = (id: string, cause: EliminationCause) => {
-    if (!willDie(id)) dying.push({ playerId: id, cause });
+  const doom = (id: string, cause: EliminationCause, credit?: KillCredit) => {
+    if (!willDie(id)) dying.push({ playerId: id, cause, credit });
   };
+  /** Credit now for a play that is certain (a turned Cursed, a wounded Tough Guy). */
+  const credit = (who: KillCredit | undefined, target: Player, kind: 'kill' | 'convert' = 'kill') => {
+    if (who) pushFeats(s, creditFeats(s, who.by, target, who.via, kind));
+  };
+  /** Credit for each shield that stopped an attack on `target`; `turning`: a wolf attack that would have turned the Cursed. */
+  const creditSave = (shield: DebuffShield, target: Player, turning = false) =>
+    pushFeats(s, holdersOf(s, SHIELD_ROLE[shield]).map((saver) => featFor(s, 'save', saver, target, { via: shield, ...(turning ? { turning } : {}) })));
 
   // First-night bonds.
   if (a.cupidTargets.length === 2) {
@@ -910,6 +1083,9 @@ export function resolveNight(state: GameState): GameState {
   if (a.direWolfTarget) m.direWolfCompanion = a.direWolfTarget;
   if (a.doppelgangerTarget) m.doppelgangerTarget = a.doppelgangerTarget;
   if (a.virginiaTarget) m.virginiaTarget = a.virginiaTarget;
+  // Inspectors wake after Cupid: a lover of a mixed couple already plays for the Couple. Read
+  // before anything changes roles tonight.
+  recordIntel(s);
 
   // Tough Guys wounded last night succumb now.
   for (const p of s.players) {
@@ -926,7 +1102,8 @@ export function resolveNight(state: GameState): GameState {
     const touch = (targetId: string | null, interactors: Player[]) => {
       if (!targetId || !tanners.has(targetId) || interactors.length === 0) return;
       doom(targetId, 'tanner');
-      for (const p of interactors) if (p.id !== targetId) doom(p.id, 'tanner');
+      const tanner = findPlayer(s, targetId)!;
+      for (const p of interactors) if (p.id !== targetId) doom(p.id, 'tanner', { by: [tanner], via: 'tanner' });
     };
     const acted = (roleId: RoleId, targetId: string | null) => touch(targetId, holdersOf(roleId));
     for (const id of a.cupidTargets) acted('cupid', id);
@@ -963,19 +1140,26 @@ export function resolveNight(state: GameState): GameState {
     report.metallic = ringDistance(s.players, wolverine.id, firstVictim) <= closest;
   }
 
-  for (const { targetId, lands, dispelled } of hits) {
+  for (const { targetId, debuffs, lands, dispelled } of hits) {
     const p = findPlayer(s, targetId);
     if (!p?.alive || willDie(targetId)) continue;
     if (!lands) {
       // Saved — unless the attacks never happened at all (every attacker was seduced).
       if (Object.values(dispelled).some((x) => x !== 'hooker')) report.saved.push(targetId);
+      // Each shield that lifted an attack earns the save (the Hooker's too: the attack was real).
+      for (const shield of new Set(Object.values(dispelled))) creditSave(shield, p, p.roleId === 'cursed');
       continue;
     }
     const lifted = dispelled.wolfpackKill;
     if (lifted === 'bodyguard' || lifted === 'witch') pushLog(s, 'log.bigBadWolfUnstoppable', { name: p.name, role: p.roleId });
+    // The first attack that landed takes the credit. The pack never targets a wolf: one it hit
+    // was moved there by the Leprechaun, whose credit it is.
+    const landed = debuffs.find((d) => !dispelled[d]);
+    const by = landed === 'wolfpackKill' && isWolfPlayer(p) ? leprechauns : landed ? attackers[landed] : undefined;
     // However many debuffs land, it is one wolf attack: a Cursed turns once, a Tough Guy is
     // wounded once, and anyone else dies.
     if (p.roleId === 'cursed') {
+      credit(by, p, 'convert');
       p.roleId = 'werewolf';
       p.status.transformed = true;
       report.transformed.push(p.id);
@@ -985,23 +1169,29 @@ export function resolveNight(state: GameState): GameState {
       continue;
     }
     if (p.roleId === 'toughGuy' && p.status.woundedRound === null) {
+      // His death after the next night is certain: the attackers have their kill now.
+      credit(by, p);
+      pushFeats(s, [featFor(s, 'toughGuy', p)]);
       p.status.woundedRound = s.round;
       report.wounded.push(p.id);
       pushLog(s, 'log.toughGuyWounded', { name: p.name, role: p.roleId });
       continue;
     }
-    doom(targetId, 'wolves');
+    doom(targetId, 'wolves', by);
     if (p.roleId === 'diseased') {
       m.wolvesSkipNextNight = true;
+      pushFeats(s, [featFor(s, 'diseased', p)]);
       pushLog(s, 'log.diseasedEaten');
     }
   }
 
   // Poison goes straight past the Bodyguard, but not the Priest's blessing.
+  const poisoned = findPlayer(s, witchKill);
   if (witchKill && witchKill === blessed) {
     if (!report.saved.includes(witchKill)) report.saved.push(witchKill);
+    if (poisoned?.alive) creditSave('priest', poisoned);
   } else if (witchKill) {
-    doom(witchKill, 'witch');
+    doom(witchKill, 'witch', { by: holdersOf(s, 'witch'), via: 'witch' });
   }
   // Powers spent tonight stay spent, even if a seduction made them fizzle.
   if (a.witchSaveTarget) m.witchHealUsed = true;
@@ -1023,6 +1213,9 @@ export function resolveNight(state: GameState): GameState {
     bitten.status.vampireMarked = true;
     report.vampireMarked = bitten.id;
   }
+  // A Hooker who seduced the biting Vampire saved their victim.
+  const spared = cancelled.has('vampireBite') ? findPlayer(s, a.vampireTarget) : undefined;
+  if (spared?.alive && !willDie(spared.id)) creditSave('hooker', spared);
   const hushed = cancelled.has('spellcasterSilence') ? undefined : findPlayer(s, a.spellcasterTarget);
   if (hushed?.alive) {
     hushed.status.silenced = true;
@@ -1037,6 +1230,7 @@ export function resolveNight(state: GameState): GameState {
   m.oldHagLastTarget = exiled?.alive ? exiled.id : null;
   const recruit = cancelled.has('cultRecruit') ? undefined : findPlayer(s, a.cultTarget);
   if (recruit?.alive) {
+    if (!recruit.status.inCult) credit({ by: holdersOf(s, 'cultLeader'), via: 'cult' }, recruit, 'convert');
     recruit.status.inCult = true;
     report.recruited = recruit.id;
   }
@@ -1051,7 +1245,13 @@ export function resolveNight(state: GameState): GameState {
   }
   m.bodyguardLastTarget = a.bodyguardTarget;
 
-  for (const d of dying) killPlayer(s, d.playerId, d.cause, 'night', report.deaths);
+  for (const d of dying) {
+    const victim = findPlayer(s, d.playerId);
+    // Built before the death (it may change roles: an Apprentice, a Doppelgänger); kept only if
+    // this cause really took them, not a broken heart a moment earlier.
+    const feats = d.credit && victim?.alive ? creditFeats(s, d.credit.by, victim, d.credit.via) : [];
+    if (killPlayer(s, d.playerId, d.cause, 'night', report.deaths)) pushFeats(s, feats);
+  }
   for (const p of s.players) p.status.protected = false;
 
   s.lastReport = report;
@@ -1244,8 +1444,12 @@ export function nominate(state: GameState, accusedId: string): GameState {
   const s = clone(state);
   if (!s.modifiers.vampireTriggeredToday) {
     s.modifiers.vampireTriggeredToday = true;
+    // The Vampires share the credit for each victim, like the pack.
+    const vampires = holdersOf(s, 'vampire');
     for (const p of s.players) {
-      if (p.alive && p.status.vampireMarked) killPlayer(s, p.id, 'vampire', 'day');
+      if (!p.alive || !p.status.vampireMarked) continue;
+      const feats = creditFeats(s, vampires, p, 'vampire');
+      if (killPlayer(s, p.id, 'vampire', 'day')) pushFeats(s, feats);
     }
   }
   s.dayStep = 'voting';
@@ -1253,6 +1457,7 @@ export function nominate(state: GameState, accusedId: string): GameState {
   if (accused?.alive && !accused.status.banished) {
     if (unrevealedPrince(accused)) {
       accused.status.princeRevealed = true;
+      pushFeats(s, [featFor(s, 'prince', accused)]);
       pushLog(s, 'log.princeNominated', { name: accused.name, role: 'prince' });
       spendElimination(s, accused.id);
     } else {
@@ -1270,11 +1475,23 @@ export function setVoters(state: GameState, nominationId: string, voters: string
   return s;
 }
 
-/** Logs accusations that end without a vote, so the timeline still shows them. */
+/**
+ * Voters who chose to vote. The Village Idiot's vote is forced by his card, so it neither earns
+ * nor costs him anything, and doesn't make an accusation count.
+ */
+const freeVoters = (s: GameState, nom: Nomination): Player[] =>
+  nom.voters.flatMap((id) => findPlayer(s, id) ?? []).filter((p) => p.roleId !== 'villageIdiot');
+
+/**
+ * Logs accusations that end without a vote, so the timeline still shows them. An accused who
+ * drew real votes and still walks away talked their way out of it.
+ */
 function logWithdrawn(s: GameState, noms: readonly Nomination[]) {
   for (const nom of noms) {
     const accused = findPlayer(s, nom.accusedId);
-    if (accused) pushLog(s, 'log.accusationWithdrawn', { name: accused.name, role: accused.roleId });
+    if (!accused) continue;
+    pushLog(s, 'log.accusationWithdrawn', { name: accused.name, role: accused.roleId });
+    if (accused.alive && freeVoters(s, nom).length > 0) pushFeats(s, [featFor(s, 'escape', accused)]);
   }
 }
 
@@ -1294,9 +1511,12 @@ export function executeNomination(state: GameState, nominationId: string): GameS
   // revealed by the vote instead.
   if (unrevealedPrince(accused)) {
     accused.status.princeRevealed = true;
+    pushFeats(s, [featFor(s, 'prince', accused)]);
     logVote(s, 'log.princeRevealed', { name: accused.name, role: 'prince' }, votersOf(s, nom));
   } else {
-    killPlayer(s, accused.id, 'vote', 'day', undefined, votersOf(s, nom));
+    // Every voter shares the result: an enemy out is a good vote, a teammate out a bad one.
+    const votes = freeVoters(s, nom).map((voter) => featFor(s, 'vote', voter, accused));
+    if (killPlayer(s, accused.id, 'vote', 'day', undefined, votersOf(s, nom))) pushFeats(s, votes);
   }
   s.nominations = s.nominations.filter((n) => n.id !== nominationId);
   spendElimination(s, accused.id);
@@ -1314,8 +1534,13 @@ export function closeDayWithoutExecution(state: GameState): GameState {
 
 export function resolveHunterShot(state: GameState, triggerId: string, targetId: string | null): GameState {
   const s = clone(state);
+  const hunter = findPlayer(s, s.pendingTriggers.find((t) => t.id === triggerId)?.sourcePlayerId);
   s.pendingTriggers = s.pendingTriggers.filter((t) => t.id !== triggerId);
-  if (targetId) killPlayer(s, targetId, 'hunter', s.phase === 'day' ? 'day' : 'night');
+  const target = findPlayer(s, targetId);
+  if (target) {
+    const feats = hunter && target.alive ? creditFeats(s, [hunter], target, 'hunter') : [];
+    if (killPlayer(s, target.id, 'hunter', s.phase === 'day' ? 'day' : 'night')) pushFeats(s, feats);
+  }
   return finalize(s);
 }
 

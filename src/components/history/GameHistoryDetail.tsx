@@ -1,9 +1,13 @@
 import clsx from 'clsx';
-import { Repeat, Sparkles } from 'lucide-react';
+import { HelpCircle, Repeat, ScrollText, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import type { GameRecord, WinTeam } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
+import { recordScoreBoard } from '../../utils/scoring';
 import { TimelineView } from '../game/TimelineView';
+import { PickLine, Scoreboard } from '../scoring/Scoreboard';
+import { ScoringGuide } from '../scoring/ScoringGuide';
 import { TONES } from '../shared/tones';
 import { Button, Chip, RoleBadge, SectionTitle, Sheet } from '../shared/ui';
 
@@ -28,16 +32,21 @@ export function useGameDate() {
 
 interface GameHistoryDetailProps {
   game: GameRecord | null;
+  /** The game just ended and its MVP isn't revealed yet: its scores stay hidden until the moderator's blind pick. */
+  awaitingPick?: boolean;
   onClose: () => void;
   /** "Start new game from lineup": the same players, seats and cards, opened on the Deal step. */
   onReplay: (game: GameRecord) => void;
 }
 
 /** Breakdown of a finished game: result, the roster in seat order and the full timeline. */
-export function GameHistoryDetail({ game, onClose, onReplay }: GameHistoryDetailProps) {
+export function GameHistoryDetail({ game, awaitingPick = false, onClose, onReplay }: GameHistoryDetailProps) {
   const { t } = useI18n();
   const fmt = useGameDate();
   const roster = game ? [...game.players].sort((a, b) => a.seat - b.seat) : [];
+  const board = useMemo(() => (game ? recordScoreBoard(game) : null), [game]);
+  const picked = game?.mvpPick ? game.players.find((p) => p.id === game.mvpPick) : undefined;
+  const [guide, setGuide] = useState(false);
 
   return (
     <Sheet open={!!game} onClose={onClose} title={game ? t(`win.${game.winner}`) : ''} closeLabel={t('settings.close')}>
@@ -82,11 +91,43 @@ export function GameHistoryDetail({ game, onClose, onReplay }: GameHistoryDetail
           </div>
 
           <div>
+            <SectionTitle
+              aside={
+                board && (
+                  <button type="button" onClick={() => setGuide(true)} className="flex items-center gap-1 text-xs text-bone-dim hover:text-bone">
+                    <HelpCircle className="h-3.5 w-3.5" />
+                    {t('mvp.howTo')}
+                  </button>
+                )
+              }
+            >
+              {t('mvp.scoreboard')}
+            </SectionTitle>
+            {board ? (
+              <div className="space-y-2">
+                {board.fromTimeline ? (
+                  <p className="flex items-start gap-1.5 text-sm text-bone-dim">
+                    <ScrollText className="mt-0.5 h-4 w-4 shrink-0 text-ember" />
+                    {t('mvp.fromTimeline')}
+                  </p>
+                ) : (
+                  // A game left before the reveal never got a pick: it counts as none.
+                  <PickLine name={picked?.name ?? null} counted={board.ranking.some((s) => s.picked)} points={board.pickPoints} />
+                )}
+                <Scoreboard board={board} />
+              </div>
+            ) : (
+              <p className="text-sm text-bone-faint">{t(awaitingPick ? 'mvp.awaitingPick' : 'mvp.noScores')}</p>
+            )}
+          </div>
+
+          <div>
             <SectionTitle>{t('dash.log')}</SectionTitle>
             <TimelineView log={game.log} />
           </div>
         </div>
       )}
+      {board && <ScoringGuide open={guide} onClose={() => setGuide(false)} pickPoints={board.pickPoints} />}
     </Sheet>
   );
 }

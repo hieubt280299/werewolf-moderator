@@ -103,6 +103,11 @@ export function useGameEngine() {
         playCue('death');
       },
       revive: (playerId: string) => dispatch({ type: 'REVIVE', playerId }),
+      /** The moderator's blind pick for the MVP bonus, from the winning side (null: no pick). Reveals the MVP; final. */
+      setMvpPick: (playerId: string | null) => {
+        dispatch({ type: 'SET_MVP_PICK', playerId });
+        playCue('dawn');
+      },
       rematch: (rules?: Partial<RebalanceRules> | null) => dispatch({ type: 'REMATCH', rules }),
       newGame: () => dispatch({ type: 'NEW_GAME' }),
       undo: () => dispatch({ type: 'UNDO' }),

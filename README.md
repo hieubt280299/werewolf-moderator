@@ -4,7 +4,7 @@ Mobile-first moderator companion for **Ultimate Werewolf** (Deluxe base and expa
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5280
 npm test           # rules engine, balancer, swap/vote/timeline tests
 npm run build      # typecheck + production build (deploy dist/ to Vercel)
 ```

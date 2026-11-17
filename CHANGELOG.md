@@ -3,6 +3,37 @@
 All notable changes to Werewolf Gamemaster are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - Unreleased
+
+### Added
+- **MVP award.** Every finished game ends with an MVP: the player with the highest score.
+  - **Scores are counted as the game is played.** The rules engine records each scoring play (a feat) when it resolves, with the player, the target and whether they were on the same side then. Points are worked out from these at the end (`utils/scoring.ts`), so the formula can be tuned without touching saved games.
+  - **Score = Result + Kills + Saves + Intel + Votes + Moderator's pick.**
+    - Result: on the winning side +8, alive at the end +4.
+    - Kills and saves are worth what the target is to their own team: 4, plus half the card's balance weight rounded up, with the sign turned round for the Werewolves and other non-Village cards (3 to 9). A Village card that helps the Werewolves on balance is worth less than a plain Villager: Cupid, Cursed and Troublemaker 3, Villager 5, Bodyguard 6, Werewolf 7, Seer 8, Big Bad Wolf 9. Taking out a teammate costs the same. The pack and the Vampires share each kill. Turning the Cursed is worth a Werewolf (one Villager fewer, one Werewolf more); a Cult recruit +3.
+    - Saves: Bodyguard, Healing Potion, Priest, or the Hooker seducing the attacker. Saving an enemy (the Bodyguard guarding the Big Bad Wolf the Leprechaun moved the attack onto, say) costs half their value, rounded: protectors choose blind. Saving the Cursed from the Werewolves is worth a Werewolf too. Diseased eaten +5, Tough Guy holds on +2, Prince revealed +3. Every saving power belongs to the Village; a protector Cupid links to a Werewolf saves for the Couple.
+    - Intel: exposing an enemy (Seer and P.I. +4, Aura Seer +2, Sorceress finding the Seer +4), clearing a teammate +1 (P.I. +2), and +2 more when an exposed enemy is eliminated. A seduced inspector earns nothing, and so does a reading the cards make wrong: the Seer seeing the Wolf Man as a Villager or the Lycan as a Werewolf neither earns nor costs anything. The Aura Seer does read the Wolf Man as not ordinary: an enemy found.
+    - Votes: each elimination you voted for, enemy +3 (+4 for roles with no power of their own), teammate −2. The Werewolf team (the Minion, Sorceress and Lone Wolf too) knows its enemies, so its votes earn less: enemy +2, packmate 0, since voting one out can be cover. Handing the standard Tanner his win costs anyone −2. Drawing votes and surviving the accusation +2. The Village Idiot's forced vote doesn't count.
+    - Moderator's pick: +5, plus 1 per round, up to 12 (+10 in a 5-round game).
+  - The MVP needs more than zero points. A tie goes to the winning side; an exact tie gives co-MVPs.
+  - **A mixed couple is its own team** from the moment Cupid links them (a Werewolf and a Villager, say). Each lover's old team becomes the enemy: a Werewolf lover who votes out his old packmate earns for an enemy, and a Seer who sees him as a Werewolf has exposed an enemy. Only the lovers can be picked when the Couple wins. Cupid plays for the Village, so the Couple's win isn't his. Deaths of a broken heart earn no one anything.
+- **The MVP ceremony** on the game-over screen.
+  - First, the moderator's pick: the player on the winning side who convinced the table and led their team best, or **Nobody stood out**, and the MVP comes from the scores alone. It's a blind pick, judged on play at the table: no score is shown anywhere before it, History included. After a draw there is no pick.
+  - **Reveal the MVP** asks for confirmation first, then shows the MVP's card and the full scoreboard. Tap a player for every play behind their score. **How scores work** explains it in plain words, on one screen: the points for each kind of play, what a player is worth (with six roles as examples), then a few worked examples. Its numbers come from the scoring itself.
+  - The pick is made once per game. It can't be changed after the reveal (that would no longer be blind), and Undo or Revive don't take it back: a game that ends again keeps it. Should the player no longer be on the winning side then, the pick earns nothing.
+  - **Continue game** on the hub stays open for a finished game until its MVP is revealed.
+- **History:** each game's scoreboard and pick in its breakdown, "MVP: name" in the game list, and an **MVP with highest score** record: the best MVP score in any game, opening that game.
+  - **Games recorded before this version are scored too, with no moderator's pick.** They kept no scoring plays, but their timeline names every night call, vote and death. The game is replayed from it through today's rules engine, which records the plays as it would live. It plays on where today's win check would have ended a game the rules of its time didn't, and the result must match the record: every player alive or dead, with the same role. A game that doesn't match shows no scores rather than wrong ones.
+  - What a timeline can't tell is left out: voters on an accusation that was withdrawn (so no points for surviving one), and before v1.1.0 the voters at all (those timelines name the accusers instead).
+
+### Changed
+- **Night-1 inspections see the Couple.** The Seer and other inspectors wake after Cupid, so their reading is now scored against the teams as they stand once the lovers are linked.
+- **The dev server runs on port 5280** (`npm run dev` → http://localhost:5280), away from Vite's default 5173. It stops with an error if 5280 is taken, rather than moving to another port.
+
+### Fixed
+- **Offline, ending a game could freeze the app.** Recording the game updated the profile, which re-ran the recording before the game was marked as recorded, over and over ("Maximum update depth exceeded"). Each version of a game's record is now written once.
+- **History no longer scrolls sideways on phones.** A record with several tied holders (three "Most played" roles, say) widened the whole page past the screen. That row now scrolls inside its card, as it was meant to.
+
 ## [1.3.0] - Unreleased
 
 Implements [`UPDATE_v1.3.0.md`](UPDATE_v1.3.0.md).

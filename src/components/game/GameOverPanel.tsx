@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n/I18nContext';
 import { RoleCard } from '../shared/RoleCard';
 import { TONES, type Tone } from '../shared/tones';
 import { Button, SectionTitle } from '../shared/ui';
+import { MvpCeremony } from './MvpCeremony';
 
 const TEAM_TONE: Record<WinTeam, Tone | null> = {
   village: TONES.village,
@@ -40,6 +41,8 @@ export function GameOverPanel({ winner }: { winner: WinResult }) {
         <Trophy className="mx-auto mb-2 h-10 w-10 text-bone" style={{ filter: tone ? `drop-shadow(0 0 10px ${tone.glow})` : undefined }} />
         <h2 className="text-3xl uppercase tracking-grimoire text-bone text-shadow-title sm:text-4xl">{t(`win.${winner.team}`)}</h2>
       </div>
+
+      <MvpCeremony />
 
       <div>
         <SectionTitle>{t('win.reveal')}</SectionTitle>

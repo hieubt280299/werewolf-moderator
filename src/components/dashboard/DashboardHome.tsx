@@ -14,6 +14,8 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
   const { profile } = useAuth();
   const { state, dispatch } = useGame();
   const active = isActiveGame(state);
+  // A finished game whose MVP isn't revealed yet can still be opened, to make the pick.
+  const awaitingMvp = state.phase === 'gameOver' && state.mvpPick === undefined;
   const stats = profile?.stats;
 
   const startNew = () => {
@@ -27,7 +29,9 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
         alive: state.players.filter((p) => p.alive).length,
         total: state.players.length,
       })}`
-    : t('hub.continueNone');
+    : awaitingMvp
+      ? t('hub.continueMvp')
+      : t('hub.continueNone');
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 pb-16 pt-6">
@@ -61,7 +65,7 @@ export function DashboardHome({ onNavigate, onOpenSettings }: { onNavigate: (vie
           icon={<Play className="h-6 w-6" />}
           title={t('hub.continue')}
           hint={continueHint}
-          disabled={!active}
+          disabled={!active && !awaitingMvp}
           onClick={() => onNavigate('game')}
           delay={140}
         />

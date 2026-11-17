@@ -1,5 +1,6 @@
 import type { GameRecord, LifetimeStats, RoleId } from '../@types/game';
 import { ROLE_ORDER } from '../data/roles';
+import { recordScoreBoard } from './scoring';
 
 /** Tied records beyond this many are counted but not shown. */
 export const MAX_TIED = 3;
@@ -35,6 +36,29 @@ export interface HistoryRecords {
   /** Most nights played. */
   longest: Leaderboard<GameRecord> | null;
   biggest: Leaderboard<GameRecord> | null;
+  /** The highest-scoring MVP of any game (v1.4.0). */
+  topMvp: Leaderboard<MvpScore> | null;
+}
+
+/** A game's MVP and their score. */
+export interface MvpScore {
+  game: GameRecord;
+  name: string;
+  roleId: RoleId;
+  total: number;
+}
+
+/** The MVP of a recorded game (more than one on a tie); empty for games that can't be scored. */
+export function mvpNames(game: GameRecord): string[] {
+  return mvpScores(game).map((m) => m.name);
+}
+
+/** A recorded game's MVPs with their scores (co-MVPs share one). */
+export function mvpScores(game: GameRecord): MvpScore[] {
+  const board = recordScoreBoard(game);
+  if (!board) return [];
+  const ids = new Set(board.mvpIds);
+  return board.ranking.filter((s) => ids.has(s.player.id)).map((s) => ({ game, name: s.player.name, roleId: s.player.roleId, total: s.total }));
 }
 
 export type WinShareKey = 'werewolf' | 'village' | 'other';
@@ -123,5 +147,6 @@ export function historyRecords(games: readonly GameRecord[]): HistoryRecords {
     ),
     longest: leaders(games, (g) => g.rounds),
     biggest: leaders(games, (g) => g.players.length),
+    topMvp: leaders(games.flatMap(mvpScores), (m) => m.total),
   };
 }
