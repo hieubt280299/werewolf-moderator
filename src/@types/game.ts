@@ -368,6 +368,81 @@ export interface WinResult {
   winnerIds: string[];
 }
 
+// ---------------------------------------------------------------------------
+// MVP scoring (v1.4.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * A scored play, recorded the moment it happens. Points are worked out from these at the
+ * end (utils/scoring), so the formula can change without touching saved games.
+ */
+export type FeatKind =
+  /** A power of yours eliminated a player (a wounded Tough Guy counts: his death is certain). */
+  | 'kill'
+  /** The pack turned the Cursed; the Cult Leader recruited a player. */
+  | 'convert'
+  /** A shield of yours stopped an attack that would have landed. */
+  | 'save'
+  /** An inspection exposed an enemy (`found`) or cleared a teammate. */
+  | 'intel'
+  /** An enemy you exposed was eliminated later. */
+  | 'payoff'
+  /** You voted for a player who was eliminated. */
+  | 'vote'
+  /** You were put to the vote, someone voted against you, and you survived it. */
+  | 'escape'
+  // Passive abilities that buy the team time.
+  | 'diseased'
+  | 'toughGuy'
+  | 'prince';
+
+/** The power behind a feat. */
+export type FeatSource =
+  | 'pack'
+  | 'bigBadWolf'
+  | 'witch'
+  | 'hunter'
+  | 'hunterLink'
+  | 'vampire'
+  | 'virginia'
+  | 'tanner'
+  | 'leprechaun'
+  | 'cult'
+  | 'bodyguard'
+  | 'priest'
+  | 'hooker'
+  | 'seer'
+  | 'auraSeer'
+  | 'pi'
+  | 'sorceress';
+
+/**
+ * Whom a play was against, at the time: an `enemy`, a teammate (`ally`), or the standard
+ * Tanner, who wins by being eliminated (`tanner`).
+ */
+export type FeatRelation = 'enemy' | 'ally' | 'tanner';
+
+export interface Feat {
+  kind: FeatKind;
+  round: number;
+  phase: 'night' | 'day';
+  /** Who earns (or loses) the points. */
+  playerId: string;
+  /** Their role at the time (a Doppelgänger may have become a Seer). */
+  actorRole: RoleId;
+  targetId?: string;
+  /** The target's role at the time. */
+  targetRole?: RoleId;
+  against?: FeatRelation;
+  via?: FeatSource;
+  /** Intel: the inspection exposed an enemy (true) or cleared a teammate (false). */
+  found?: boolean;
+  /** The pack's (or the Vampires') kill, split between this many players. */
+  shared?: number;
+  /** A save from a wolf attack on the Cursed, which would have turned them into a Werewolf. */
+  turning?: boolean;
+}
+
 export interface SetupDraft {
   names: string[];
   deck: RoleId[];
@@ -416,6 +491,17 @@ export interface GameState {
    * the Role Pool, dealt or not, so the table can't tell which roles are in play.
    */
   fullPoolCalls: boolean;
+  /** Scored plays so far, for the MVP award (v1.4.0). */
+  feats: Feat[];
+  /**
+   * The moderator's pick for the bonus: the player on the winning side who convinced and led
+   * the table best, chosen blind (no score is shown before it). Undefined until the moderator
+   * decides; the MVP is revealed then. Made once per game: Undo and Revive keep it. Null for
+   * no pick (nobody stood out, or nobody won).
+   */
+  mvpPick?: string | null;
+  /** When the game ended (kept when the record is rewritten after the MVP pick). */
+  finishedAt?: number | null;
   /** Set once the finished game has been written to the moderator's history. */
   recordedAt?: number | null;
   createdAt: number;
@@ -477,6 +563,8 @@ export interface UserProfile {
 }
 
 export interface GameRecordPlayer {
+  /** The player's id in the game, which feats refer to. Missing on games before v1.4.0. */
+  id?: string;
   name: string;
   seat: number;
   roleId: RoleId;
@@ -498,6 +586,10 @@ export interface GameRecord {
   /** Seat indexes of the winning players. */
   winnerSeats: number[];
   log: GameLogEntry[];
+  /** Scored plays, for the scoreboard and the MVP. Missing on games before v1.4.0. */
+  feats?: Feat[];
+  /** The moderator's pick (a player id); null for none, missing if never decided. */
+  mvpPick?: string | null;
 }
 
 export type { SessionUser } from './auth';

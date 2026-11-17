@@ -1,13 +1,13 @@
 import clsx from 'clsx';
-import { ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Award, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import type { GameRecord } from '../../@types/game';
 import type { View } from '../../App';
 import { useAuth } from '../../context/AuthContext';
 import { isActiveGame, useGame } from '../../context/GameContext';
 import { useI18n } from '../../i18n/I18nContext';
 import { checkLineup, lineupSetup } from '../../utils/gameCalculations';
-import { winShares, type WinShareKey } from '../../utils/historyAnalytics';
+import { mvpNames, winShares, type WinShareKey } from '../../utils/historyAnalytics';
 import { GameHistoryDetail, TEAM_CHIP, useGameDate } from '../history/GameHistoryDetail';
 import { AdvancedStatsPanel } from '../statistics/AdvancedStatsPanel';
 import { Chip, RoleBadge, SectionTitle } from '../shared/ui';
@@ -43,6 +43,12 @@ export function HistoryStats({ onNavigate }: { onNavigate: (view: View) => void 
   }, [listGames]);
 
   const shares = stats ? winShares(stats) : [];
+  // The game on the game-over screen whose MVP isn't revealed yet keeps its scores out of
+  // History until then: the moderator's pick is made blind.
+  const unrevealed = state.phase === 'gameOver' && state.mvpPick === undefined ? state.id : null;
+  const shown = useMemo(() => games?.map((g) => (g.id === unrevealed ? { ...g, feats: undefined } : g)) ?? null, [games, unrevealed]);
+  const mvps = useMemo(() => new Map((shown ?? []).map((g) => [g.id, mvpNames(g)])), [shown]);
+  const openShown = open ? (shown?.find((g) => g.id === open.id) ?? open) : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 pb-16 pt-6">
@@ -76,7 +82,7 @@ export function HistoryStats({ onNavigate }: { onNavigate: (view: View) => void 
         </section>
       )}
 
-      {games && games.length > 0 && <AdvancedStatsPanel games={games} onOpenGame={setOpen} />}
+      {shown && shown.length > 0 && <AdvancedStatsPanel games={shown} onOpenGame={setOpen} />}
 
       <section>
         <SectionTitle>{t('history.recent')}</SectionTitle>
@@ -100,6 +106,12 @@ export function HistoryStats({ onNavigate }: { onNavigate: (view: View) => void 
                     {t('history.players', { count: g.players.length })} · {t('history.rounds', { count: g.rounds })}
                     {g.poolName && ` · ${t('history.pool', { name: g.poolName })}`}
                   </p>
+                  {!!mvps.get(g.id)?.length && (
+                    <p className="flex min-w-0 items-center gap-1 text-xs font-semibold text-ember">
+                      <Award className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{t('mvp.historyChip', { names: mvps.get(g.id)!.join(', ') })}</span>
+                    </p>
+                  )}
                   <div className="flex -space-x-1.5">
                     {g.players.slice(0, 12).map((p) => (
                       <RoleBadge key={p.seat} roleId={p.roleId} size={22} dead={!p.alive} />
@@ -113,7 +125,7 @@ export function HistoryStats({ onNavigate }: { onNavigate: (view: View) => void 
         </ul>
       </section>
 
-      <GameHistoryDetail game={open} onClose={() => setOpen(null)} onReplay={replay} />
+      <GameHistoryDetail game={openShown} awaitingPick={!!open && open.id === unrevealed} onClose={() => setOpen(null)} onReplay={replay} />
     </div>
   );
 }

@@ -50,6 +50,12 @@ export default defineConfig({
       },
     }),
   ],
+  // A fixed dev port, away from Vite's default 5173 (used by another app on the moderator's
+  // machine). strictPort: fail loudly rather than drift to another port.
+  server: {
+    port: 5280,
+    strictPort: true,
+  },
   build: {
     rollupOptions: {
       output: {

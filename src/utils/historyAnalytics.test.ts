@@ -123,7 +123,7 @@ describe('historyRecords', () => {
   });
 
   it('has no records without games', () => {
-    expect(historyRecords([])).toEqual({ mostPlayed: null, mostWins: null, bestRate: null, longest: null, biggest: null });
+    expect(historyRecords([])).toEqual({ mostPlayed: null, mostWins: null, bestRate: null, longest: null, biggest: null, mostMvps: null });
   });
 });
 

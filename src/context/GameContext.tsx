@@ -12,7 +12,6 @@ import {
 } from 'react';
 import {
   NO_REBALANCES,
-  type GameModifiers,
   type GameState,
   type NightActionField,
   type NightTargetListField,
@@ -54,6 +53,8 @@ export type GameAction =
   /** A fresh game from a past game's lineup (names, seats, cards), opened on the Deal board. */
   | { type: 'LOAD_LINEUP'; setup: Partial<SetupDraft> }
   | { type: 'HYDRATE'; state: GameState }
+  /** The moderator's blind pick for the MVP bonus, from the winning side (null: no pick). Reveals the MVP; final. */
+  | { type: 'SET_MVP_PICK'; playerId: string | null }
   | { type: 'MARK_RECORDED' }
   | { type: 'UNDO' };
 
@@ -74,26 +75,6 @@ const DEFAULT_POOL: RoleId[] = [
 // State
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MODIFIERS: GameModifiers = {
-  wolvesSkipNextNight: false,
-  wolvesDoubleKill: false,
-  bodyguardLastTarget: null,
-  oldHagLastTarget: null,
-  witchHealUsed: false,
-  witchKillUsed: false,
-  vampireTriggeredToday: false,
-  direWolfCompanion: null,
-  doppelgangerTarget: null,
-  virginiaTarget: null,
-  priestUsed: false,
-  piUsed: false,
-  troublemakerUsed: false,
-  extraExecution: false,
-  tannerWinner: null,
-  hookerVisited: [],
-  pendingAwakenings: [],
-};
-
 export function createInitialState(setup?: Partial<SetupDraft>): GameState {
   const now = Date.now();
   return {
@@ -106,7 +87,7 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
     deck: [],
     nightStepIndex: 0,
     nightActions: rules.emptyNightActions(),
-    modifiers: { ...DEFAULT_MODIFIERS, hookerVisited: [], pendingAwakenings: [] },
+    modifiers: rules.emptyModifiers(),
     lastReport: null,
     nominations: [],
     executedToday: null,
@@ -123,6 +104,7 @@ export function createInitialState(setup?: Partial<SetupDraft>): GameState {
     },
     rules: { ...NO_REBALANCES },
     fullPoolCalls: false,
+    feats: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -147,8 +129,10 @@ export function normalizeGameState(s: GameState): GameState {
     // Games dealt before house rules existed play by the standard rules.
     rules: { ...NO_REBALANCES, ...s.rules },
     fullPoolCalls: s.fullPoolCalls ?? false,
+    // Games saved before v1.4.0 score from here on.
+    feats: s.feats ?? [],
     nightActions: { ...rules.emptyNightActions(), ...nightActions },
-    modifiers: { ...DEFAULT_MODIFIERS, ...s.modifiers },
+    modifiers: { ...rules.emptyModifiers(), ...s.modifiers },
     lastReport: s.lastReport ? { ...rules.emptyReport(s.lastReport.round), ...s.lastReport } : null,
     players: s.players.map((p) => ({ ...p, status: { ...EMPTY_STATUS, ...p.status } })),
     nominations: s.nominations ?? [],
@@ -171,7 +155,17 @@ function withNightActions(state: GameState, patch: Partial<GameState['nightActio
   return next;
 }
 
+/**
+ * Stamps the moment a game ends. Each time it ends (again, after a revive or an undo) the
+ * record is rewritten. The moderator's pick is made once per game and stays.
+ */
 export function gameReducer(state: GameState, action: GameAction): GameState {
+  const next = reduceGame(state, action);
+  if (next === state || next.phase !== 'gameOver' || state.phase === 'gameOver' || action.type === 'HYDRATE') return next;
+  return { ...next, finishedAt: Date.now(), recordedAt: null };
+}
+
+function reduceGame(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'UPDATE_SETUP': {
       const setup = { ...state.setup, ...action.patch };
@@ -246,6 +240,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return createInitialState({ experience: state.setup.experience, previousDeck: lastDeck(state), ...action.setup });
     case 'HYDRATE':
       return normalizeGameState(action.state);
+    case 'SET_MVP_PICK':
+      // A blind pick, from the winning side, made once: the scores are shown with it, so a
+      // second pick would no longer be blind.
+      if (state.phase !== 'gameOver' || state.mvpPick !== undefined) return state;
+      if (action.playerId !== null && !state.winner?.winnerIds.includes(action.playerId)) return state;
+      // Cleared so the history record is written again with the pick.
+      return { ...state, mvpPick: action.playerId, recordedAt: null };
     case 'MARK_RECORDED':
       return { ...state, recordedAt: Date.now() };
     case 'UNDO':
@@ -253,15 +254,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   }
 }
 
-interface History {
+export interface History {
   past: GameState[];
   present: GameState;
 }
 
-function historyReducer(history: History, action: GameAction): History {
+export function historyReducer(history: History, action: GameAction): History {
   if (action.type === 'UNDO') {
     const previous = history.past[history.past.length - 1];
-    return previous ? { past: history.past.slice(0, -1), present: previous } : history;
+    if (!previous) return history;
+    // The moderator's pick can't be undone: it comes back with the same game.
+    const { present } = history;
+    const keep = present.id === previous.id && present.mvpPick !== undefined ? { mvpPick: present.mvpPick } : {};
+    return { past: history.past.slice(0, -1), present: { ...previous, ...keep } };
   }
   if (action.type === 'HYDRATE') return { past: [], present: normalizeGameState(action.state) };
 
@@ -361,14 +366,31 @@ export function GameProvider({ uid, children }: { uid: string; children: ReactNo
     return () => window.clearTimeout(syncTimer.current);
   }, [cloud, uid, present]);
 
-  // Write finished games to history (and lifetime stats) once.
+  // Write finished games to history (and lifetime stats) once, and again with the MVP pick.
+  // Writes run one after another: the store reads the previous record to keep stats right,
+  // so a second write must not start before the first has landed.
+  //
+  // `recordGame` is read through a ref, and each version of the record is written only once.
+  // Writing updates the profile's stats, which gives `recordGame` a new identity. Offline, the
+  // write lands within the click that ended the game (or made the pick), so that profile update
+  // renders before MARK_RECORDED does. As a dependency, it re-ran this effect with the game
+  // still unmarked, wrote again, and looped.
+  const recordQueue = useRef<Promise<void>>(Promise.resolve());
+  const recordGameRef = useRef(recordGame);
+  recordGameRef.current = recordGame;
+  const lastRecorded = useRef<string | null>(null);
   useEffect(() => {
     if (present.phase !== 'gameOver' || present.recordedAt) return;
+    const version = `${present.id}:${present.finishedAt ?? ''}:${present.mvpPick === undefined ? '-' : present.mvpPick ?? 'none'}`;
+    if (lastRecorded.current === version) return;
     const record = buildGameRecord(present);
     if (!record) return;
+    lastRecorded.current = version;
     dispatch({ type: 'MARK_RECORDED' });
-    recordGame(record).catch((err: unknown) => setSyncError(err instanceof Error ? err.message : String(err)));
-  }, [present, recordGame]);
+    recordQueue.current = recordQueue.current
+      .then(() => recordGameRef.current(record))
+      .catch((err: unknown) => setSyncError(err instanceof Error ? err.message : String(err)));
+  }, [present]);
 
   const value = useMemo<GameContextValue>(
     () => ({ state: present, dispatch, canUndo: history.past.length > 0, syncError }),

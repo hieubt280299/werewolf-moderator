@@ -1,5 +1,7 @@
 import type { GameRecord, LifetimeStats, RoleId } from '../@types/game';
 import { ROLE_ORDER } from '../data/roles';
+import { nameKey } from './gameCalculations';
+import { recordScoreBoard } from './scoring';
 
 /** Tied records beyond this many are counted but not shown. */
 export const MAX_TIED = 3;
@@ -35,6 +37,54 @@ export interface HistoryRecords {
   /** Most nights played. */
   longest: Leaderboard<GameRecord> | null;
   biggest: Leaderboard<GameRecord> | null;
+  /** Most MVP awards, by player name (v1.4.0). */
+  mostMvps: Leaderboard<MvpTally> | null;
+}
+
+/** How often a player — known by name across games — was the MVP. */
+export interface MvpTally {
+  /** The name as most recently written. */
+  name: string;
+  awards: number;
+  /** Scored games they played. */
+  games: number;
+}
+
+/** The MVP of a recorded game (more than one on a tie); empty for games recorded before scoring. */
+export function mvpNames(game: GameRecord): string[] {
+  const board = recordScoreBoard(game);
+  if (!board) return [];
+  const ids = new Set(board.mvpIds);
+  return board.ranking.filter((s) => ids.has(s.player.id)).map((s) => s.player.name);
+}
+
+/**
+ * MVP awards per player over the scored games. Players are matched by name, ignoring case,
+ * extra spaces and how accents were typed. Most awards first, then from fewer games.
+ */
+export function tallyMvps(games: readonly GameRecord[]): MvpTally[] {
+  const tallies = new Map<string, MvpTally>();
+  for (const game of games) {
+    const board = recordScoreBoard(game);
+    if (!board) continue;
+    const mvps = new Set(board.mvpIds);
+    // Two players sharing a name in one game count as one appearance.
+    const seated = new Map<string, { name: string; mvp: boolean }>();
+    for (const { player } of board.ranking) {
+      const key = nameKey(player.name);
+      if (!key) continue;
+      const entry = seated.get(key) ?? { name: player.name.trim(), mvp: false };
+      entry.mvp ||= mvps.has(player.id);
+      seated.set(key, entry);
+    }
+    for (const [key, { name, mvp }] of seated) {
+      const tally = tallies.get(key) ?? { name, awards: 0, games: 0 };
+      tally.games += 1;
+      if (mvp) tally.awards += 1;
+      tallies.set(key, tally);
+    }
+  }
+  return [...tallies.values()].sort((a, b) => b.awards - a.awards || a.games - b.games || a.name.localeCompare(b.name));
 }
 
 export type WinShareKey = 'werewolf' | 'village' | 'other';
@@ -123,5 +173,6 @@ export function historyRecords(games: readonly GameRecord[]): HistoryRecords {
     ),
     longest: leaders(games, (g) => g.rounds),
     biggest: leaders(games, (g) => g.players.length),
+    mostMvps: leaders(tallyMvps(games), (m) => m.awards),
   };
 }

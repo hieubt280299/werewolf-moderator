@@ -610,12 +610,17 @@ export function buildGameRecord(state: GameState): GameRecord | null {
   return {
     id: state.id,
     startedAt: new Date(state.createdAt).toISOString(),
-    finishedAt: new Date().toISOString(),
+    // Kept when the record is written again after the MVP pick.
+    finishedAt: new Date(state.finishedAt ?? Date.now()).toISOString(),
     rounds: state.round,
     poolName: state.setup.poolName ?? null,
     pool: state.setup.pool,
     winner: state.winner.team,
+    feats: state.feats ?? [],
+    // Missing until the moderator decides; null for no pick.
+    ...(state.mvpPick !== undefined ? { mvpPick: state.mvpPick } : {}),
     players: state.players.map((p) => ({
+      id: p.id,
       name: p.name,
       seat: p.seat,
       roleId: p.roleId,

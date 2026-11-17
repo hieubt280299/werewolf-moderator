@@ -1,10 +1,10 @@
 import clsx from 'clsx';
-import { CalendarClock, Layers, Percent, Trophy, Users } from 'lucide-react';
+import { Award, CalendarClock, Layers, Percent, Trophy, Users } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { GameRecord, RoleId } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { historyRecords, MIN_WINS_FOR_RATE, percentOf, type Leaderboard, type RoleTally } from '../../utils/historyAnalytics';
+import { historyRecords, MIN_WINS_FOR_RATE, percentOf, type Leaderboard, type MvpTally, type RoleTally } from '../../utils/historyAnalytics';
 import { TEAM_CHIP, useGameDate } from '../history/GameHistoryDetail';
 import { RoleDetailSheet } from '../shared/RoleDetailSheet';
 import { TONES } from '../shared/tones';
@@ -39,7 +39,9 @@ export function AdvancedStatsPanel({ games, onOpenGame }: AdvancedStatsPanelProp
         {t('stats.title')}
       </SectionTitle>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      {/* grid-cols-1, not the implicit column: that one grows to fit a row of tied holders and
+          pushes the page wider than a phone, instead of letting the row scroll. */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <RecordBlock
           icon={<Layers className="h-4 w-4" />}
           title={t('stats.mostPlayed')}
@@ -95,6 +97,21 @@ export function AdvancedStatsPanel({ games, onOpenGame }: AdvancedStatsPanelProp
         <RecordBlock icon={<Users className="h-4 w-4" />} title={t('stats.biggest')} board={records.biggest}>
           {(g: GameRecord) => (
             <GameEntry key={g.id} game={g} onOpen={onOpenGame} primary={t('history.players', { count: g.players.length })} />
+          )}
+        </RecordBlock>
+
+        <RecordBlock icon={<Award className="h-4 w-4" />} title={t('mvp.mostAwards')} hint={t('mvp.mostAwardsHint')} board={records.mostMvps}>
+          {(m: MvpTally) => (
+            <div key={m.name} className={clsx(ENTRY, 'cursor-default hover:border-panel-edge')}>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ember/60 bg-ember/10 shadow-inner-ember">
+                <Award className="h-5 w-5 text-ember" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-display text-sm font-semibold tracking-wide text-bone">{m.name}</span>
+                <span className="block font-display text-lg font-bold leading-tight text-ember">{plural(m.awards, 'mvp.awardsOne', 'mvp.awards')}</span>
+                <span className="block text-[11px] text-bone-faint">{plural(m.games, 'stats.playedOne', 'stats.played')}</span>
+              </span>
+            </div>
           )}
         </RecordBlock>
       </div>
