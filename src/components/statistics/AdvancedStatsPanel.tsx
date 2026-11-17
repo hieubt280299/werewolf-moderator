@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { GameRecord, RoleId } from '../../@types/game';
 import { ROLES } from '../../data/roles';
 import { useI18n } from '../../i18n/I18nContext';
-import { historyRecords, MIN_WINS_FOR_RATE, percentOf, type Leaderboard, type MvpTally, type RoleTally } from '../../utils/historyAnalytics';
+import { historyRecords, MIN_WINS_FOR_RATE, percentOf, type Leaderboard, type MvpScore, type RoleTally } from '../../utils/historyAnalytics';
 import { TEAM_CHIP, useGameDate } from '../history/GameHistoryDetail';
 import { RoleDetailSheet } from '../shared/RoleDetailSheet';
 import { TONES } from '../shared/tones';
@@ -26,6 +26,7 @@ interface AdvancedStatsPanelProps {
 export function AdvancedStatsPanel({ games, onOpenGame }: AdvancedStatsPanelProps) {
   const { t } = useI18n();
   const records = useMemo(() => historyRecords(games), [games]);
+  const fmt = useGameDate();
   const [role, setRole] = useState<RoleId | null>(null);
 
   if (games.length === 0) return null;
@@ -100,18 +101,16 @@ export function AdvancedStatsPanel({ games, onOpenGame }: AdvancedStatsPanelProp
           )}
         </RecordBlock>
 
-        <RecordBlock icon={<Award className="h-4 w-4" />} title={t('mvp.mostAwards')} hint={t('mvp.mostAwardsHint')} board={records.mostMvps}>
-          {(m: MvpTally) => (
-            <div key={m.name} className={clsx(ENTRY, 'cursor-default hover:border-panel-edge')}>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ember/60 bg-ember/10 shadow-inner-ember">
-                <Award className="h-5 w-5 text-ember" />
-              </span>
+        <RecordBlock icon={<Award className="h-4 w-4" />} title={t('mvp.topScore')} board={records.topMvp}>
+          {(m: MvpScore) => (
+            <button key={`${m.game.id}:${m.name}`} type="button" onClick={() => onOpenGame(m.game)} className={ENTRY}>
+              <RoleBadge roleId={m.roleId} size={44} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-display text-sm font-semibold tracking-wide text-bone">{m.name}</span>
-                <span className="block font-display text-lg font-bold leading-tight text-ember">{plural(m.awards, 'mvp.awardsOne', 'mvp.awards')}</span>
-                <span className="block text-[11px] text-bone-faint">{plural(m.games, 'stats.playedOne', 'stats.played')}</span>
+                <span className="block font-display text-lg font-bold leading-tight text-ember">{m.total === 1 ? t('mvp.pointsOne') : t('mvp.points', { points: m.total })}</span>
+                <span className="block truncate text-[11px] text-bone-faint">{fmt(m.game.finishedAt)}</span>
               </span>
-            </div>
+            </button>
           )}
         </RecordBlock>
       </div>

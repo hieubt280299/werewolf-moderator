@@ -4,7 +4,7 @@ import { createInitialState, gameReducer, historyReducer, normalizeGameState, ty
 import { dictionaries } from '../i18n/translations';
 import { buildGameRecord, EMPTY_STATUS } from './gameCalculations';
 import * as rules from './gameRules';
-import { historyRecords, mvpNames, tallyMvps } from './historyAnalytics';
+import { historyRecords, mvpNames, mvpScores } from './historyAnalytics';
 import {
   featLineKey,
   featPoints,
@@ -479,28 +479,29 @@ describe('the MVP award', () => {
   });
 });
 
-describe('MVP hall of fame', () => {
+describe('MVP with the highest score', () => {
   /** A finished game (the Werewolf in seat 0 wins and is the MVP) with these names in seats 0–2. */
-  const played = (names: string[]) => {
+  const played = (names: string[], pick?: string) => {
     const dealt = game(['werewolf', 'villager', 'villager']);
-    const s = night({ ...dealt, id: names.join('-'), players: dealt.players.map((p, i) => ({ ...p, name: names[i] })) }, { wolfTargets: ['p1'] });
+    let s = night({ ...dealt, id: names.join('-'), players: dealt.players.map((p, i) => ({ ...p, name: names[i] })) }, { wolfTargets: ['p1'] });
+    if (pick) s = gameReducer(s, { type: 'SET_MVP_PICK', playerId: pick });
     return buildGameRecord(s)!;
   };
 
-  it('counts awards by name across games, older games included', () => {
-    const first = played(['An', 'Bình', 'Chi']);
-    const second = played([' an ', 'Bình', 'Dũng']);
-    // Recorded before v1.4.0: scored from its timeline.
-    const { feats: _feats, ...legacy } = played(['Chi', 'Bình', 'An']);
-    expect(mvpNames(first)).toEqual(['An']);
-    expect(mvpNames(legacy)).toEqual(['Chi']);
+  it('finds the best MVP score across games, older games included', () => {
+    // A kill (5), the win (8), alive (4): 17. The moderator's pick adds 6 in a 1-round game.
+    const plain = played(['An', 'Bình', 'Chi']);
+    const picked = played(['Dũng', 'Bình', 'Chi'], 'p0');
+    // Recorded before v1.4.0: scored from its timeline, with no pick.
+    const { feats: _feats, mvpPick: _pick, ...legacy } = played(['Giang', 'Bình', 'An'], 'p0');
+    expect(mvpNames(plain)).toEqual(['An']);
+    expect(mvpNames(legacy)).toEqual(['Giang']);
+    expect(mvpScores(picked)).toMatchObject([{ name: 'Dũng', roleId: 'werewolf', total: 23 }]);
 
-    // Newest first, as History lists them.
-    const tallies = tallyMvps([second, first, legacy]);
-    expect(tallies[0]).toEqual({ name: 'an', awards: 2, games: 3 });
-    expect(tallies[1]).toEqual({ name: 'Chi', awards: 1, games: 2 });
-    expect(tallies.find((m) => m.name === 'Bình')).toEqual({ name: 'Bình', awards: 0, games: 3 });
-    expect(historyRecords([second, first, legacy]).mostMvps).toMatchObject({ value: 2, entries: [{ name: 'an' }], tied: 1 });
+    const top = historyRecords([legacy, picked, plain]).topMvp!;
+    expect(top).toMatchObject({ value: 23, entries: [{ name: 'Dũng', game: { id: picked.id } }], tied: 1 });
+    // Equal scores share the record.
+    expect(historyRecords([legacy, plain]).topMvp).toMatchObject({ value: 17, tied: 2 });
     // A timeline that can't be replayed to the recorded result isn't scored.
     expect(mvpNames({ ...legacy, players: legacy.players.map((p) => ({ ...p, alive: true })) })).toEqual([]);
   });
